@@ -207,7 +207,7 @@ def steps(p, dry_run=False):
     return [[sys.executable, str(ROOT / "mount.py"), "goto", p["target"], *extra],
             [sys.executable, str(ROOT / "shoot.py"), p["target"], *count,
              "--minutes", f"{rule['cap_minutes'] if rule else p['minutes'] * SHOOT_CAP:g}",   # the programme's own cap
-             "--exposure", str(p["exposure"]), "--gain", str(p["gain"]),
+             "--exposure", str(p["exposure"]), "--gain", str(p["gain"]), "--no-refocus",   # measured against a reference
              *(["--filter", p["filter"]] if p.get("filter") else []),
              *(["--dither", str(p["dither"])] if p.get("dither") else []), *extra]]
 
@@ -494,7 +494,7 @@ def second_look(p, name, say=print, dry_run=False, run_command=None, search=None
     # budget, before the next step's start).
     cap = minutes * SHOOT_CAP if most_minutes is None else max(1.0, min(minutes * SHOOT_CAP, most_minutes))
     cmd = [sys.executable, str(ROOT / "shoot.py"), name, "--frames", str(frames), "--exposure", str(p["exposure"]),
-           "--gain", str(p["gain"]), "--minutes", f"{cap:.1f}", "--dither-first",
+           "--gain", str(p["gain"]), "--minutes", f"{cap:.1f}", "--dither-first", "--no-refocus",
            *(["--filter", p["filter"]] if p.get("filter") else []),
            *(["--dry-run"] if dry_run else [])]
     # Its exposure and its time said apart: the frames are the minutes of

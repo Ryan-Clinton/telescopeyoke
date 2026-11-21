@@ -1082,6 +1082,9 @@ def main():
     ap.add_argument("--recentre", type=int, metavar="N", default=0,
                     help="also re-centre every N frames, whatever the drift")
     ap.add_argument("--no-recentre", action="store_true", help="never move the mount")
+    ap.add_argument("--no-refocus", action="store_true",
+                    help="do not focus again during the run when the stars widen or the focuser's temperature moves "
+                         "(refocus.py). Off by itself with --hold, in the demo, and without the camera keeper")
     ap.add_argument("--dither", type=int, metavar="N", default=0,
                     help="every N frames, re-centre a little off the target (about 1.5'), so the camera's "
                          "own pattern falls on different stars and averages away")
@@ -1715,6 +1718,8 @@ def image(args, session, exposure, moving, holding, tracker):
         site = (config.load() if config.FILE.exists() else config.example())["site"]
     shown = 0.0   # when the newest raw frame was last put on the web page
     waiting = deque()   # (future, time taken) for frames being processed, oldest first
+    import refocus
+    focus_watch = refocus.start(args)   # focusing again part way through, or None
 
     def more():
         """Whether to take another frame. With no fixed number, carry on
@@ -1821,6 +1826,20 @@ def image(args, session, exposure, moving, holding, tracker):
         session.drawer = pool       # the page's picture is drawn by these workers, never a new process
         while go_on():
             tracker.pause()      # re-centring or catching up is not the camera keeping it waiting
+            if focus_watch and focus_watch.why:
+                # Between frames, none in flight. The mount is not moved and
+                # the keeper holds the sensor cold (refocus.py).
+                collect(everything=True)
+                print(f"  focusing again: {focus_watch.why}", flush=True)
+                outcome, words = refocus.focus_now(lambda: stop_waiting(args.name))
+                print(f"  focus: {outcome} ({words})", flush=True)
+                focus_watch.done(session.log, focused=outcome == "better")
+                if outcome == "stopped":
+                    told["stop"] = True
+                elif outcome == "failed":
+                    session.refocus, session.refocus_when = f"{words}: focus again (./focus.py --auto)", "during the run"
+                asked_more.clear()   # the answer for this frame may have changed
+                continue
             due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
             if moving and args.dither and since_dither >= args.dither:
                 # A dither centres the target again too, a little off.
@@ -1981,7 +2000,8 @@ def image(args, session, exposure, moving, holding, tracker):
                             (moving and due)
                             or (holding and moving and holding.due(session.shifts))
                             or (args.assist and moving
-                                and len(session.track) >= live.get("shoot.assist_every", ASSIST_EVERY)))
+                                and len(session.track) >= live.get("shoot.assist_every", ASSIST_EVERY))
+                            or (focus_watch is not None and focus_watch.due(session.log)))
                         if plain_check[0] is not None and len(session.accepted) > plain_check[0]:
                             # The first frame kept after a plain GoTo back: near the
                             # reference (taken just after the solved centring), or
@@ -2072,7 +2092,8 @@ def image(args, session, exposure, moving, holding, tracker):
 
     session.finish()
     if session.refocus:
-        raise interface.Refusal("REFOCUS_NEEDED", f"Stopped after a filter change: {session.refocus}.")
+        when = getattr(session, "refocus_when", "after a filter change")
+        raise interface.Refusal("REFOCUS_NEEDED", f"Stopped {when}: {session.refocus}.")
     if getattr(args, "light_path", None) and args.light_path.get("name") and session.accepted:
         # The stars' width in this filter: what a change to another filter is
         # checked against (L for any filter; this one for its parfocal set).

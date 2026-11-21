@@ -141,6 +141,25 @@ On Linux the sounds are small WAV files played by the first of `pw-play`,
 at the start and speaks its changes of state without the click and tone.
 `./doctor.py` reports both.
 
+## Focusing again during a run
+
+Not yet tried on the sky. `shoot.py` (through `refocus.py`) focuses again
+between frames when the stars are 1.25 times as wide as they began, with no
+fall in star count or roundness to explain it, or when the focuser's
+thermistor has moved 1 °C from its last focus. It does this at most every 20
+minutes, and each focus costs about 80 to 200 s.
+
+It runs `./focus.py --auto --only-if-better`: a focus that fits no curve or
+does not end sharper goes back to where it started. The mount is not moved
+and guiding carries on. If the drawtube's place is left unknown, the run stops
+with `REFOCUS_NEEDED`.
+
+It is off without the camera keeper (the sensor could warm), in the demo
+(which would turn the real focuser), with `--hold`, `--focus-as-is` or the
+sub-length ladder, and for patrols and star watches, whose brightness
+measurements a focus change would disturb. `--no-refocus` turns it off for
+any run.
+
 ## What has and has not been tried
 
 **On the sky:** hand focus with the spoken numbers is how the telescope is

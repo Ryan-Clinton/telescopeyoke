@@ -1379,6 +1379,29 @@ def focus_motor(motor, read, usual, say=progress, coarse=64, step=32, points=7, 
             "fit": fit, "readings": readings}
 
 
+def better_or_back(drive, focusing, backlash, say=progress):
+    """A focus during a run (refocus.py): `focusing()` kept only if a curve
+    fitted and it ended sharper than it began; otherwise, or if it refused
+    part way, back to where it started, the last move inward. 20 November
+    2026: a focus in SII began at HFR 2.08 and ended at 2.96. A move whose
+    end is not known is raised, since there is then no way back."""
+    try:
+        result = focusing()
+    except (interface.Refusal, OutOfReach) as problem:
+        if drive.moved is None:
+            raise
+        drive.home(backlash)
+        return {"kept": False, "why": str(problem) or "the next move was beyond the focuser's travel"}
+    began, ended = result["readings"][0][1], result.get("ended_hfr")
+    if (result.get("fit") or {}).get("ok") and began and ended is not None and ended < began:
+        return dict(result, kept=True, start_hfr=began)
+    drive.home(backlash)
+    why = (f"it ended at HFR {ended} from {began}" if (result.get("fit") or {}).get("ok")
+           else "no focus curve fitted")
+    say(f"  not sharper ({why}): back where it started")
+    return {"kept": False, "why": why, "start_hfr": began, "ended_hfr": ended}
+
+
 def log_focus(motor, result, band):
     """One line of FOCUS_LOG for a finished motor focus. Never raises: a
     line not written is not worth a focus run failing over."""
@@ -1794,7 +1817,15 @@ def run_motor(args, mode="focus"):
                         args.offset, drive, lambda d: focus_motor(d, read, usual, say=say, ring=ring, live=live),
                         lambda name: filters.turn_wheel(name, say=progress), say=progress, temperature=thermistor,
                         verified=args.verified)
-                result = focus_motor(drive, read, usual, say=say, ring=ring, live=live)
+                if getattr(args, "only_if_better", False):
+                    # No far search (no ring): stars gone in the middle of a
+                    # run is cloud, and the drawtube stays where it is.
+                    result = better_or_back(drive, lambda: focus_motor(drive, read, usual, say=say, live=live),
+                                            settings["backlash"], say=say)
+                    if not result["kept"]:
+                        return result
+                else:
+                    result = focus_motor(drive, read, usual, say=say, ring=ring, live=live)
                 here = None
                 if filters.wheel_in_train():
                     # What the drawtube is now focused for: the filter the wheel says
@@ -1989,6 +2020,10 @@ def main():
                     help="focus with the motor from wherever it is, moving either way: the far search first if no "
                          "star measures, then small steps the way the stars get sharper, ending on the best with "
                          "the gears' slack taken up")
+    ap.add_argument("--only-if-better", action="store_true",
+                    help="with --auto: keep the new focus only if a curve fitted and it ended sharper than it began; "
+                         "otherwise back to where it started. No far search. What an imaging run uses to focus "
+                         "again part way through (refocus.py)")
     ap.add_argument("--offset", metavar="FILTER",
                     help="with --auto, on a light path with the filter wheel: focus in L, out a little, focus in "
                          "FILTER, and the difference kept as one measurement of its set's focus offset")
