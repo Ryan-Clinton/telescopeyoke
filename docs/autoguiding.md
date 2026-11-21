@@ -421,6 +421,29 @@ These need daylight or the user's hands. None needs the sky.
    for the ladder's lengths. Science refuses frames without matched darks,
    so these come first.
 
+### For another night: a Barlow on the guide scope
+
+Not tried. The owner has an Omni 1.25" Barlow (taken here as 2×; check its
+marking). The guider bins 2×2, so at 162 mm it works at 9.55" a pixel, and a
+3" star is well under one pixel, which makes its measured centre less
+reliable. A 2× Barlow would make it about 324 mm, f/6.4 and 4.8" a binned
+pixel. Each star's light is spread over about four times the area, so guide
+stars look fainter and may need longer exposures.
+
+Slightly defocusing the guide scope is free and comes first. Judge either by
+the imaging frames' stars, since the guider's RMS is measured through the same
+coarse view, and not until the Dec drive is fixed. To try the Barlow:
+
+1. By day, Barlow into the guide scope, the GPCAM's 1.25" nosepiece into the
+   Barlow. Focus on something distant with the helical focuser, sliding the
+   camera if needed, then mark and lock its position. If it cannot reach
+   focus, note which end it was closest at: a spacer may fix it.
+2. Check that the Barlow and camera do not droop as the scope tilts. If they
+   do, a rigid printed sleeve would hold them in line.
+3. Measure the real focal length from a guide frame's stars (it depends on
+   the camera's distance from the Barlow), set `[guider] focal_mm` to it, and
+   calibrate the guider again.
+
 ## The order it is built in
 
 The camera and the star tracking, then calibration, then the closed loop,

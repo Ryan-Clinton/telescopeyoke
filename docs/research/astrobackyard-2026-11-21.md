@@ -47,9 +47,10 @@ In the order they would help this rig.
    both axes.
 5. **Watch the guide scope's focal length if guiding stays poor.** The site's
    rule is at least a third of the imaging focal length: 250 mm for the 150P's
-   750 mm. Our guide scope is 162 mm, at about 4.8"/px. This is a rule of
-   thumb and centroiding works well below one pixel, so it is a suspect to
-   check against measured guiding, not a reason to buy anything.
+   750 mm. Our guide scope is 162 mm, at 9.55" a pixel as the guider bins it.
+   This is a rule of thumb and centroiding works well below one pixel, so it
+   is a suspect to check against the imaging frames' stars. The owner's
+   Barlow is the way to try it: `docs/autoguiding.md`.
 
 ## Useful reference figures
 

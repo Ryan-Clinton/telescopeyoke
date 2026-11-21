@@ -232,6 +232,32 @@ Not done:
 - **Calibrated colour.** That needs this camera's full spectral response,
   which no maker publishes, or a colour reference measured through it.
 
+## For another night: the Moon and planets through a Barlow
+
+Not tried. The owner has an Omni 1.25" Barlow (taken here as 2×; check its
+marking) to use on the colour camera, the 183C, which has no filter wheel in
+the way. On the 150P it would give about 1500 mm, f/10 and 0.33" a pixel, a
+good match for 2.4 µm pixels, which are fully sampled at about f/9.
+
+| Target | On the sensor (about 30' by 20') |
+|---|---|
+| Jupiter (about 40") | about 120 pixels across |
+| Saturn's disc (about 18") | about 55 pixels, the rings about twice that |
+| The Moon (about 31') | too big: craters, regions or a mosaic |
+
+Each pixel gets a quarter of the light, so exposures are about four times
+longer or the gain higher.
+
+1. By day, screw a 1.25" nosepiece onto the 183C (check there is one), slide
+   it into the Barlow and the Barlow into the focuser's 1.25" holder. Check
+   that it reaches focus on something distant.
+2. Add it as its own light path (`[trains.NAME]`) with its own flats, so that
+   plate solves and calibration from the normal setup are not used on it.
+3. Measure the real focal length from the first plate solve or the Moon's
+   size in the frame, and put that in the light path.
+4. Run `./ty collimation` before a planet night: f/10 shows misaligned
+   mirrors far more than f/5. On a night of poor seeing, leave the Barlow out.
+
 ## The first result, 24 October 2026
 
 The 97 %-lit Moon, 31° up through thin haze: 300 frames of 20 ms at gain
