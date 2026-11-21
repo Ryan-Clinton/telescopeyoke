@@ -27,6 +27,12 @@ What is left of the eighteen reviews' plan, done on 20 November 2026
 - **The Dec drive**: `mount.py dectest` measures it on the main camera
   (`--pulses N`); the guider can guide Dec one way only. The focus's far
   search goes past half a turn while the doughnuts keep shrinking.
+- **Focus during a run** (`refocus.py`, `docs/focus.md`): an imaging run
+  focuses again between frames when its stars widen or the focuser's
+  temperature moves, keeping the new focus only if it is sharper. Not yet
+  tried on the sky.
+- **Tonight's plan** says which filters suit each target under the Moon, as
+  advice.
 
 ## 0.4.2: a GoTo by name keeps clear of the Sun, and eighteen reviews' fixes
 

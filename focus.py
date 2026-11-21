@@ -1820,6 +1820,12 @@ def run_motor(args, mode="focus"):
                 if getattr(args, "only_if_better", False):
                     # No far search (no ring): stars gone in the middle of a
                     # run is cloud, and the drawtube stays where it is.
+                    # Measured first, as every focus is: one still as good as
+                    # usual is left alone, nothing turned.
+                    now = sample(read, SWEEP_FRAMES, usual)["hfr"]
+                    if now is not None and now <= GOOD_ENOUGH * usual:
+                        progress(f"Left as it is: HFR {now}, as good as focusing usually gets.")
+                        return {"kept": False, "why": f"HFR {now} is already as good as usual", "start_hfr": now}
                     result = better_or_back(drive, lambda: focus_motor(drive, read, usual, say=say, live=live),
                                             settings["backlash"], say=say)
                     if not result["kept"]:

@@ -168,3 +168,15 @@ its job comes off this list.
     each, `./ty lucky mineral --mono B G R`), and **a supernova's colour**
     (`./patrol.py TARGET --colour-at RA,DEC`): both built, neither run on
     the sky. The owner chose not to run them on 21 November.
+36. **Focus during a run** (`refocus.py`, `docs/focus.md`): built 21 November,
+    not yet run on the sky. The next ordinary imaging run with the keeper
+    will use it: read its `focusing again` and `focus:` lines, check the stars
+    after it, and record the result in `docs/validation.md`. Its 1.25 width
+    and 1 °C triggers are first estimates.
+37. **The Moon's filter advice** (`filters.for_moon`): it changes where the
+    Moon doubles the sky, from one moonlit L run. Measure it by band as
+    moonlit runs come in.
+38. **The Omni 1.25" Barlow**, for another night: on the guide scope
+    (`docs/autoguiding.md`) and on the 183C for the Moon and planets
+    (`docs/lucky-imaging.md`). Check its marking says 2×, and try focus by
+    day first. The owner was thinking of sending it back: keep it until then.

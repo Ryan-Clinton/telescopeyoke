@@ -38,6 +38,10 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
 6. **Never stop a focus run part way.** If it must stop, say where the
    focuser is, measure with `--check`, and focus again.
 
+An imaging run may focus itself between frames (`refocus.py`,
+`docs/focus.md`): its log says `focusing again`, then `focus:` with the
+result. Do not start another focus over it.
+
 Focus comes before anything that plate-solves.
 
 ## With the motor focuser: `./focus.py --auto`

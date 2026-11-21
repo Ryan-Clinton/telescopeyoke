@@ -149,9 +149,11 @@ fall in star count or roundness to explain it, or when the focuser's
 thermistor has moved 1 °C from its last focus. It does this at most every 20
 minutes, and each focus costs about 80 to 200 s.
 
-It runs `./focus.py --auto --only-if-better`: a focus that fits no curve or
-does not end sharper goes back to where it started. The mount is not moved
-and guiding carries on. If the drawtube's place is left unknown, the run stops
+It runs `./focus.py --auto --only-if-better`, which measures first and turns
+nothing if focus is still within 10% of the usual best. A focus that fits no
+curve or does not end sharper goes back to where it started. The mount is not
+moved and guiding carries on. A stop asked during a focus takes effect when
+the focus has finished. If the drawtube's place is left unknown, the run stops
 with `REFOCUS_NEEDED`.
 
 It is off without the camera keeper (the sensor could warm), in the demo

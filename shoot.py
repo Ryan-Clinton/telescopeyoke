@@ -1833,7 +1833,7 @@ def image(args, session, exposure, moving, holding, tracker):
                 print(f"  focusing again: {focus_watch.why}", flush=True)
                 outcome, words = refocus.focus_now(lambda: stop_waiting(args.name))
                 print(f"  focus: {outcome} ({words})", flush=True)
-                focus_watch.done(session.log, focused=outcome == "better")
+                focus_watch.done(session.log)
                 if outcome == "stopped":
                     told["stop"] = True
                 elif outcome == "failed":

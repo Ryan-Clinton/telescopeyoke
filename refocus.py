@@ -166,19 +166,23 @@ class Watch:
                     self.why = f"the focuser has gone from {self.focused_c:.1f} to {degrees:.1f} °C"
         return bool(self.why)
 
-    def done(self, log, focused=True):
-        """After a focus: judged afresh from the next frames. One that found
-        nothing better waits its turn too, so a soft night is not refocused
-        frame after frame."""
+    def done(self, log):
+        """After a focus: judged afresh from the next frames and from the
+        temperature now. One that found nothing better counts too, so a soft
+        night or a focus already good is not tried again every AT_MOST_S."""
         self.why, self.since, self.focused = None, len(log), self.clock()
-        if focused:
-            self.focused_c = self.read()
+        degrees = self.read()
+        if degrees is not None:
+            self.focused_c = degrees
 
 
 def focus_now(stop, say=print):
-    """./focus.py --auto --only-if-better, waited for, with `stop()` asked
-    every couple of seconds. Returns ("better" | "left" | "stopped" | "failed",
-    words): "left" is the focuser where it began."""
+    """./focus.py --auto --only-if-better, waited for. A stop asked meanwhile
+    (`stop()`, every couple of seconds) takes effect when the focus has
+    finished: a focus stopped part way can leave the drawtube well off
+    (17 October 2026: HFR 1.86 before, 3.52 after). Returns ("better" | "left"
+    | "stopped" | "failed", words): "left" is the focuser where it began;
+    "failed" beats "stopped", so a focus left unknown is always said."""
     import focuser
 
     def place():
@@ -188,21 +192,19 @@ def focus_now(stop, say=print):
     before = place()
     child = subprocess.Popen([sys.executable, str(ROOT / "focus.py"), "--auto", "--only-if-better", "--json"],
                              stdout=subprocess.PIPE, text=True, cwd=ROOT)
-    deadline, ended, killed_at = time.monotonic() + TIMEOUT_S, None, None
+    deadline, asked, killed_at = time.monotonic() + TIMEOUT_S, False, None
     while True:
         try:
             out, _ = child.communicate(timeout=2)
             break
         except subprocess.TimeoutExpired:
-            if ended is None and (stop() or time.monotonic() > deadline):
-                ended = "stopped" if time.monotonic() <= deadline else "timed out"
+            asked = asked or stop()
+            if killed_at is None and time.monotonic() > deadline:
                 killed_at = time.monotonic() + TERM_WAIT_S
                 child.terminate()
             elif killed_at and time.monotonic() > killed_at:
                 child.kill()
-    if ended == "stopped":
-        return "stopped", "told to stop during the focus"
-    if ended:
+    if killed_at:
         return "failed", f"the focus did not finish in {TIMEOUT_S / 60:.0f} minutes"
     try:
         answer = json.loads(out)
@@ -211,10 +213,10 @@ def focus_now(stop, say=print):
     if answer.get("ok"):
         data = answer.get("data") or {}
         if data.get("kept"):
-            return "better", f"HFR {data.get('start_hfr')} to {data.get('ended_hfr')}"
-        return "left", data.get("why") or "no sharper than it began"
-    problem = (answer.get("errors") or [{}])[0].get("message", "the focus failed")
-    now = place()
-    if before is not None and now == before:
-        return "left", problem
-    return "failed", problem
+            outcome, words = "better", f"HFR {data.get('start_hfr')} to {data.get('ended_hfr')}"
+        else:
+            outcome, words = "left", data.get("why") or "no sharper than it began"
+    else:
+        words = (answer.get("errors") or [{}])[0].get("message", "the focus failed")
+        outcome = "left" if before is not None and place() == before else "failed"
+    return ("stopped", f"told to stop during the focus; {words}") if asked and outcome != "failed" else (outcome, words)

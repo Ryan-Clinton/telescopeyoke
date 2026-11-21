@@ -183,6 +183,14 @@ and, if focus is already within 10% of the usual best, leaves it alone
 pictures. With `--dry-run` it only looks for the focuser's port and says what
 it would do.
 
+`focus.py --auto --only-if-better` is what an imaging run uses to focus again
+between frames (`refocus.py`, `docs/focus.md`; not yet tried on the sky): it
+measures first, keeps a new focus only if it ended sharper, and otherwise goes
+back to where it started. `shoot.py --no-refocus` turns that off for a run.
+The planner's Filter column and `moon_filter` (`filters.for_moon`) say which
+filters suit each target under tonight's Moon, as advice: no run's filter
+changes because of them.
+
 `focuser.py test` and `move` turn the focuser's motor, never the mount; `flash`
 loads the Nano's firmware. See `docs/focuser.md`.
 
