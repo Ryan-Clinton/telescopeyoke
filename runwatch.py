@@ -17,6 +17,7 @@ Nothing here moves the mount or uses the camera.
 """
 import argparse
 import sys
+import json
 import time
 from pathlib import Path
 
@@ -122,6 +123,12 @@ class Watch:
         # alone is over STALLED, so the run's own pace is allowed twice over.
         taken = [f["taken"] for f in log[-5:]]
         pace = max((b - a for a, b in zip(taken, taken[1:])), default=0.0)
+        # With one frame logged there is no gap to go by: the run's own exposure
+        # stands in (21 November 2026: every 120 s run's start said "stopped").
+        try:
+            pace = max(pace, float(json.loads((self.session / "session.json").read_text())["exposure"]))
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
         if quiet > STALLED + 2 * pace:
             self.once("stalled", f"{name}: no frame for {minutes(quiet)}: the camera or the run has stopped", lines)
             return lines
