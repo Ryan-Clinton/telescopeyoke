@@ -102,6 +102,34 @@ def lined_up(image, reference):
 
 
 MIN_COVERED = 0.75   # share of the frame every filter must cover for the target to be in the picture
+GREEN_KEPT = 0.25    # of the green above the red and blue's average, in the Hubble palette
+OIII_SHARE = 0.8     # OIII fills two channels in HOO: at full strength the stars come out cyan
+
+
+def narrowband(rgb, channels, saturation):
+    """Each filter stretched on its own, so a strong Ha does not drown the
+    others (21 November 2026: NGC 2174's SHO, balanced together, was almost
+    all green). In SHO, Ha is in green: most of the green the red and blue
+    do not share is taken off, which leaves the palette's gold and blue."""
+    stretched = {}
+    for c, band in enumerate(channels):
+        if band not in stretched:
+            plane = np.repeat(rgb[..., c, None], 3, axis=2)
+            stretched[band] = process.process(plane, saturation=1.0)[..., 0].astype(np.float32)
+    colour = np.stack([stretched[b] for b in channels], axis=2)
+    if channels[1] == "Ha":
+        before = colour.mean(axis=2)
+        limit = (colour[..., 0] + colour[..., 2]) / 2
+        calmer = np.minimum(colour[..., 1], limit + GREEN_KEPT * np.maximum(colour[..., 1] - limit, 0))
+        # Stars are bright in all three and keep their green, or they turn magenta.
+        star = np.clip((colour.min(axis=2) - 70) / 70, 0, 1)
+        colour[..., 1] = star * colour[..., 1] + (1 - star) * calmer
+        # What the green gave the nebula's brightness, put back across all three.
+        colour *= np.clip(before / np.maximum(colour.mean(axis=2), 1.0), 1.0, 1.6)[..., None]
+    else:
+        colour[..., 1:] *= OIII_SHARE
+    grey = colour.mean(axis=2, keepdims=True)
+    return grey + saturation * (colour - grey)
 
 
 def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette="LRGB"):
@@ -138,7 +166,10 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
                                     "the colours would not line up.")
     valid = np.all([np.isfinite(i) for i in images.values()], axis=0)
     rgb = np.stack([np.where(valid, images[b], 0) for b in channels], axis=2)
-    colour = process.process(rgb, saturation=saturation).astype(np.float32)
+    if palette == "LRGB":
+        colour = process.process(rgb, saturation=saturation).astype(np.float32)
+    else:
+        colour = narrowband(rgb, channels, saturation)
     if detail_band in images:
         grey = np.where(valid, images[detail_band], 0)
         detail = process.process(np.repeat(grey[..., None], 3, axis=2), saturation=1.0)[..., 0].astype(np.float32)
