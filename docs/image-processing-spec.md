@@ -187,6 +187,11 @@ one-off measurements, each planted at 1 and 3 times the pixel noise):
 - *Star widths.* After the global match, each ninth of the NGC 2174 frame is
   within -9 to +6% of Ha's width. Local kernels are not needed yet.
 
+Local contrast is built (structure from 3 to 24 px, on the star-free layer). The
+odd and even halves of a session agree on that structure (r 0.72 to 0.97) and do
+not below 3 px, which it leaves alone. A centred hyperbolic stretch was tried and
+not kept. Method notes: `docs/research/image-processing-methods-2026-11-21.md`.
+
 Each picture's JSON is now stamped through `records.write` (schema `colour`),
 with every effective setting and each source stack's SHA-256. Comparison runs
 get their own file names. Section 7's other measures have not been run.

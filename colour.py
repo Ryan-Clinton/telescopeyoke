@@ -146,8 +146,9 @@ NARROWBAND_SATURATION = 1.8   # mixed linearly the palette is paler than separat
 EDGE_TRIM = 0.035    # of the picture's shorter side, off every edge of a linear narrowband picture
 QUIET = (0.7, 0.6, 0.5, 0.4)    # times its noise each scale needs to be fully kept: at this, on NGC 2174, 99% of the faintest stars stay, their flux within 1%
 MIN_CLEAR = 0.3      # of the frame clear of nebula, or the sky is not mapped
-PICTURE_VERSION = 2  # of the method below: changes what the same stacks give
+PICTURE_VERSION = 3  # of the method below: changes what the same stacks give
 EDGE_BAND = 0.25     # of the shorter side: how far in from the edge the sky map acts
+CONTRAST = 0.3       # how far local contrast may lift or lower the nebula
 SKY_CELLS = 5        # how smooth the sky map is, in cells of 16 pixels: far wider than any star
 STAR_TINT = 0.25     # of each star's colour kept: a filter's stars differ by more than the eye expects
 OIII_SHARE = 0.8     # OIII fills two channels in HOO: at full strength the stars come out cyan
@@ -288,6 +289,19 @@ def layers(plane, star):
     return nebula, plane - nebula
 
 
+def local_contrast(picture, nebula, where):
+    """The nebula's ridges and lanes brought out: its structure between
+    about 3 and 24 pixels across, measured on the star-free layer so no star
+    gets a halo, and applied as a gain, so colours keep their ratios.
+    `where` (0 to 1) keeps it off the sky."""
+    soft = np.arcsinh(np.maximum(nebula, 0))
+    band = ndimage.gaussian_filter(soft, 3) - ndimage.gaussian_filter(soft, 24)
+    inside = band[where > 0.5]
+    spread = 1.4826 * float(np.median(np.abs(inside - np.median(inside)))) + 1e-6 if inside.size else 1.0
+    gain = 1 + CONTRAST * np.clip(band / (3 * spread), -1, 1) * where
+    return picture * gain[..., None]
+
+
 def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=False):
     """The narrowband picture made in the light's own units: sky off, star
     widths matched, the palette mixed, and one stretch at the very end.
@@ -351,7 +365,10 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
     raw = np.mean([untouched[b] / scale[b] + sharp_stars[b] / flux[b] * level for b in channels], axis=0)
     sky = raw[clear & (star < 0.1)] if open_sky >= MIN_CLEAR else raw     # nebula would count as grain
     noise = 1.4826 * np.median(np.abs(sky - np.median(sky))) + 1e-6
+    bright_part = ndimage.gaussian_filter((~clear).astype(np.float32), 16) if open_sky >= MIN_CLEAR else np.ones_like(light)
     picture = process.display(colour / noise, saturation=saturation, whole=False, light=light / noise)
+    plain = np.mean([sharp_nebula[b] / scale[b] for b in channels], axis=0) / noise
+    picture = local_contrast(picture, plain, bright_part)
     if grain:
         say("  grain in the clear sky: " + ", ".join(f"{b} x{v:.2f}" for b, v in grain.items()))
     done = {"method": "linear", "picture_version": PICTURE_VERSION, "clear_sky_share": round(open_sky, 3),
@@ -527,7 +544,7 @@ def run(args):
                 "any_coverage": args.any_coverage}
     if linear_mix:
         settings.update(green_kept=GREEN_KEPT, linear_oiii=LINEAR_OIII, star_tint=STAR_TINT, edge_trim=EDGE_TRIM,
-                        sky_cells=SKY_CELLS, min_clear=MIN_CLEAR, quiet=list(QUIET))
+                        sky_cells=SKY_CELLS, min_clear=MIN_CLEAR, contrast=CONTRAST, quiet=list(QUIET))
     for band, stack in stacks.items():
         if isinstance(used.get(band), dict):
             used[band]["sha256"] = storage.digest(stack)
