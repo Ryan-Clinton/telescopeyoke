@@ -33,7 +33,9 @@ kept beside the picture as NAME-PALETTE-linear.fits, a picture product and not
 for measurement. A stack not calibrated makes a picture called a preview.
 """
 import argparse
+import hashlib
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -115,6 +117,13 @@ def brightness(path):
     return data.mean(axis=0) if data.ndim == 3 else data
 
 
+def covered(image):
+    """Where a stack has data. Stack.result() writes zero where no frame
+    reached, so a zero region joined to the frame's edge is empty; a lone
+    zero inside the picture is a real value."""
+    return ndimage.binary_fill_holes(np.nan_to_num(image) != 0)
+
+
 def fits_well(info):
     """Enough stars matched, and they landed where they should."""
     return (stacking.lined_up(info["matched"]) and info["residual"] is not None
@@ -128,15 +137,18 @@ def lined_up(image, reference):
     Ha before the flip, its OIII and SII after). So is one that matches
     enough stars but fits them badly, which chance can do. Returns the image,
     the match, and whether it was turned."""
+    # The stack's coverage moves with it, as a second plane.
+    planes = np.stack([image, covered(image).astype(image.dtype)], axis=2)
+    placed = lambda moved: np.where(moved[..., 1] > 0.99, moved[..., 0], np.nan)
     stars = stacking.find_stars(np.nan_to_num(image))
-    moved, info = stacking.register(image[..., None], np.nan_to_num(image), stars, reference)
+    moved, info = stacking.register(planes, np.nan_to_num(image), stars, reference)
     if not fits_well(info):
-        turned = np.ascontiguousarray(image[::-1, ::-1])
-        clean = np.nan_to_num(turned)
-        again, second = stacking.register(turned[..., None], clean, stacking.find_stars(clean), reference)
+        turned = np.ascontiguousarray(planes[::-1, ::-1])
+        clean = np.nan_to_num(turned[..., 0])
+        again, second = stacking.register(turned, clean, stacking.find_stars(clean), reference)
         if fits_well(second) or (not fits_well(info) and second["matched"] > info["matched"]):
-            return again[..., 0], second, True
-    return moved[..., 0], info, False
+            return placed(again), second, True
+    return placed(moved), info, False
 
 
 MIN_COVERED = 0.75   # share of the frame every filter must cover for the target to be in the picture
@@ -146,7 +158,7 @@ NARROWBAND_SATURATION = 1.8   # mixed linearly the palette is paler than separat
 EDGE_TRIM = 0.035    # of the picture's shorter side, off every edge of a linear narrowband picture
 QUIET = (0.7, 0.6, 0.5, 0.4)    # times its noise each scale needs to be fully kept: at this, on NGC 2174, 99% of the faintest stars stay, their flux within 1%
 MIN_CLEAR = 0.3      # of the frame clear of nebula, or the sky is not mapped
-PICTURE_VERSION = 3  # of the method below: changes what the same stacks give
+PICTURE_VERSION = 4  # of the method below: changes what the same stacks give
 EDGE_BAND = 0.25     # of the shorter side: how far in from the edge the sky map acts
 CONTRAST = 0.3       # how far local contrast may lift or lower the nebula
 SKY_CELLS = 5        # how smooth the sky map is, in cells of 16 pixels: far wider than any star
@@ -293,16 +305,19 @@ def local_contrast(picture, nebula, where):
     """The nebula's ridges and lanes brought out: its structure between
     about 3 and 24 pixels across, measured on the star-free layer so no star
     gets a halo, and applied as a gain, so colours keep their ratios.
-    `where` (0 to 1) keeps it off the sky."""
+    `where` (0 to 1) keeps it off the sky. Medians, not Gaussians: beside a
+    planted hard edge the dark rim was 22 px wide against 73."""
     soft = np.arcsinh(np.maximum(nebula, 0))
-    band = ndimage.gaussian_filter(soft, 3) - ndimage.gaussian_filter(soft, 24)
+    wide = ndimage.median_filter(soft[::4, ::4], 13)
+    wide = ndimage.zoom(wide, (soft.shape[0] / wide.shape[0], soft.shape[1] / wide.shape[1]), order=1)
+    band = ndimage.gaussian_filter(ndimage.median_filter(soft, 5), 1.5) - ndimage.gaussian_filter(wide, 4)
     inside = band[where > 0.5]
     spread = 1.4826 * float(np.median(np.abs(inside - np.median(inside)))) + 1e-6 if inside.size else 1.0
     gain = 1 + CONTRAST * np.clip(band / (3 * spread), -1, 1) * where
     return picture * gain[..., None]
 
 
-def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=False):
+def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=False, contrast=True):
     """The narrowband picture made in the light's own units: sky off, star
     widths matched, the palette mixed, and one stretch at the very end.
     Nebula and stars are balanced apart: the nebula on its own strength, so
@@ -315,7 +330,8 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
     planes = {}
     for c, band in enumerate(channels):
         if band not in planes:
-            planes[band] = process.remove_sky(rgb[..., c, None].astype(np.float32), background)[..., 0]
+            # A level only: a surface is fitted once the nebula is masked.
+            planes[band] = process.remove_sky(rgb[..., c, None].astype(np.float32), 0)[..., 0]
     # Where the sky is, from the filter that shows the nebula best: a weak
     # filter cannot tell its own nebula from its sky, and scaled up to match,
     # NGC 2174's SII turned the sky red (21 November 2026).
@@ -327,8 +343,12 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
         say(f"  sky fitted outside the nebula as {guide} shows it ({open_sky:.0%} of the frame is clear)")
     else:
         # A target filling the frame leaves too little sky to map: what the
-        # map took off would be the target.
-        say(f"  only {open_sky:.0%} of the frame is clear of nebula: no sky map, only the tilt")
+        # map took off would be the target. One the catalogue calls frame-filling
+        # keeps the level alone.
+        if background:
+            planes = {b: process.remove_sky(p[..., None].copy(), 1)[..., 0] for b, p in planes.items()}
+        say(f"  only {open_sky:.0%} of the frame is clear of nebula: no sky map, "
+            + ("only the tilt" if background else "only the level"))
     scale = {b: nebula_level(p) for b, p in planes.items()}
     even, before, after = matched_widths(planes, say)
     star = star_mask(np.mean([p / scale[b] for b, p in planes.items()], axis=0))
@@ -368,10 +388,11 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
     bright_part = ndimage.gaussian_filter((~clear).astype(np.float32), 16) if open_sky >= MIN_CLEAR else np.ones_like(light)
     picture = process.display(colour / noise, saturation=saturation, whole=False, light=light / noise)
     plain = np.mean([sharp_nebula[b] / scale[b] for b in channels], axis=0) / noise
-    picture = local_contrast(picture, plain, bright_part)
+    if contrast:
+        picture = local_contrast(picture, plain, bright_part)
     if grain:
         say("  grain in the clear sky: " + ", ".join(f"{b} x{v:.2f}" for b, v in grain.items()))
-    done = {"method": "linear", "picture_version": PICTURE_VERSION, "clear_sky_share": round(open_sky, 3),
+    done = {"method": "linear", "picture_version": PICTURE_VERSION, "local_contrast": contrast, "clear_sky_share": round(open_sky, 3),
             "sky_map": open_sky >= MIN_CLEAR, "sky_guide": guide, "grain_kept": grain, "nebula_scale": {b: round(v, 2) for b, v in scale.items()},
             "star_flux": {b: round(v, 2) for b, v in flux.items()},
             "star_width_px": {b: round(v, 2) for b, v in before.items() if v},
@@ -406,7 +427,7 @@ def narrowband(rgb, channels, saturation, background=2):
 
 
 def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette="LRGB", background=2,
-            stretched=False, quiet=False):
+            stretched=False, quiet=False, contrast=True, linear_background=None):
     """The colour picture (8-bit RGB array) and what went into it."""
     channels, base, detail_band = PALETTES[palette]
     needed = tuple(dict.fromkeys(channels))
@@ -424,6 +445,7 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
     images = {b: i[:rows, :cols] for b, i in images.items()}
     ref_image = np.nan_to_num(images[base])
     reference = {"square": stacking.centre_square(ref_image), "stars": stacking.find_stars(ref_image)}
+    images[base] = np.where(covered(images[base]), images[base], np.nan)
     used = {"palette": palette, base: {"stack": str(stacks[base]), "matched": None}}
     # A stack labelled uncalibrated is allowed, as a preview, and called one.
     raw = [b for b in have if fits.getheader(stacks[b]).get("TY_CALIB") is not True]
@@ -453,7 +475,9 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
         colour = narrowband(rgb, channels, saturation, background)
         used["method"] = "stretched"
     else:
-        colour, linear, done = linear_narrowband(rgb, channels, saturation, background, say, quiet)
+        colour, linear, done = linear_narrowband(rgb, channels, saturation,
+                                                 background if linear_background is None else linear_background,
+                                                 say, quiet, contrast)
         used.update(done)
     if detail_band in images:
         grey = np.where(valid, images[detail_band], 0)
@@ -509,6 +533,7 @@ def main():
     ap.add_argument("--noise-reduction", action="store_true",
                     help="narrowband: wavelet noise reduction (off by default: on NGC 2174 and NGC 281 it kept no more "
                          "faint detail than a plain blur)")
+    ap.add_argument("--no-contrast", action="store_true", help="narrowband: leave out local contrast, for comparison")
     ap.add_argument("--any-coverage", action="store_true",
                     help="make the picture even when the filters share under 75%% of the frame")
     ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
@@ -526,13 +551,16 @@ def run(args):
     background = max(process.sky_for(args.name), 1)
     picture, used, linear = combine(stacks, saturation, min_covered=0.0 if args.any_coverage else MIN_COVERED,
                             palette=args.palette, background=background,
-                            stretched=args.stretched, quiet=args.noise_reduction)
+                            stretched=args.stretched, quiet=args.noise_reduction,
+                            contrast=not args.no_contrast, linear_background=process.sky_for(args.name))
     suffix = "colour" if args.palette == "LRGB" else args.palette
     # A comparison keeps its own files, so it never replaces the picture.
     if args.stretched:
         suffix += "-stretched"
     if args.noise_reduction:
         suffix += "-quiet"
+    if args.no_contrast:
+        suffix += "-nocontrast"
     if args.saturation:
         suffix += f"-sat{args.saturation:g}"
     out = config.DATA / "web" / f"{stacking.folder_name(args.name)}-{suffix}.jpg"
@@ -540,7 +568,7 @@ def run(args):
     Image.fromarray(picture).save(out, quality=93)
     print(f"saved {out}")
     settings = {"saturation": saturation, "background": background, "stretched": args.stretched,
-                "noise_reduction": args.noise_reduction, "night": args.night,
+                "noise_reduction": args.noise_reduction, "local_contrast": not args.no_contrast, "night": args.night,
                 "any_coverage": args.any_coverage}
     if linear_mix:
         settings.update(green_kept=GREEN_KEPT, linear_oiii=LINEAR_OIII, star_tint=STAR_TINT, edge_trim=EDGE_TRIM,
@@ -548,7 +576,15 @@ def run(args):
     for band, stack in stacks.items():
         if isinstance(used.get(band), dict):
             used[band]["sha256"] = storage.digest(stack)
-    result = {"name": args.name, "palette": args.palette, "picture": str(out), "settings": settings, "filters": used}
+    # The usual name is always the latest; each different make is kept too.
+    made = json.dumps([PICTURE_VERSION, args.palette, settings, sorted(
+        (b, v["sha256"]) for b, v in used.items() if isinstance(v, dict) and "sha256" in v)], sort_keys=True)
+    run_id = hashlib.sha256(made.encode()).hexdigest()[:12]
+    copy = out.parent / "colour-runs" / f"{out.stem}-{run_id}.jpg"
+    copy.parent.mkdir(exist_ok=True)
+    shutil.copy2(out, copy)
+    result = {"name": args.name, "palette": args.palette, "picture": str(out), "run_id": run_id,
+              "kept_copy": str(copy), "settings": settings, "filters": used}
     if linear is not None:
         # For processing again without restacking. A picture product: every
         # measurement keeps reading the filters' own final.fits.
@@ -558,7 +594,9 @@ def run(args):
         head["TY_PICT"] = (True, "picture product, not for measurement")
         fits.writeto(kept, np.moveaxis(linear.astype(np.float32), 2, 0), head, overwrite=True)
         result["linear"] = str(kept)
-    return records.write(out.with_suffix(".json"), result, schema="colour", stamp=True)
+    answer = records.write(out.with_suffix(".json"), result, schema="colour", stamp=True)
+    shutil.copy2(out.with_suffix(".json"), copy.with_suffix(".json"))
+    return answer
 
 
 if __name__ == "__main__":

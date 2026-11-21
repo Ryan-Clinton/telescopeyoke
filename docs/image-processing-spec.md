@@ -1,7 +1,7 @@
 # Finished pictures: what the paid tools do, and our own trained models
 
-Spec, 21 November 2026. Nothing here is built, installed or downloaded yet.
-It covers two things: what the commercial astrophotography tools do that
+Spec, 21 November 2026. Part of stage A is built (section 4.1). Stages B to E
+are not, and no model or training data has been installed or downloaded. It covers two things: what the commercial astrophotography tools do that
 TelescopeYoke does not, and how to train our own small neural networks for
 the parts where training helps.
 
@@ -45,11 +45,14 @@ half turn across the meridian; outlier-clipped averaging; a sky surface of
 order 0, 1 or 2; colour balanced on the stars; an arcsinh stretch; LRGB, SHO
 and HOO palettes; mosaics.
 
-**Not in the deep-sky path** (searched by name across `*.py`): deconvolution,
-wavelet or edge-preserving noise reduction, star/nebula separation,
+**Added for narrowband since this spec began** (section 4.1): a linear path,
+star-width matching, star/nebula layers, optional wavelet noise reduction and
+local contrast.
+
+**Not in the deep-sky path**: deconvolution, edge-preserving noise reduction,
 photometric colour calibration (Gaia is used for depth and photometry, not
-colour), a hyperbolic stretch, local contrast, continuum subtraction,
-per-pixel noise maps for pictures. `lucky.py` has its own sharpening, for the Moon and planets.
+colour), a hyperbolic stretch, continuum subtraction, per-pixel noise maps
+for pictures. `lucky.py` has its own sharpening, for the Moon and planets.
 
 **Our own data, 183M, as of today:**
 
@@ -114,7 +117,7 @@ network is the right tool or plain code is.
 | 3 | Photometric colour | PixInsight SPCC, Siril SPCC | Star colour from catalogue spectra and the filter and sensor curves | Star-average only | No | **2** (broadband) |
 | 4 | Better gradient model | PixInsight DBE/MGC, APP, GraXpert | Follows sky gradients a polynomial cannot | Order 0-2 | Plain first | **2** |
 | 5 | Controlled stretch | GHS (PixInsight, Siril) | Sets where contrast goes | Arcsinh only | No | **2** |
-| 6 | Local contrast | PixInsight HDRMT, LHE; StarTools HDR | Reveals structure in bright cores | No | No | **2** |
+| 6 | Local contrast | PixInsight HDRMT, LHE; StarTools HDR | Reveals structure in bright cores | Narrowband, median scales | No | **2** |
 | 7 | Deconvolution | BlurXTerminator, StarTools SVDecon, PixInsight | Undoes blur | No | Plain first, then **yes** | **3** |
 | 8 | Star shape repair | BlurXTerminator "correct only" | Fixes coma, tilt and guiding elongation across the field | No | **Yes** | **3** |
 | 9 | Star reduction, halos, fringes | SXT workflows, Siril "unpurple" | Smaller stars, no coloured rims | No | Follows from 1 | **3** |
@@ -187,14 +190,31 @@ one-off measurements, each planted at 1 and 3 times the pixel noise):
 - *Star widths.* After the global match, each ninth of the NGC 2174 frame is
   within -9 to +6% of Ha's width. Local kernels are not needed yet.
 
-Local contrast is built (structure from 3 to 24 px, on the star-free layer). The
+- *The whole sky chain, from the stack.* A glow planted at 3 times the pixel
+  noise keeps 96 to 98% at 60 px sigma and 87 to 93% at 150 px. At 350 px it keeps
+  only 32 to 48%, and at 800 px, about the frame's size, 2 to 13%. Fitting only a
+  level first, so that every surface is fitted with the nebula masked, changed
+  these by a few points and left the sky as flat. The first pass is now a level
+  anyway. **A faint glow nearly as wide as the frame cannot be told from a sky
+  gradient in one frame.** Keeping it needs a wider reference image (MGC, or
+  perhaps the guide camera).
+- *Coverage.* Empty stack pixels (zero, joined to the frame's edge) now travel
+  through alignment as a mask. None of the six stacks measured had any, so
+  today's pictures do not change because of this.
+
+Local contrast is built (structure from 3 to 24 px, on the star-free layer), on
+median scales. Beside a planted hard edge its dark rim is 22 px wide against 73 px
+for Gaussians, at the same depth (30%), so a rim remains. `--no-contrast` leaves
+it out for comparison. The
 odd and even halves of a session agree on that structure (r 0.72 to 0.97) and do
 not below 3 px, which it leaves alone. A centred hyperbolic stretch was tried and
 not kept. Method notes: `docs/research/image-processing-methods-2026-11-21.md`.
 
 Each picture's JSON is now stamped through `records.write` (schema `colour`),
 with every effective setting and each source stack's SHA-256. Comparison runs
-get their own file names. Section 7's other measures have not been run.
+get their own file names. The usual name is the latest picture, and each
+different make is also kept in `web/colour-runs/` under an identifier from its
+method version, settings and stacks. Section 7's other measures have not been run.
 
 ### 4.2 PSF matching
 

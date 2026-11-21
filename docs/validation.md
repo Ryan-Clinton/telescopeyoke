@@ -98,6 +98,18 @@ The account of everything tried so far, feature by feature, is at the end:
 | 16 | Does the handset take its clock from the computer? | `./mount.py settime` with the handset at its main menu, then read its date on its own screen. | Yes, once: 7 October 2026, at the main menu, it read back the computer's time to the second and its sidereal clock came to 0.01° from true. The date on its own screen was not looked at. |
 | 17 | Can it predict what a turn of a bolt does? | During polar alignment: measure; turn the left azimuth bolt in exactly half a turn; measure again saying so (`--turned 0.5 0`, or the screen); then another half turn the same way and measure again. | Partly, 17 October 2026, not in exact half turns: a quarter turn moved the axis about 0.2° east (the program learnt 0.72° a turn from it), and the next adjustment, told nothing, moved it 2.9°, about 1.7° a turn if it was the advised one and three quarters. The learnt figure was too small: the advice in turns is not yet to be believed. |
 
+### Narrowband pictures, 21 November 2026
+
+Measured on stacks from this rig, NGC 2174 (Ha, OIII, SII) and NGC 281 (Ha,
+OIII, uncalibrated). Two targets, one-off runs. Details:
+`docs/image-processing-spec.md`, section 4.1.
+
+- Planted faint glows survive the sky removal at 60 to 150 px sigma (87 to 98%)
+  and do not at 350 px or wider (2 to 48%).
+- Local contrast follows structure that independent halves agree on (r 0.72 to
+  0.97, 3 to 24 px). It still leaves a narrower dark rim beside a hard edge.
+- Wavelet noise reduction kept no more faint detail than a plain blur: off by default.
+
 ### The software the proofs above ran on
 
 The owner's laptop, Ubuntu, 20 November 2026: Python 3.14.4, numpy 2.3.5,
