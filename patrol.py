@@ -951,9 +951,10 @@ def last_watched(name):
 
 
 CHARACTERISE = (("R", 16, 5.0), ("Ha", 60, 10.0))   # filter, seconds a frame, minutes
+COLOUR_AT = (("B", 16, 5.0), ("R", 16, 5.0))        # a known transient's colour, night by night
 
 
-def characterise(name, wanted, dry_run=False, say=print, run_command=None):
+def characterise(name, wanted, dry_run=False, say=print, run_command=None, bands=CHARACTERISE, place=None):
     """A candidate already found in L, measured in R and Ha for its evidence.
     It adds nothing to the candidate's book: a detection here is never a
     second night or a confirmation, and R holds Ha's light as well, so the
@@ -961,8 +962,12 @@ def characterise(name, wanted, dry_run=False, say=print, run_command=None):
     import candidates
     import forced
     import mount
-    book = candidates.load(name)
-    chosen = [candidates.find(book, one.strip()) for one in wanted.split(",")]   # one set of frames serves them all
+    if place:          # a known object at a place (a reported supernova), not a candidate of ours
+        wanted = f"{place[0]:.5f}{place[1]:+.5f}"
+        chosen = [{"id": wanted, "ra": place[0], "dec": place[1]}]
+    else:
+        book = candidates.load(name)
+        chosen = [candidates.find(book, one.strip()) for one in wanted.split(",")]   # one set of frames serves them all
     extra = ["--dry-run"] if dry_run else []
     run_command = run_command or (lambda c: subprocess.run(c, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")))
 
@@ -977,7 +982,7 @@ def characterise(name, wanted, dry_run=False, say=print, run_command=None):
     sessions = {}
     try:
         step("mount.py", "goto", name, "--solve", *extra)
-        for band, exposure, minutes in CHARACTERISE:
+        for band, exposure, minutes in bands:
             began = time.time()
             step("shoot.py", name, "--filter", band, "--frames", str(math.ceil(minutes * 60 / exposure)),
                  "--minutes", f"{minutes * SHOOT_CAP:g}", "--exposure", str(exposure), "--gain", "1500", *extra)
@@ -1013,6 +1018,14 @@ def characterise(name, wanted, dry_run=False, say=print, run_command=None):
 def run(args, say=print):
     if getattr(args, "characterise", None):
         return characterise(args.programme, args.characterise, args.dry_run, say)
+    if getattr(args, "colour_at", None):
+        try:
+            place = tuple(float(v) for v in args.colour_at.split(","))
+            if len(place) != 2 or not (0 <= place[0] < 360 and -90 <= place[1] <= 90):
+                raise ValueError
+        except ValueError:
+            raise interface.Refusal("INVALID_REQUEST", "--colour-at wants RA,DEC in degrees.") from None
+        return characterise(args.programme, None, args.dry_run, say, bands=COLOUR_AT, place=place)
     if getattr(args, "sweep", False):
         return sweep(args.all_history, say=say, dry_run=args.dry_run)
     if args.analyse:
@@ -1425,6 +1438,9 @@ def main():
     ap.add_argument("--all-history", action="store_true", help="with --sweep: every session kept")
     ap.add_argument("--characterise", metavar="CANDIDATE[,CANDIDATE]",
                     help="with a field: measure those candidates in R and Ha, as evidence only (moves the mount)")
+    ap.add_argument("--colour-at", metavar="RA,DEC",
+                    help="with a target: a known object at that place (degrees) in B and R; "
+                         "colour alone never names a supernova's type (moves the mount)")
     ap.add_argument("--dry-run", action="store_true", help="every step as it would be run; nothing moved or taken")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()

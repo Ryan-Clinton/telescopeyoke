@@ -52,6 +52,7 @@ STARS = {
 }
 MINUTES = 10.0
 BIN = 10
+TRANSIT_DEPTH = 0.012    # mag: the proposed companion's 1.1% transit (programmes/tabby.toml)
 COLOUR_BANDS = ("B", "R")
 COLOUR_MINUTES = 5.0     # each band; 30 batches' worth of 4 s frames between them
 BRIGHTEST = 10.5         # G: trusted in its programme's 4 s frames (16 s ones fill the wells near G 13)
@@ -140,6 +141,27 @@ def colour_change(nights, blue="B", red="R"):
     error = math.hypot(jb["uncertainty"], jr["uncertainty"])
     return {"change": round(change, 3), "uncertainty": round(error, 4), "significant": bool(abs(change) >= 3 * error),
             "why": f"{blue} {jb['dimmer']:+.3f}, {red} {jr['dimmer']:+.3f}: {blue}-{red} {change:+.3f} ± {error:.3f} mag"}
+
+
+def transit_reach(nights, depth=TRANSIT_DEPTH):
+    """Whether this camera and filter's nights are steady enough to see the
+    proposed companion's transit at three sigma: measured from the newest
+    night's series, its night-to-night spread with a night's own error."""
+    if not nights:
+        return {"can_see": None, "why": "no night measured"}
+    same = [n for n in nights if series(n) == series(nights[-1])]
+    camera, name = series(nights[-1])
+    label = f"{camera}, {name or 'unfiltered'}"
+    if len(same) < BASELINE_NIGHTS:
+        return {"can_see": None, "nights": len(same),
+                "why": f"{label}: {len(same)} night(s), {BASELINE_NIGHTS} needed to measure the spread"}
+    mags = np.array([n["mag"] for n in same])
+    spread = 1.4826 * float(np.median(np.abs(mags - np.median(mags))))
+    error = float(np.median([n["scatter"] / math.sqrt(max(n["points"], 1)) for n in same]))
+    noise = math.hypot(spread, error)
+    return {"can_see": bool(depth >= 3 * noise), "nights": len(same), "noise": round(noise, 4),
+            "why": f"{label}: {len(same)} nights, noise {noise:.4f} mag; a {depth:.3f} mag transit needs "
+                   f"{depth / 3:.4f} or better"}
 
 
 def measure(key, session, size=BIN, say=print, night=None):
@@ -259,6 +281,10 @@ def run(args, say=print):
     s = star(args.star)
     if args.colour is not None:
         return colour_look(args.star, args.colour, args.plan or args.dry_run, say)
+    if args.transit_reach:
+        reach = transit_reach(history(s)["nights"])
+        say(reach["why"])
+        return {"star": s["id"], "name": s["name"], "transit_reach": reach, "kind": "measured"}
     if args.history:
         record = history(s)
         for n in record["nights"]:
@@ -279,6 +305,8 @@ def main():
     ap.add_argument("--history", action="store_true", help="every night measured so far")
     ap.add_argument("--colour", type=float, nargs="?", const=COLOUR_MINUTES, metavar="MINUTES",
                     help=f"image in {' then '.join(COLOUR_BANDS)}, this long each (default {COLOUR_MINUTES:g})")
+    ap.add_argument("--transit-reach", action="store_true",
+                    help="whether the nights so far are steady enough for the proposed 1.1%% transit; only reads")
     ap.add_argument("--bin", type=int, default=BIN, help=f"frames in each point (default {BIN})")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
