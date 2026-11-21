@@ -24,10 +24,8 @@ import stacking
 ROOT = Path(__file__).parent
 
 
-def process(rgb, detail=0.8, colour=5.0, stretch=None, background=2, saturation=1.25, whole=True):
-    """rgb: float array (rows, cols, 3) from a stack. Returns 8-bit RGB, or
-    with `whole` false the same 0 to 255 scale unrounded, for mixing further."""
-    rgb = rgb.astype(np.float32)
+def remove_sky(rgb, background=2):
+    """The sky glow and its gradient taken off each channel; still linear."""
     # Level each channel: take out the sky glow and its gradient, then match
     # the channels' scales on the stars so the sky is neutral grey.
     # Take out the sky glow with a smooth surface fitted to the sky alone:
@@ -44,7 +42,7 @@ def process(rgb, detail=0.8, colour=5.0, stretch=None, background=2, saturation=
     design = np.column_stack(terms(ys, xs))
     full_y, full_x = np.mgrid[0:rows, 0:cols]
     full = [t.astype(np.float32) for t in terms(full_y / rows, full_x / cols)]
-    for c in range(3):
+    for c in range(rgb.shape[2]):
         samples = ndimage.median_filter(rgb[::64, ::64, c], 3).ravel()
         # Sky only: leave out stars, nebula and the empty edges of a stack.
         filled = samples[samples != 0]
@@ -52,6 +50,41 @@ def process(rgb, detail=0.8, colour=5.0, stretch=None, background=2, saturation=
             & (samples != 0)
         fit, *_ = np.linalg.lstsq(design[keep], samples[keep], rcond=None)
         rgb[..., c] -= sum(k * t for k, t in zip(fit, full))
+    return rgb
+
+
+def display(rgb, detail=0.8, colour=5.0, stretch=None, saturation=1.25, whole=True, light=None):
+    """A linear picture in units of the sky noise, stretched for the eye: 8-bit
+    RGB, or with `whole` false the same scale unrounded. `light`, when given,
+    is the brightness to use in place of the colour's own."""
+    # Smooth brightness a little and colour a lot.
+    brightness = rgb.mean(axis=2)
+    tint = rgb - brightness[..., None]
+    if light is not None:
+        brightness = light
+    brightness = ndimage.gaussian_filter(brightness, detail)
+    tint = ndimage.gaussian_filter(tint, (colour, colour, 0))
+    rgb = brightness[..., None] + tint
+
+    # Sky just above black; stretch so faint glow shows without lifting grain.
+    softness = 1.0 / np.sqrt(1 + detail ** 2 * 12)   # noise left after smoothing
+    black, white = -2.0 * softness, np.percentile(brightness, 99.995)
+    scaled = np.clip((rgb - black) / (white - black), 0, 1)
+    if stretch is None:
+        stretch = auto_stretch((FAINT - black) / (white - black))
+    out = np.arcsinh(stretch * scaled) / np.arcsinh(stretch)
+    # A little more colour, pushed out from each pixel's own grey level.
+    grey = out.mean(axis=2, keepdims=True)
+    out = grey + saturation * (out - grey)
+    out = 255 * np.clip(out, 0, 1)
+    return out.astype(np.uint8) if whole else out.astype(np.float32)
+
+
+def process(rgb, detail=0.8, colour=5.0, stretch=None, background=2, saturation=1.25, whole=True):
+    """rgb: float array (rows, cols, 3) from a stack. Returns 8-bit RGB, or
+    with `whole` false the same 0 to 255 scale unrounded, for mixing further."""
+    rgb = rgb.astype(np.float32)
+    rgb = remove_sky(rgb, background)
     # Colour balance: the average star is white. Stars are the pixels far
     # above the sky in every channel.
     grey = rgb.mean(axis=2)
@@ -81,25 +114,7 @@ def process(rgb, detail=0.8, colour=5.0, stretch=None, background=2, saturation=
     glow = ndimage.gaussian_filter(grey, 8) if background == 0 else 0.0
     rgb /= 1.4826 * np.median(np.abs(grey - glow))   # in units of the sky noise
 
-    # Smooth brightness a little and colour a lot.
-    brightness = rgb.mean(axis=2)
-    tint = rgb - brightness[..., None]
-    brightness = ndimage.gaussian_filter(brightness, detail)
-    tint = ndimage.gaussian_filter(tint, (colour, colour, 0))
-    rgb = brightness[..., None] + tint
-
-    # Sky just above black; stretch so faint glow shows without lifting grain.
-    softness = 1.0 / np.sqrt(1 + detail ** 2 * 12)   # noise left after smoothing
-    black, white = -2.0 * softness, np.percentile(brightness, 99.995)
-    scaled = np.clip((rgb - black) / (white - black), 0, 1)
-    if stretch is None:
-        stretch = auto_stretch((FAINT - black) / (white - black))
-    out = np.arcsinh(stretch * scaled) / np.arcsinh(stretch)
-    # A little more colour, pushed out from each pixel's own grey level.
-    grey = out.mean(axis=2, keepdims=True)
-    out = grey + saturation * (out - grey)
-    out = 255 * np.clip(out, 0, 1)
-    return out.astype(np.uint8) if whole else out.astype(np.float32)
+    return display(rgb, detail, colour, stretch, saturation, whole)
 
 
 def sky_for(name):

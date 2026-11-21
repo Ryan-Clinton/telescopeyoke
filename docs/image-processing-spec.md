@@ -164,6 +164,15 @@ linear colour result is also saved as a 32-bit file beside the JPEG, so a
 picture can be reprocessed without restacking. It is a picture product and
 never replaces a `final.fits`.
 
+**Built 21 November 2026, for narrowband** (`colour.py`, the default;
+`--stretched` is the earlier method). Sky is fitted outside the nebula as the
+strongest filter shows it, nebula and stars are balanced apart, and brightness
+comes from the unblurred filters. On NGC 2174 the stars lost most of their
+coloured rims and the Hubble palette shows gold and blue. Still wrong: a purple
+cast in the top right corner of the SHO picture, cause unknown. The stacks show
+no step in the sky there (under 0.5 counts along the top). Judged by eye on one
+target; section 7's measures have not been run.
+
 ### 4.2 PSF matching
 
 1. Measure each filter's star shape with the existing 3 x 3 grid
@@ -177,6 +186,8 @@ never replaces a `final.fits`.
    is the reference for the method, and is not a new dependency.
 4. Blur only what colour needs. The sharpest filter's unblurred image is kept
    for a separate detail layer.
+   Built as the global Gaussian: on NGC 2174, OIII 5.05 to 5.78 px and SII
+   5.13 to 5.81 px, against Ha's 5.88. Local kernels are not built.
 5. Passes if star colour rims shrink and each filter's star flux is unchanged.
    Ha's extra width may be a focus or session difference, so it is also worth
    fixing at the telescope rather than blurring everything to it.
