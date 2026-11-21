@@ -29,16 +29,6 @@
             "timeout": 20
           }
         ]
-      },
-      {
-        "matcher": "WebFetch|Agent|Task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/py\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/refused.py\"",
-            "timeout": 10
-          }
-        ]
       }
     ],
     "UserPromptSubmit": [
@@ -92,16 +82,6 @@
             "type": "command",
             "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/py\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/log.py\"",
             "timeout": 20
-          }
-        ]
-      },
-      {
-        "matcher": "WebFetch",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/py\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/refused.py\"",
-            "timeout": 10
           }
         ]
       }
