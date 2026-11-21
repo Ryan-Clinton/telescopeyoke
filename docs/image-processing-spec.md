@@ -141,15 +141,45 @@ that cannot beat a wavelet denoiser is not worth keeping.
 
 | Stage | Delivers | Needs |
 |---|---|---|
-| A | PSF matching between filters; star mask and separation; wavelet noise reduction; photometric colour; GHS; local contrast; better gradient; narrowband into RGB; continuum subtraction | Plain code, filter curves, Gaia |
+| A | A linear path (section 4.1); PSF matching between filters (4.2); 32-bit export; star mask and separation; wavelet noise reduction; photometric colour; GHS; local contrast; better gradient; narrowband into RGB; continuum subtraction | Plain code, filter curves, Gaia |
 | B | Training-data diagnostics: the level flips, and the half-stack checks of section 5 | Plain code |
 | C | Own-data denoiser (section 5) | PyTorch on the desktop; B passed |
 | D | Star removal model (section 6.1) | Stage A's separation, stage C's tooling |
 | E | Star repair, then separately modest sharpening (section 6.2) | Survey data, measured star shapes |
 
 A and B can run side by side, and A's pictures do not wait for B. C to E each
-start only when the one before has passed its acceptance. Channels already
-stay in floating point through colour assembly (`process.process(whole=False)`).
+start only when the one before has passed its acceptance.
+
+### 4.1 A linear path to colour
+
+Today's channels stay in floating point, but `process.process(whole=False)`
+returns them on a 0 to 255 display scale, **after** background removal and an
+arcsinh stretch, and `colour.narrowband` mixes those stretched channels. So the
+mixing is unrounded but not linear, which matters most for faint OIII and SII.
+
+Stage A separates the order: linear stacks; background removed from each;
+channels scaled to each other; PSF matched; palette mixed; **one** display
+stretch at the end. Today's path stays available as the comparison baseline. The
+linear colour result is also saved as a 32-bit file beside the JPEG, so a
+picture can be reprocessed without restacking. It is a picture product and
+never replaces a `final.fits`.
+
+### 4.2 PSF matching
+
+1. Measure each filter's star shape with the existing 3 x 3 grid
+   (`plant.local_shapes`).
+2. Bring the sharper filters **towards the widest**, never sharpening the
+   widest. First try on NGC 2174: OIII and SII towards Ha, with a normalised
+   Gaussian kernel of sigma `sqrt(target^2 - own^2)`, which preserves flux.
+3. If the width varies materially from centre to corners, use a regularised
+   kernel from the measured shapes in each part of the grid, smoothly blended.
+   This is a few lines of NumPy; [photutils](https://docs.astropy.org/projects/photutils/en/stable/user_guide/psf_matching.html)
+   is the reference for the method, and is not a new dependency.
+4. Blur only what colour needs. The sharpest filter's unblurred image is kept
+   for a separate detail layer.
+5. Passes if star colour rims shrink and each filter's star flux is unchanged.
+   Ha's extra width may be a focus or session difference, so it is also worth
+   fixing at the telescope rather than blurring everything to it.
 
 **Where it would live (proposed).** A `finish.py` command for the picture
 steps, called by `colour.py`; `train.py` for building sets and training, which
@@ -209,6 +239,19 @@ two halves' residuals, in blank sky and in rings around stars, and correlate
 the A-B difference with the dark and flat residuals. A pair with a significant
 correlation, unstable detector levels or strong cloud variation stays out.
 
+An A-B difference **cannot** see a defect that is identical in both halves,
+since it cancels, so it is one diagnostic and not the gate. Stage B adds:
+
+- **Independently calibrated subsets:** the dark and flat frames are split so
+  each half uses masters made from different calibration frames, then compared.
+- **Detector-fixed structure:** frames are stacked in detector coordinates,
+  without registration, so sky averages away across dithers and anything fixed
+  to the sensor remains. Sessions with too little dither to separate the two
+  are marked and stay out.
+- **Known defects:** planted dark, flat and banding errors of known size, run
+  once to measure what size each diagnostic can detect. That figure is recorded
+  with the diagnostics.
+
 **Network (proposed).** A small residual U-Net, 4 levels, 32 base channels,
 predicting a correction to its input. One model for all filters at first, with
 the filter given as a condition only if results differ by filter. 256-pixel
@@ -261,6 +304,17 @@ training is therefore not the IPHAS image itself: it is IPHAS blurred to a
 modest improvement over our measured PSF, so the network is asked for a small,
 defensible gain. Asking it for IPHAS's or Hubble's detail is how a sharpener
 starts inventing structure.
+
+**Quality gate for IPHAS.** Use only frames with `in_dr2` true and `qcgrade`
+A (A++, A+ or A; grades are per field), reading `qcproblems`, `seeing` and
+`elliptic`. The page says moonlight and other background remain in the images,
+and describes a 2D background filter for its sky metrics, but does not say whether
+that filter is applied to the delivered pixels. So before any training a small
+sample is checked for whether known extended emission survives.
+
+**How much gain.** A first ceiling of a 5 to 10% reduction in measured star
+width, with no entitlement even to that. A gain counts only where an independent
+deeper stack supports it.
 
 **Order.** Star-shape repair is trained and accepted first, against our measured
 field-varying PSF. Sharpening of nebulae is a separate, later model.
@@ -335,11 +389,9 @@ text. Models trained from it name that manifest.
 
 ## 10. Questions for review
 
-1. Are the half-stack entry checks of section 5 enough to catch a shared artefact?
-2. What PSF-matching method suits a stack whose star width varies across the
-   frame, without softening the sharpest filter more than it must?
-3. How large a sharpening gain over our measured PSF is defensible for stage E?
-4. Is there a capability the paid tools have that section 3 has still missed?
+1. Is matching towards the widest filter right when that filter's extra width
+   may come from a focus difference that could be fixed at the telescope?
+2. Is a 32-bit FITS the right format for the linear colour result?
 
 ## Sources
 
@@ -359,6 +411,7 @@ text. Models trained from it name that manifest.
 - Astro Pixel Processor: <https://www.astropixelprocessor.com/with-unique-features/>
 - StarTools modules: <https://www.startools.org/modules>
 - PhotometricContinuumSubtraction: <https://app.astrobin.com/forum/topic/138868/new-script-photometriccontinuumsubtraction-pixinsight>
+- photutils PSF matching: <https://docs.astropy.org/projects/photutils/en/stable/user_guide/psf_matching.html>
 - PyTorch CUDA 12.6 notice: <https://dev-discuss.pytorch.org/t/notice-cuda-12-6-wheels-will-no-longer-be-published-from-pytorch-2-15-drops-maxwell-pascal-volta/3432>
 - MAST data use: <https://archive.stsci.edu/publishing/data-attributions>
 - Legacy Surveys acknowledgement: <https://www.legacysurvey.org/acknowledgment-old/>
