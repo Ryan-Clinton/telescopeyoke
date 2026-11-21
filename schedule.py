@@ -981,6 +981,12 @@ def tidy(say=print, wait_s=20):
     found = []
     for pid, line in host.processes():       # Linux and Windows alike
         names = [Path(w.strip('"')).name for w in line]
+        # A rain watch that wakes the person (rain.py --wake) guards the kit
+        # until it is indoors, not the night: it stays (21 November 2026,
+        # "make sure the night end does not cancel the rain monitor").
+        if "rain.py" in names and "--wake" in line:
+            tell(f"rain.py --wake (process {pid}): left running, until the telescope is in")
+            continue
         if any(n in WATCHERS for n in names) and pid != os.getpid():
             found.append((pid, next(n for n in names if n in WATCHERS)))
     for pid, name in found:
