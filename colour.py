@@ -44,7 +44,9 @@ from scipy import ndimage
 import config
 import interface
 import process
+import records
 import stacking
+import storage
 
 COLOURS = ("R", "G", "B")
 # palette: (the filter in red, in green, in blue), the filter lined up on,
@@ -143,6 +145,9 @@ LINEAR_OIII = 0.55   # OIII fills two channels in HOO: mixed linearly at full st
 NARROWBAND_SATURATION = 1.8   # mixed linearly the palette is paler than separate stretches' colours
 EDGE_TRIM = 0.035    # of the picture's shorter side, off every edge of a linear narrowband picture
 QUIET = (0.7, 0.6, 0.5, 0.4)    # times its noise each scale needs to be fully kept: at this, on NGC 2174, 99% of the faintest stars stay, their flux within 1%
+MIN_CLEAR = 0.3      # of the frame clear of nebula, or the sky is not mapped
+PICTURE_VERSION = 2  # of the method below: changes what the same stacks give
+EDGE_BAND = 0.25     # of the shorter side: how far in from the edge the sky map acts
 SKY_CELLS = 5        # how smooth the sky map is, in cells of 16 pixels: far wider than any star
 STAR_TINT = 0.25     # of each star's colour kept: a filter's stars differ by more than the eye expects
 OIII_SHARE = 0.8     # OIII fills two channels in HOO: at full strength the stars come out cyan
@@ -214,14 +219,17 @@ def clear_of_nebula(guide):
     rest = shape - sky_surface(shape, shape < np.percentile(shape, 50))
     middle = np.median(rest)
     bright = rest >= middle + 2 * 1.4826 * np.median(np.abs(rest - middle))
-    # The nebula is the largest bright patch. Smaller ones, such as a glow
-    # along the frame's edge, are sky for the map to follow.
+    # Every bright patch is nebula, however many there are, except a smaller
+    # one lying along the frame's edge: that is the glow the map must follow.
     coarse = ndimage.binary_opening(bright[::8, ::8], iterations=2)
     labels, count = ndimage.label(coarse)
     if not count:
         return ~bright
     sizes = ndimage.sum_labels(coarse, labels, range(1, count + 1))
-    nebula = ndimage.binary_dilation(labels == int(np.argmax(sizes)) + 1, iterations=3)
+    largest = int(np.argmax(sizes)) + 1
+    edge = set(labels[0]) | set(labels[-1]) | set(labels[:, 0]) | set(labels[:, -1])
+    kept = [n for n in range(1, count + 1) if n == largest or n not in edge]
+    nebula = ndimage.binary_dilation(np.isin(labels, kept), iterations=3)
     full = np.repeat(np.repeat(nebula, 8, axis=0), 8, axis=1)[:guide.shape[0], :guide.shape[1]]
     return ~full
 
@@ -236,6 +244,12 @@ def sky_model(plane, clear):
     level = ndimage.gaussian_filter(rest * weight, SKY_CELLS, mode="nearest")
     share = ndimage.gaussian_filter(weight, SKY_CELLS, mode="nearest")
     extra = level / np.maximum(share, 0.05)
+    # Only towards the frame's edge, where the patch is. Across the middle it
+    # also took off faint nebula: planted glows lost 15 to 60% of their light.
+    rows, cols = extra.shape
+    yy, xx = np.ogrid[:rows, :cols]
+    inward = np.minimum(np.minimum(yy, rows - 1 - yy), np.minimum(xx, cols - 1 - xx))
+    extra = extra * np.clip(1 - inward / (EDGE_BAND * min(rows, cols)), 0, 1)
     return bowl + ndimage.zoom(extra, (plane.shape[0] / extra.shape[0], plane.shape[1] / extra.shape[1]), order=1)
 
 
@@ -274,7 +288,7 @@ def layers(plane, star):
     return nebula, plane - nebula
 
 
-def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=True):
+def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=False):
     """The narrowband picture made in the light's own units: sky off, star
     widths matched, the palette mixed, and one stretch at the very end.
     Nebula and stars are balanced apart: the nebula on its own strength, so
@@ -293,8 +307,14 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
     # NGC 2174's SII turned the sky red (21 November 2026).
     guide = max(planes, key=lambda b: nebula_level(planes[b]))
     clear = clear_of_nebula(planes[guide])
-    planes = {b: p - sky_model(p, clear) for b, p in planes.items()}
-    say(f"  sky fitted outside the nebula as {guide} shows it")
+    open_sky = float(clear.mean())
+    if open_sky >= MIN_CLEAR:
+        planes = {b: p - sky_model(p, clear) for b, p in planes.items()}
+        say(f"  sky fitted outside the nebula as {guide} shows it ({open_sky:.0%} of the frame is clear)")
+    else:
+        # A target filling the frame leaves too little sky to map: what the
+        # map took off would be the target.
+        say(f"  only {open_sky:.0%} of the frame is clear of nebula: no sky map, only the tilt")
     scale = {b: nebula_level(p) for b, p in planes.items()}
     even, before, after = matched_widths(planes, say)
     star = star_mask(np.mean([p / scale[b] for b, p in planes.items()], axis=0))
@@ -329,11 +349,13 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
     # The stretch is set by the grain as it was: set by the reduced grain, it
     # lifted the sky's blotches along with the nebula.
     raw = np.mean([untouched[b] / scale[b] + sharp_stars[b] / flux[b] * level for b in channels], axis=0)
-    noise = 1.4826 * np.median(np.abs(raw - np.median(raw))) + 1e-6
+    sky = raw[clear & (star < 0.1)] if open_sky >= MIN_CLEAR else raw     # nebula would count as grain
+    noise = 1.4826 * np.median(np.abs(sky - np.median(sky))) + 1e-6
     picture = process.display(colour / noise, saturation=saturation, whole=False, light=light / noise)
     if grain:
         say("  grain in the clear sky: " + ", ".join(f"{b} x{v:.2f}" for b, v in grain.items()))
-    done = {"method": "linear", "grain_kept": grain, "nebula_scale": {b: round(v, 2) for b, v in scale.items()},
+    done = {"method": "linear", "picture_version": PICTURE_VERSION, "clear_sky_share": round(open_sky, 3),
+            "sky_map": open_sky >= MIN_CLEAR, "sky_guide": guide, "grain_kept": grain, "nebula_scale": {b: round(v, 2) for b, v in scale.items()},
             "star_flux": {b: round(v, 2) for b, v in flux.items()},
             "star_width_px": {b: round(v, 2) for b, v in before.items() if v},
             "star_width_matched_px": {b: round(v, 2) for b, v in after.items() if v}}
@@ -367,7 +389,7 @@ def narrowband(rgb, channels, saturation, background=2):
 
 
 def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette="LRGB", background=2,
-            stretched=False, quiet=True):
+            stretched=False, quiet=False):
     """The colour picture (8-bit RGB array) and what went into it."""
     channels, base, detail_band = PALETTES[palette]
     needed = tuple(dict.fromkeys(channels))
@@ -438,7 +460,7 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
         if r1 > r0 and c1 > c0:
             colour = colour[r0:r1 + 1, c0:c1 + 1]
             linear = None if linear is None else linear[r0:r1 + 1, c0:c1 + 1]
-            share = colour.shape[0] * colour.shape[1] / valid.size
+            share = float(valid[r0:r1 + 1, c0:c1 + 1].sum()) / valid.size     # pixels really covered, not the rectangle
             used["covered"] = round(float(share), 2)
             say(f"  every filter covers {share:.0%} of the frame; the picture is cropped to it")
             if share < min_covered:
@@ -467,7 +489,9 @@ def main():
                     help="LRGB (default), SHO (SII red, Ha green, OIII blue) or HOO (Ha red, OIII green and blue)")
     ap.add_argument("--stretched", action="store_true",
                     help="narrowband: stretch each filter before mixing (the earlier method, for comparison)")
-    ap.add_argument("--no-noise-reduction", action="store_true", help="narrowband: leave the nebula's grain in")
+    ap.add_argument("--noise-reduction", action="store_true",
+                    help="narrowband: wavelet noise reduction (off by default: on NGC 2174 and NGC 281 it kept no more "
+                         "faint detail than a plain blur)")
     ap.add_argument("--any-coverage", action="store_true",
                     help="make the picture even when the filters share under 75%% of the frame")
     ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
@@ -482,15 +506,32 @@ def run(args):
     print("stacks: " + (", ".join(f"{b} {p.parent.name}" for b, p in sorted(stacks.items())) or "none"))
     linear_mix = args.palette != "LRGB" and not args.stretched
     saturation = args.saturation or (NARROWBAND_SATURATION if linear_mix else 1.25)
+    background = max(process.sky_for(args.name), 1)
     picture, used, linear = combine(stacks, saturation, min_covered=0.0 if args.any_coverage else MIN_COVERED,
-                            palette=args.palette, background=max(process.sky_for(args.name), 1),
-                            stretched=args.stretched, quiet=not args.no_noise_reduction)
+                            palette=args.palette, background=background,
+                            stretched=args.stretched, quiet=args.noise_reduction)
     suffix = "colour" if args.palette == "LRGB" else args.palette
+    # A comparison keeps its own files, so it never replaces the picture.
+    if args.stretched:
+        suffix += "-stretched"
+    if args.noise_reduction:
+        suffix += "-quiet"
+    if args.saturation:
+        suffix += f"-sat{args.saturation:g}"
     out = config.DATA / "web" / f"{stacking.folder_name(args.name)}-{suffix}.jpg"
     out.parent.mkdir(exist_ok=True)
     Image.fromarray(picture).save(out, quality=93)
     print(f"saved {out}")
-    result = {"name": args.name, "palette": args.palette, "picture": str(out), "filters": used}
+    settings = {"saturation": saturation, "background": background, "stretched": args.stretched,
+                "noise_reduction": args.noise_reduction, "night": args.night,
+                "any_coverage": args.any_coverage}
+    if linear_mix:
+        settings.update(green_kept=GREEN_KEPT, linear_oiii=LINEAR_OIII, star_tint=STAR_TINT, edge_trim=EDGE_TRIM,
+                        sky_cells=SKY_CELLS, min_clear=MIN_CLEAR, quiet=list(QUIET))
+    for band, stack in stacks.items():
+        if isinstance(used.get(band), dict):
+            used[band]["sha256"] = storage.digest(stack)
+    result = {"name": args.name, "palette": args.palette, "picture": str(out), "settings": settings, "filters": used}
     if linear is not None:
         # For processing again without restacking. A picture product: every
         # measurement keeps reading the filters' own final.fits.
@@ -500,8 +541,7 @@ def run(args):
         head["TY_PICT"] = (True, "picture product, not for measurement")
         fits.writeto(kept, np.moveaxis(linear.astype(np.float32), 2, 0), head, overwrite=True)
         result["linear"] = str(kept)
-    (out.with_suffix(".json")).write_text(json.dumps(result, indent=1), encoding="utf-8")
-    return result
+    return records.write(out.with_suffix(".json"), result, schema="colour", stamp=True)
 
 
 if __name__ == "__main__":

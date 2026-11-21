@@ -170,11 +170,26 @@ strongest filter shows it, nebula and stars are balanced apart, and brightness
 comes from the unblurred filters. On NGC 2174 the stars lost most of their
 coloured rims and the Hubble palette shows gold and blue. A patch at one corner
 of the sensor, in every filter, is taken out by a smooth map of the clear sky;
-its cause is unknown, and 3.5% is trimmed off each edge. Wavelet noise reduction
-acts on the nebula layer only (`--no-noise-reduction` leaves it out). On NGC 2174
-at the strength chosen, fine grain in the clear sky falls to about 0.4 of what it
-was, 99% of the faintest quarter of stars are still found, and matched star flux
-changes by +0.7% (spread 0.9%). One target; the rest of section 7 has not been run.
+its cause is unknown, and 3.5% is trimmed off each edge.
+
+**Measured with planted signal, 21 November 2026** (five stacks: NGC 2174 in Ha,
+OIII and SII, NGC 281 in Ha and OIII; the NGC 281 stacks are uncalibrated;
+one-off measurements, each planted at 1 and 3 times the pixel noise):
+
+- *Sky map.* Applied across the whole frame it took 7 to 62% of a faint isolated
+  glow (60 px sigma). It now acts only in the outer quarter, and 90 to 100% of
+  the glow survives. Every bright patch counts as nebula except a smaller one
+  along the frame's edge. With under 30% of the frame clear, no map is made.
+- *Wavelet noise reduction.* At equal grain it kept no more faint detail than a
+  plain Gaussian blur of sigma 0.7 to 0.8 px, on glows or thin filaments. Both
+  lost 6 to 36% of a thin filament's flux on the nebula. So it is **off by
+  default** (`--noise-reduction`), kept as the baseline for stage C.
+- *Star widths.* After the global match, each ninth of the NGC 2174 frame is
+  within -9 to +6% of Ha's width. Local kernels are not needed yet.
+
+Each picture's JSON is now stamped through `records.write` (schema `colour`),
+with every effective setting and each source stack's SHA-256. Comparison runs
+get their own file names. Section 7's other measures have not been run.
 
 ### 4.2 PSF matching
 

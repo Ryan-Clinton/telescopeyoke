@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "colour.py: how one colour picture was made",
+  "type": "object",
+  "required": ["name", "palette", "picture", "settings", "filters", "provenance"],
+  "properties": {
+    "name": {"type": "string"},
+    "palette": {"enum": ["LRGB", "SHO", "HOO"]},
+    "picture": {"type": "string"},
+    "linear": {"type": "string"},
+    "settings": {
+      "type": "object",
+      "required": ["saturation", "background", "stretched", "noise_reduction"],
+      "properties": {
+        "saturation": {"type": "number"},
+        "background": {"type": "integer"},
+        "stretched": {"type": "boolean"},
+        "noise_reduction": {"type": "boolean"}
+      }
+    },
+    "filters": {
+      "type": "object",
+      "required": ["palette", "calibrated"],
+      "properties": {"palette": {"type": "string"}, "calibrated": {"type": "boolean"}}
+    },
+    "provenance": {"type": "object", "required": ["git_commit", "telescopeyoke", "created_utc"]}
+  }
+}
