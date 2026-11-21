@@ -208,6 +208,8 @@ def colour_light(bridge, light, colour, brightness=100, seconds=20, restore=True
         x, y = COLOURS.get(colour, COLOURS["Orange"])
         wanted["color"] = {"xy": {"x": x, "y": y}}
     name = light.get("metadata", {}).get("name", light["id"])
+    if not does_colour(light):
+        colour = "white (it does no colour)"      # 21 November 2026: "went blue" on a white bulb misled
     bridge.put(light["id"], {**wanted, "alert": {"action": "breathe"}})
     sleep(seconds)
     if not restore:
