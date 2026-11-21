@@ -86,9 +86,18 @@ def brightness(path):
 
 
 def lined_up(image, reference):
-    """`image` moved onto `reference` (a dict of its "square" and "stars")."""
+    """`image` moved onto `reference` (a dict of its "square" and "stars").
+    Stacks from either side of the meridian are half a turn apart, so a stack
+    that does not match is tried turned round (21 November 2026: NGC 2174's
+    Ha before the flip, its OIII and SII after)."""
     stars = stacking.find_stars(np.nan_to_num(image))
     moved, info = stacking.register(image[..., None], np.nan_to_num(image), stars, reference)
+    if not stacking.lined_up(info["matched"]):
+        turned = np.ascontiguousarray(image[::-1, ::-1])
+        clean = np.nan_to_num(turned)
+        again, second = stacking.register(turned[..., None], clean, stacking.find_stars(clean), reference)
+        if second["matched"] > info["matched"]:
+            return again[..., 0], second
     return moved[..., 0], info
 
 
