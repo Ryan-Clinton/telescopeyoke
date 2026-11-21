@@ -386,13 +386,48 @@ def run(args, say=print):
     return answer
 
 
+def compare_filters(field, say=print):
+    """Which filter has measured a field's transits best, from the kept
+    precision.json of each session: the worse of each night's baseline and
+    in-transit scatter for its best way. Only one camera's filters are
+    weighed, and with fewer than two filters measured nothing is chosen."""
+    import stacking
+    import variables
+    best = {}
+    for kept in sorted((config.DATA / "frames" / stacking.folder_name(field)).glob("*/precision.json")):
+        ways = json.loads(kept.read_text(encoding="utf-8")).get("ways") or []
+        scatter = [v for v in (ways[0].get("baseline_rms_mmag"), ways[0].get("transit_rms_mmag"))
+                   if v is not None and np.isfinite(v)] if ways else []
+        if not scatter:
+            continue
+        series = variables.session_series(kept.parent)
+        if series not in best or max(scatter) < best[series]["mmag"]:
+            best[series] = {"camera": series[0], "filter": series[1], "session": kept.parent.name,
+                            "mmag": round(float(max(scatter)), 2)}
+    rows = sorted(best.values(), key=lambda r: r["mmag"])
+    for r in rows:
+        say(f"  {r['camera']}, {r['filter'] or 'unfiltered'}: {r['mmag']} mmag ({r['session']})")
+    newest = rows and max(rows, key=lambda r: r["session"])["camera"]
+    filtered = [r for r in rows if r["camera"] == newest and r["filter"]]
+    choice = filtered[0]["filter"] if len(filtered) >= 2 else None
+    say(f"Use {choice}: the lowest measured scatter." if choice
+        else "No choice yet: this needs two filters measured with one camera.")
+    return {"field": field, "filters": rows, "choice": choice, "kind": "measured"}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("session", help="the night's session folder")
-    ap.add_argument("--planet", required=True, help="the planet, as the archive names it (\"WASP-12 b\")")
+    ap.add_argument("session", nargs="?", help="the night's session folder")
+    ap.add_argument("--planet", help="the planet, as the archive names it (\"WASP-12 b\")")
+    ap.add_argument("--compare", metavar="FIELD", help="which filter has measured this field's transits best; only reads")
     ap.add_argument("--again", action="store_true", help="measure the frames again, not from precision-flux.npz")
     ap.add_argument("--first", type=int, metavar="N", help="only the first N frames: a quick try")
     args = ap.parse_args()
+    if args.compare:
+        interface.main("precision", lambda: compare_filters(args.compare), False)
+        return
+    if not args.session or not args.planet:
+        ap.error("name a session and --planet, or --compare FIELD")
     interface.main("precision", lambda: run(args), False)
 
 

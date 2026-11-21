@@ -111,6 +111,18 @@ def _onto(a, shift):
     return ndimage.shift(a, shift, order=1, mode="nearest")
 
 
+def mono_colour(blue, green, red):
+    """One RGB stack from three mono stacks, one per filter, each moved onto
+    green. The log ratios and the slope taken off later absorb the filters'
+    different throughputs. Still a colour index, not a mineral abundance."""
+    base = _level(green)
+
+    def placed(band):
+        band = _level(band)
+        return _onto(band, lucky.whole_shift(base, band))
+    return np.stack([placed(red), base, placed(blue)], -1)
+
+
 def _middle(image, size=1024):
     """The middle of a picture, where the Moon is, for lining things up."""
     h, w = image.shape[:2]
@@ -569,13 +581,15 @@ def solved_turn(site, when, look, path=None):
             "solved_at": solved_at.isoformat()}
 
 
-def mineral_file(stems, details=None, strength="standard", site=None, say=print, slope="bright"):
+def mineral_file(stems, details=None, strength="standard", site=None, say=print, slope="bright", mono=False):
     """The mineral Moon from stacked videos named by their stem (the SER
     file without .ser): colour from each one's largest share, detail from
-    the share each showed (from `details` when given). Writes the files the
-    module's notes list beside the first. Returns (picture, facts)."""
+    the share each showed (from `details` when given). With `mono`, the
+    stems are one mono camera's B, G and R videos, made into one colour
+    stack, with G for the detail. Writes the files the module's notes list
+    beside the first. Returns (picture, facts)."""
     stems = [Path(str(s).removesuffix(".ser")) for s in stems]
-    detail_stems = [Path(str(s).removesuffix(".ser")) for s in (details or stems)]
+    detail_stems = [Path(str(s).removesuffix(".ser")) for s in (details or (stems[1:2] if mono else stems))]
     from astropy.io import fits
     colours, ceilings, flats = [], [], []
     for stem in stems:
@@ -586,6 +600,8 @@ def mineral_file(stems, details=None, strength="standard", site=None, say=print,
         flats.append(done.get("flat"))
         say(f"{stem.name}: colour from the best {largest} %, white level {ceilings[-1]:g}, "
             f"{'flat ' + Path(done['flat']).name if done.get('flat') else 'no flat'}")
+    if mono:
+        colours, ceilings = [mono_colour(*colours)], [min(ceilings)]
     detail_images, detail_ceilings = _details(detail_stems)
     geometry, placed = placed_on_moon(_level(detail_images[0]), detail_stems[0], site, say)
     out = mineral(colours, detail_images, strength=strength, ceilings=ceilings, detail_ceilings=detail_ceilings,
@@ -739,12 +755,12 @@ def _written(out, facts, stems, geometry, placed, strength, say):
 
 
 @activity.during("Making the mineral Moon", lambda a: f"from {len(a['stems'])} videos")
-def run(stems, details=None, strength="standard", slope="bright", send=True):
+def run(stems, details=None, strength="standard", slope="bright", send=True, mono=False):
     """The command: make it, and send the picture to the person's phone
     (not with `send` off, for a run made only to compare). The stream says
     so while it is made (lucky.json's "mineral" stage)."""
     lucky.progress("mineral", videos=len(stems))
-    jpg, facts = mineral_file(stems, details=details, strength=strength, slope=slope)
+    jpg, facts = mineral_file(stems, details=details, strength=strength, slope=slope, mono=mono)
     lucky.progress("done", kind="mineral", videos=facts.get("videos", len(stems)), seas=facts.get("seas", []),
                    picture=str(jpg))
     if not send:

@@ -669,6 +669,8 @@ def main():
                     help="mineral: fit the slope across the disc on its brighter half (agreed better with "
                          "Clementine on 30 October 2026) or on the mapped highlands")
     ap.add_argument("--no-send", action="store_true", help="mineral: do not send the picture (a run to compare)")
+    ap.add_argument("--mono", action="store_true",
+                    help="mineral: the three videos are one mono camera's B, G and R, in that order")
     ap.add_argument("--compare-flats", nargs="+", metavar="FLAT",
                     help="mineral: the colour stacked again with each flat (none, master, or a FITS file) "
                          "and how well the videos agree with each")
@@ -684,11 +686,13 @@ def main():
         return
     if args.command == "mineral":
         import mineral
+        if args.mono and (len(args.target) != 3 or args.compare_flats):
+            ap.error("--mono takes exactly three videos (B, G, R) and no --compare-flats")
         if args.compare_flats:
             mineral.compare_flats(args.target, args.compare_flats, details=args.detail)
         else:
             mineral.run(args.target, details=args.detail, strength=args.strength, slope=args.slope,
-                        send=not args.no_send)
+                        send=not args.no_send, mono=args.mono)
         return
     args.target = args.target[0]
     if args.command == "capture":
