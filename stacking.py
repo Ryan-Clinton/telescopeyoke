@@ -268,6 +268,19 @@ def dark_stem(cards):
             f"-s{card('READSPD')}-t{card('SET-TEMP')}")
 
 
+def dark_kept(exposure, gain):
+    """Whether a dark is kept for frames of this exposure and gain at the
+    camera's present settings, without loading it: for a plan, before any
+    frame has a header to match."""
+    camera = camera_from()
+    if dark_method(camera) != "matched":
+        return master_path("dark", exposure, gain).exists()
+    settings = config.hardware()["camera"]
+    return bool(versions(library(camera), dark_stem({
+        "EXPTIME": exposure, "GAIN": gain, "OFFSET": settings.get("offset"),
+        "READSPD": settings.get("readout_speed"), "SET-TEMP": settings.get("tec_target")})))
+
+
 def flat_stem(cards):
     return f"flat-{_slug(cards.get('TELESCOP') or 'none')}-{_slug(cards.get('FILTER') or 'none')}"
 

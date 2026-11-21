@@ -95,7 +95,7 @@ def readiness(p):
     # picture: on 1 November 2026 M33's 16 s frames had only a bias, and the
     # stream showed a purple glow round three edges. Said, never a stop.
     import stacking
-    dark = stacking.master_path("dark", p["exposure"], p["gain"]).exists()
+    dark = stacking.dark_kept(p["exposure"], p["gain"])
     items.append({"what": "dark", "ok": dark, "stops": False, "kind": "inferred",
                   "detail": "kept" if dark else f"none for {p['exposure']:g} s at gain {p['gain']}: "
                                                 f"./calibrate.py dark --exposure {p['exposure']:g} --gain {p['gain']} "
