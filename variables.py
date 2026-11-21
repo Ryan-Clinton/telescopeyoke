@@ -539,9 +539,30 @@ def draw(star, path, size=(640, 320)):
     return str(path)
 
 
+def compare_bands(name, say=print):
+    """Each listed star's scatter in every band of one camera that has its own
+    record: a change seen in only one band points at that band's systematics,
+    and one larger in blue than red at colour. Reads the kept records only."""
+    import stacking
+    folder = config.DATA / "frames" / stacking.folder_name(name)
+    stars = {}
+    for path in sorted(folder.glob("variables-*-*.json")):
+        record = json.loads(path.read_text(encoding="utf-8"))
+        for s in record.get("stars_listed", []):
+            row = stars.setdefault(key(s["ra"], s["dec"]), {"ra": s["ra"], "dec": s["dec"], "bands": {}})
+            row["bands"][f"{record['camera']} {record['filter']}"] = s.get("scatter")
+    shared = [s for s in stars.values() if len(s["bands"]) >= 2]
+    for s in shared:
+        say(f"  {s['ra']:.5f} {s['dec']:+.5f}: " + ", ".join(f"{b} {v:.3f}" for b, v in s["bands"].items() if v is not None))
+    say(f"{len(shared)} listed star(s) measured in two bands or more")
+    return {"field": name, "stars": shared, "kind": "measured"}
+
+
 def run(args, say=print):
     if config.DEMO:
         raise interface.Refusal("DEMO_UNSUPPORTED", "Light curves need real frames.")
+    if getattr(args, "compare_bands", False):
+        return compare_bands(args.name, say)
     import stacking
     import vet
     folder = config.DATA / "frames" / stacking.folder_name(args.name)
@@ -610,6 +631,7 @@ def main():
     ap.add_argument("name", help="the field, as the frames' folder is named (M31)")
     ap.add_argument("--session", action="append", help="one session folder's name (repeat for more; default all)")
     ap.add_argument("--filter", help="the filter to measure (default: the newest session's camera and filter)")
+    ap.add_argument("--compare-bands", action="store_true", help="each listed star's scatter across the kept bands; only reads")
     ap.add_argument("--bin", type=int, default=BIN, help=f"frames in each point (default {BIN})")
     ap.add_argument("--offline", action="store_true", help="do not ask VSX which stars are known")
     ap.add_argument("--json", action="store_true", help="answer in JSON")

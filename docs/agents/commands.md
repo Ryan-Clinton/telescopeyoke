@@ -160,7 +160,11 @@ already taken. Only nights of the same camera and filter share a usual level.
 `--colour [MINUTES]` (moves the mount; 5 minutes each by default) images it in
 B then R and, once each band has three earlier nights, says whether B changed
 more than R that night. `--transit-reach` only reads the kept nights and says
-whether their noise could show the proposed 0.012 mag transit at three sigma.
+whether their noise could show the proposed 0.012 mag transit at three sigma,
+and how nights inside its windows compare with those outside. Each night also
+keeps `check_scatter`, how steady stars of about its brightness were.
+`variables.py FIELD --compare-bands` sets a star's scatter in each kept band
+side by side.
 Reporting a dip is a person's.
 
 ## Uses the camera, not the mount

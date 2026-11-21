@@ -24,6 +24,7 @@
     "candidate": {"type": "string", "description": "With --characterise: the candidate measured in R and Ha."},
     "candidates": {"type": "array", "items": {"type": "object"}, "description": "With --characterise and several candidates: each one's answer."},
     "measurements": {"type": "array", "items": {"type": "object"}, "description": "With --characterise: forced photometry at its place in tonight's stacks, each in its own band."},
+    "expected_reach": {"type": "object", "description": "With --characterise: how faint each band should reach in its time, scaled from its newest measured stack; null until it has one."},
     "confirms": {"const": false, "description": "With --characterise: always false. These measurements are evidence, never a confirmation."},
     "programme": {
       "type": "object",

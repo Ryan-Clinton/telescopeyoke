@@ -954,6 +954,24 @@ CHARACTERISE = (("R", 16, 5.0), ("Ha", 60, 10.0))   # filter, seconds a frame, m
 COLOUR_AT = (("B", 16, 5.0), ("R", 16, 5.0))        # a known transient's colour, night by night
 
 
+def band_reach(band, seconds):
+    """How faint `seconds` of exposure in `band` should reach: the newest
+    measured stack in that band (half of planted stars found), scaled by
+    the square root of the time. Its sky may differ from tonight's; None
+    until the band has a measured stack."""
+    from astropy.io import fits
+    kept = sorted(config.DATA.glob("frames/*/*/depth.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for path in kept:
+        final = path.parent / "final.fits"
+        if not final.exists() or fits.getheader(final).get("FILTER") != band:
+            continue
+        record = json.loads(path.read_text(encoding="utf-8"))
+        half, measured = record.get("completeness", {}).get("all", {}).get("mag_50"), record.get("exposure_s")
+        if half and measured:
+            return round(half + 1.25 * math.log10(seconds / measured), 2)
+    return None
+
+
 def characterise(name, wanted, dry_run=False, say=print, run_command=None, bands=CHARACTERISE, place=None):
     """A candidate already found in L, measured in R and Ha for its evidence.
     It adds nothing to the candidate's book: a detection here is never a
@@ -970,6 +988,13 @@ def characterise(name, wanted, dry_run=False, say=print, run_command=None, bands
         chosen = [candidates.find(book, one.strip()) for one in wanted.split(",")]   # one set of frames serves them all
     extra = ["--dry-run"] if dry_run else []
     run_command = run_command or (lambda c: subprocess.run(c, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")))
+    reach = {band: band_reach(band, minutes * 60) for band, _, minutes in bands}
+    for k in chosen:
+        seen = [n["mag"] for n in k.get("nights", []) if n.get("seen") and n.get("mag") is not None]
+        for band, limit in reach.items():
+            if seen and limit is not None and limit < seen[-1]:
+                say(f"  {k['id']}: last seen at {seen[-1]:.2f}; {band} should reach about {limit:.2f} in this time, "
+                    "so a miss would say nothing")
 
     def step(script, *words, optional=False):
         done = run_command([sys.executable, str(ROOT / script), *words])
@@ -1004,9 +1029,11 @@ def characterise(name, wanted, dry_run=False, say=print, run_command=None, bands
     import stacking
     answers = []
     for k in chosen:
-        rows = [r for r in forced.history(name, k["ra"], k["dec"], say) if r["session"] in tonight]
+        # Its own detections beside tonight's, so the packet shows L with R and Ha.
+        found = {n.get("night") for n in k.get("nights", []) if n.get("seen")}
+        rows = [r for r in forced.history(name, k["ra"], k["dec"], say) if r["session"] in tonight | found]
         answer = {"object": name, "candidate": k["id"], "ra": k["ra"], "dec": k["dec"], "sessions": sessions,
-                  "measurements": rows, "confirms": False, "kind": "measured",
+                  "measurements": rows, "expected_reach": reach, "confirms": False, "kind": "measured",
                   "note": "Instrumental, each in its own band. Not a confirmation or a line strength."}
         records.write(config.DATA / "frames" / stacking.folder_name(name) / f"characterise-{k['id']}.json",
                       answer, stamp=True)

@@ -164,6 +164,41 @@ def transit_reach(nights, depth=TRANSIT_DEPTH):
                    f"{depth / 3:.4f} or better"}
 
 
+def transit_window(nights, windows, depth=TRANSIT_DEPTH):
+    """The newest series' nights inside the proposed transit's windows against
+    those outside them. Never a detection by itself: 2.3 sigma is all the
+    proposal has, and a single site sees only part of a 21-hour transit."""
+    if not nights:
+        return {"seen": None, "why": "no night measured"}
+    same = [n for n in nights if series(n) == series(nights[-1]) and n.get("jd") is not None]
+    inside = [n for n in same if any(a <= n["jd"] <= b for a, b in windows)]
+    outside = [n for n in same if n not in inside]
+    if not inside or len(outside) < BASELINE_NIGHTS:
+        return {"seen": None, "inside": len(inside), "outside": len(outside),
+                "why": f"{len(inside)} night(s) in a window and {len(outside)} outside; "
+                       f"needs 1 and {BASELINE_NIGHTS}"}
+    level = np.array([n["mag"] for n in outside])
+    usual = float(np.median(level))
+    spread = 1.4826 * float(np.median(np.abs(level - usual)))
+    change = float(np.median([n["mag"] for n in inside])) - usual
+    error = math.hypot(spread, float(np.median([n["scatter"] / math.sqrt(max(n["points"], 1)) for n in inside])))
+    return {"seen": bool(change >= max(depth / 2, 3 * error)), "inside": len(inside), "outside": len(outside),
+            "change": round(change, 4), "uncertainty": round(error, 4),
+            "why": f"{change:+.4f} ± {error:.4f} mag in the window against {len(outside)} nights outside it"}
+
+
+def check_stars(n, j):
+    """How steady the stars of about the target's brightness were that night:
+    the typical scatter of up to 10 of them, so a noisy night is told from a
+    change in the star."""
+    stars, mags = np.asarray(n["stars"]), np.asarray(n["mags"])
+    near = np.argsort(np.abs(stars[:, 2] - stars[j, 2]))
+    near = [i for i in near if i != j and np.isfinite(mags[:, i]).sum() >= 3][:10]
+    if not near:
+        return None
+    return round(float(np.median([np.nanstd(mags[:, i], ddof=1) for i in near])), 4)
+
+
 def measure(key, session, size=BIN, say=print, night=None):
     """The star in one night's frames, added to its record."""
     import variables
@@ -187,7 +222,8 @@ def measure(key, session, size=BIN, say=print, night=None):
     latest = {"session": session.name, "jd": round(float(np.mean(jd)), 5) if jd else None,
               "mag": round(float(np.median(mags)), 4), "points": int(len(mags)),
               "scatter": round(float(np.std(mags, ddof=1)) if len(mags) > 1 else 0.0, 4),
-              "batches": [round(float(m), 4) for m in mags], **session_band(session)}
+              "batches": [round(float(m), 4) for m in mags], "check_scatter": check_stars(n, j),
+              **session_band(session)}
     record = history(s)
     record["nights"] = [x for x in record["nights"] if x["session"] != latest["session"]] + [latest]
     record["nights"].sort(key=lambda x: x["session"])
@@ -291,9 +327,14 @@ def run(args, say=print):
     if args.colour is not None:
         return colour_look(args.star, args.colour, args.plan or args.dry_run, say)
     if args.transit_reach:
-        reach = transit_reach(history(s)["nights"])
+        import patrol
+        nights = history(s)["nights"]
+        reach = transit_reach(nights)
+        windows = [w for watch in patrol.programme(s["programme"]).get("watch", []) for w in watch.get("windows", [])]
+        window = transit_window(nights, windows)
         say(reach["why"])
-        return {"star": s["id"], "name": s["name"], "transit_reach": reach, "kind": "measured"}
+        say(f"In the windows: {window['why']}")
+        return {"star": s["id"], "name": s["name"], "transit_reach": reach, "transit_window": window, "kind": "measured"}
     if args.history:
         record = history(s)
         for n in record["nights"]:
