@@ -961,7 +961,8 @@ def characterise(name, wanted, dry_run=False, say=print, run_command=None):
     import candidates
     import forced
     import mount
-    k = candidates.find(candidates.load(name), wanted)
+    book = candidates.load(name)
+    chosen = [candidates.find(book, one.strip()) for one in wanted.split(",")]   # one set of frames serves them all
     extra = ["--dry-run"] if dry_run else []
     run_command = run_command or (lambda c: subprocess.run(c, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")))
 
@@ -995,13 +996,18 @@ def characterise(name, wanted, dry_run=False, say=print, run_command=None):
     if dry_run:
         return {"dry_run": True, "object": name}
     tonight = set(sessions.values())
-    rows = [r for r in forced.history(name, k["ra"], k["dec"], say) if r["session"] in tonight]
-    answer = {"object": name, "candidate": wanted, "ra": k["ra"], "dec": k["dec"], "sessions": sessions,
-              "measurements": rows, "confirms": False, "kind": "measured",
-              "note": "Instrumental, each in its own band. Not a confirmation or a line strength."}
     import stacking
-    records.write(config.DATA / "frames" / stacking.folder_name(name) / f"characterise-{wanted}.json", answer, stamp=True)
-    return answer
+    answers = []
+    for k in chosen:
+        rows = [r for r in forced.history(name, k["ra"], k["dec"], say) if r["session"] in tonight]
+        answer = {"object": name, "candidate": k["id"], "ra": k["ra"], "dec": k["dec"], "sessions": sessions,
+                  "measurements": rows, "confirms": False, "kind": "measured",
+                  "note": "Instrumental, each in its own band. Not a confirmation or a line strength."}
+        records.write(config.DATA / "frames" / stacking.folder_name(name) / f"characterise-{k['id']}.json",
+                      answer, stamp=True)
+        answers.append(answer)
+    return answers[0] if len(answers) == 1 else {"object": name, "candidates": answers, "confirms": False,
+                                                 "kind": "measured"}
 
 
 def run(args, say=print):
@@ -1417,8 +1423,8 @@ def main():
     ap.add_argument("--sweep", action="store_true", help=f"search every session of the last {SWEEP_DAYS} days "
                     "not yet searched")
     ap.add_argument("--all-history", action="store_true", help="with --sweep: every session kept")
-    ap.add_argument("--characterise", metavar="CANDIDATE",
-                    help="with a field: measure that candidate in R and Ha, as evidence only (moves the mount)")
+    ap.add_argument("--characterise", metavar="CANDIDATE[,CANDIDATE]",
+                    help="with a field: measure those candidates in R and Ha, as evidence only (moves the mount)")
     ap.add_argument("--dry-run", action="store_true", help="every step as it would be run; nothing moved or taken")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
