@@ -210,8 +210,11 @@ one-off measurements, each planted at 1 and 3 times the pixel noise):
   noise, on one 420 px crop. Not added.
 - *Level jumps between frames.* Fitting each frame against the session's median
   and the flat separates sky (which follows the flat) from a fixed offset. In the
-  NGC 2174 Ha session, offsets of +5 to +34 counts do not follow the flat; one SII
-  frame is exactly 5 counts low. The cause is not known. Stage B must settle it.
+  NGC 2174 Ha session, seven frames have offsets of +5 to +34 counts that do not
+  follow the flat. All seven were already rejected from the stack, and the two
+  largest have star flux down by 75 to 90% or more, so cloud is likely but not
+  shown. One SII frame is exactly 5 counts low with its sky unchanged, the size of
+  the dark level flips. The cause is not known. Stage B must settle it.
 
 Local contrast is built (structure from 3 to 24 px, on the star-free layer), on
 median scales. Beside a planted hard edge its dark rim is 22 px wide against 73 px
