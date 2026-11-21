@@ -256,22 +256,31 @@ def colour_look(key, minutes=COLOUR_MINUTES, dry_run=False, say=print, run_comma
         mount.claim("starwatch.py --colour")
     try:
         step("mount.py", "goto", s["name"], "--solve")
-        measured = []
+        sessions = []
         for band in COLOUR_BANDS:
             began = time.time()
+            # Frames only: stacking and measuring wait until both bands are
+            # in, so neither holds the telescope (21 November 2026).
             step("shoot.py", s["name"], "--filter", band, "--frames", str(frames), "--minutes",
-                 f"{minutes * patrol.SHOOT_CAP:g}", "--exposure", str(p["exposure"]), "--gain", str(p["gain"]))
+                 f"{minutes * patrol.SHOOT_CAP:g}", "--exposure", str(p["exposure"]), "--gain", str(p["gain"]),
+                 "--no-restack")
             if dry_run:
                 continue
             session = patrol.newest_session(s["name"], began)
             if session is None:
                 raise interface.Refusal("NO_SESSION", f"No {band} frames of {s['id']} were kept.")
-            measured.append(measure(key, session, BIN, say))
+            sessions.append(session)
     finally:
         if not dry_run:
             mount.release()
     if dry_run:
         return {"star": s["id"], "name": s["name"], "kind": "inferred"}
+    import restack
+    measured = []
+    for session in sessions:
+        if not (session / "final.fits").is_file():
+            restack.run(session, say=say)
+        measured.append(measure(key, session, BIN, say))
     colour = colour_change(history(s)["nights"], *COLOUR_BANDS)
     say(f"Colour: {colour['why']}")
     return {"star": s["id"], "name": s["name"], "bands": measured, "colour": colour, "kind": "measured"}
