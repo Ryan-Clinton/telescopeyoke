@@ -142,6 +142,7 @@ GREEN_KEPT = 0.25    # of the green above the red and blue's average, in the Hub
 LINEAR_OIII = 0.55   # OIII fills two channels in HOO: mixed linearly at full strength the nebula goes grey
 NARROWBAND_SATURATION = 1.8   # mixed linearly the palette is paler than separate stretches' colours
 EDGE_TRIM = 0.035    # of the picture's shorter side, off every edge of a linear narrowband picture
+QUIET = (0.7, 0.6, 0.5, 0.4)    # times its noise each scale needs to be fully kept: at this, on NGC 2174, 99% of the faintest stars stay, their flux within 1%
 SKY_CELLS = 5        # how smooth the sky map is, in cells of 16 pixels: far wider than any star
 STAR_TINT = 0.25     # of each star's colour kept: a filter's stars differ by more than the eye expects
 OIII_SHARE = 0.8     # OIII fills two channels in HOO: at full strength the stars come out cyan
@@ -238,6 +239,34 @@ def sky_model(plane, clear):
     return bowl + ndimage.zoom(extra, (plane.shape[0] / extra.shape[0], plane.shape[1] / extra.shape[1]), order=1)
 
 
+def fine_grain(plane, clear):
+    """The pixel-to-pixel grain in the clear sky."""
+    fine = plane - ndimage.gaussian_filter(plane, 2)
+    sky = fine[::2, ::2][clear[::2, ::2]]
+    return 1.4826 * float(np.median(np.abs(sky - np.median(sky))))
+
+
+def quietened(plane, clear):
+    """The nebula's grain reduced, scale by scale (a starlet transform). Each
+    scale's noise is measured in the clear sky; detail well above it is kept
+    whole, detail at its level goes, and what is left over at the largest
+    scale is never touched, so the nebula's overall light does not change."""
+    smooth, out = plane, None
+    details = []
+    for level in range(len(QUIET)):
+        kernel = np.zeros(4 * 2 ** level + 1, np.float32)
+        kernel[:: 2 ** level] = np.array([1, 4, 6, 4, 1], np.float32) / 16
+        wider = ndimage.convolve1d(ndimage.convolve1d(smooth, kernel, axis=0, mode="mirror"), kernel, axis=1, mode="mirror")
+        details.append(smooth - wider)
+        smooth = wider
+    out = smooth
+    for detail, strength in zip(details, QUIET):
+        sky = detail[::3, ::3][clear[::3, ::3]]
+        limit = strength * 1.4826 * float(np.median(np.abs(sky - np.median(sky))))
+        out = out + detail * np.clip((np.abs(detail) - limit) / max(limit, 1e-6), 0, 1)
+    return out
+
+
 def layers(plane, star):
     """A linear plane as (nebula, stars), which add back up to it. Only the
     stars' own pixels are replaced, so the nebula keeps its fine detail."""
@@ -245,7 +274,7 @@ def layers(plane, star):
     return nebula, plane - nebula
 
 
-def linear_narrowband(rgb, channels, saturation, background=2, say=print):
+def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=True):
     """The narrowband picture made in the light's own units: sky off, star
     widths matched, the palette mixed, and one stretch at the very end.
     Nebula and stars are balanced apart: the nebula on its own strength, so
@@ -270,10 +299,16 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print):
     even, before, after = matched_widths(planes, say)
     star = star_mask(np.mean([p / scale[b] for b, p in planes.items()], axis=0))
     core = star > 0.5
-    nebula, stars, sharp_nebula, sharp_stars, flux = {}, {}, {}, {}, {}
+    nebula, stars, sharp_nebula, sharp_stars, flux, grain, untouched = {}, {}, {}, {}, {}, {}, {}
     for band in planes:
         nebula[band], stars[band] = layers(even[band], star)
         sharp_nebula[band], sharp_stars[band] = layers(planes[band], star)
+        untouched[band] = sharp_nebula[band]
+        if quiet:
+            before_grain = fine_grain(nebula[band], clear)
+            nebula[band] = quietened(nebula[band], clear)
+            sharp_nebula[band] = quietened(sharp_nebula[band], clear)
+            grain[band] = round(fine_grain(nebula[band], clear) / max(before_grain, 1e-6), 2)
         bright = stars[band][core]
         flux[band] = max(float(bright[bright > 0].mean()) if (bright > 0).any() else 0.0, 1e-6)
     # The stars' overall brightness, as they would have had on the nebula's scales.
@@ -291,9 +326,14 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print):
     white = even_stars.mean(axis=2, keepdims=True)
     colour += white + STAR_TINT * (even_stars - white)
     light = np.mean([sharp_nebula[b] / scale[b] + sharp_stars[b] / flux[b] * level for b in channels], axis=0)
-    noise = 1.4826 * np.median(np.abs(light - np.median(light))) + 1e-6
+    # The stretch is set by the grain as it was: set by the reduced grain, it
+    # lifted the sky's blotches along with the nebula.
+    raw = np.mean([untouched[b] / scale[b] + sharp_stars[b] / flux[b] * level for b in channels], axis=0)
+    noise = 1.4826 * np.median(np.abs(raw - np.median(raw))) + 1e-6
     picture = process.display(colour / noise, saturation=saturation, whole=False, light=light / noise)
-    done = {"method": "linear", "nebula_scale": {b: round(v, 2) for b, v in scale.items()},
+    if grain:
+        say("  grain in the clear sky: " + ", ".join(f"{b} x{v:.2f}" for b, v in grain.items()))
+    done = {"method": "linear", "grain_kept": grain, "nebula_scale": {b: round(v, 2) for b, v in scale.items()},
             "star_flux": {b: round(v, 2) for b, v in flux.items()},
             "star_width_px": {b: round(v, 2) for b, v in before.items() if v},
             "star_width_matched_px": {b: round(v, 2) for b, v in after.items() if v}}
@@ -327,7 +367,7 @@ def narrowband(rgb, channels, saturation, background=2):
 
 
 def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette="LRGB", background=2,
-            stretched=False):
+            stretched=False, quiet=True):
     """The colour picture (8-bit RGB array) and what went into it."""
     channels, base, detail_band = PALETTES[palette]
     needed = tuple(dict.fromkeys(channels))
@@ -374,7 +414,7 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
         colour = narrowband(rgb, channels, saturation, background)
         used["method"] = "stretched"
     else:
-        colour, linear, done = linear_narrowband(rgb, channels, saturation, background, say)
+        colour, linear, done = linear_narrowband(rgb, channels, saturation, background, say, quiet)
         used.update(done)
     if detail_band in images:
         grey = np.where(valid, images[detail_band], 0)
@@ -427,6 +467,7 @@ def main():
                     help="LRGB (default), SHO (SII red, Ha green, OIII blue) or HOO (Ha red, OIII green and blue)")
     ap.add_argument("--stretched", action="store_true",
                     help="narrowband: stretch each filter before mixing (the earlier method, for comparison)")
+    ap.add_argument("--no-noise-reduction", action="store_true", help="narrowband: leave the nebula's grain in")
     ap.add_argument("--any-coverage", action="store_true",
                     help="make the picture even when the filters share under 75%% of the frame")
     ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
@@ -443,7 +484,7 @@ def run(args):
     saturation = args.saturation or (NARROWBAND_SATURATION if linear_mix else 1.25)
     picture, used, linear = combine(stacks, saturation, min_covered=0.0 if args.any_coverage else MIN_COVERED,
                             palette=args.palette, background=max(process.sky_for(args.name), 1),
-                            stretched=args.stretched)
+                            stretched=args.stretched, quiet=not args.no_noise_reduction)
     suffix = "colour" if args.palette == "LRGB" else args.palette
     out = config.DATA / "web" / f"{stacking.folder_name(args.name)}-{suffix}.jpg"
     out.parent.mkdir(exist_ok=True)

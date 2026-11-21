@@ -168,10 +168,13 @@ never replaces a `final.fits`.
 `--stretched` is the earlier method). Sky is fitted outside the nebula as the
 strongest filter shows it, nebula and stars are balanced apart, and brightness
 comes from the unblurred filters. On NGC 2174 the stars lost most of their
-coloured rims and the Hubble palette shows gold and blue. Still wrong: a purple
-cast in the top right corner of the SHO picture, cause unknown. The stacks show
-no step in the sky there (under 0.5 counts along the top). Judged by eye on one
-target; section 7's measures have not been run.
+coloured rims and the Hubble palette shows gold and blue. A patch at one corner
+of the sensor, in every filter, is taken out by a smooth map of the clear sky;
+its cause is unknown, and 3.5% is trimmed off each edge. Wavelet noise reduction
+acts on the nebula layer only (`--no-noise-reduction` leaves it out). On NGC 2174
+at the strength chosen, fine grain in the clear sky falls to about 0.4 of what it
+was, 99% of the faintest quarter of stars are still found, and matched star flux
+changes by +0.7% (spread 0.9%). One target; the rest of section 7 has not been run.
 
 ### 4.2 PSF matching
 
