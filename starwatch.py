@@ -206,6 +206,10 @@ def look(key, minutes=MINUTES, plan=False, dry_run=False, say=print, patrol_run=
     if not session:
         raise interface.Refusal("NO_SESSION", f"No frames of {s['id']} were kept.")
     measure_run = measure_run or (lambda: measure(key, session, BIN, say))
+    # The frames are in and measuring moves nothing: the next step need not
+    # wait for it (21 November 2026: B and R stood idle behind L's measuring).
+    import mount
+    mount.release()
     return dict(measure_run(), patrol=done)
 
 
