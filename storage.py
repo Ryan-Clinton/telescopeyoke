@@ -4,6 +4,12 @@
     ./storage.py                 free space here and on the storage disk
     ./storage.py --tidy          move finished Moon videos and old raw frames there now
     ./storage.py --tidy --dry-run   what would be moved
+    ./storage.py --processed     the same for sessions already stacked, unless
+                                 the camera or mount is in use
+    ./storage.py --processed --install   do that every hour (a systemd user timer)
+
+Raw frames are already Rice-compressed by shoot.py, which is lossless: about
+15 MB of a 40 MB frame, and gzip on top saves nothing (21 November 2026).
 
 A Moon video is 0.3 to 12 GB and is finished once its picture is stacked.
 Moved, it keeps its path here as a link, so nothing that reads it changes.
@@ -19,8 +25,11 @@ transit at 4 s needs about 50 GB, with 15 GB free and 115 GB of old
 frames on the laptop.
 """
 import argparse
+import fcntl
 import os
 import shutil
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -96,15 +105,16 @@ def finished_videos(data=None, now=None):
     return out
 
 
-def finished_frames(data=None, now=None):
+def finished_frames(data=None, now=None, stacked=False):
     """Raw frames of sessions nothing has been written in for
-    SESSION_SETTLED_S, as {session folder: [light frames]}."""
+    SESSION_SETTLED_S, as {session folder: [light frames]}; with `stacked`,
+    only sessions that have their stacked picture."""
     frames = Path(data or config.DATA) / "frames"
     now = time.time() if now is None else now
     out = {}
     for session in sorted(p for p in frames.glob("*/*") if p.is_dir() and p.parent.name != "lucky"):
         lights = [f for f in sorted(session.glob("light-*.fits")) if not f.is_symlink()]
-        if not lights:
+        if not lights or (stacked and not (session / "final.fits").exists()):
             continue
         newest = max(f.stat().st_mtime for f in session.iterdir() if not f.is_symlink())
         if now - newest >= SESSION_SETTLED_S:
@@ -112,15 +122,64 @@ def finished_frames(data=None, now=None):
     return out
 
 
-def tidy(store=None, data=None, say=print, dry_run=False, now=None):
+def tidy(store=None, data=None, say=print, dry_run=False, now=None, stacked=False):
     """Every finished Moon video and old session's raw frames moved to the
-    storage disk. Returns bytes moved."""
+    storage disk (with `stacked`, only sessions with their picture made).
+    Returns bytes moved. One tidy at a time: the hourly timer and a schedule
+    step could otherwise copy the same file at once."""
     store = archive() if store is None else store
     if not store:
         say("no storage disk set ([storage] archive in config.toml): nothing moved")
         return 0
     if not Path(store).exists() and not dry_run:
         Path(store).mkdir(parents=True, exist_ok=True)
+    lock_path = Path(data or config.DATA) / "cache" / "storage-tidy.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            say("another tidy is running: nothing moved by this one")
+            return 0
+        return _tidy(store, data, say, dry_run, now, stacked)
+
+
+def processed(say=print):
+    """Stacked sessions moved to the storage disk, when it is there and
+    nothing is using the camera or mount. An unmounted disk is left alone:
+    making its folder would put the archive on the laptop."""
+    import keeper
+    import schedule
+    store = archive()
+    if not store or not store.exists():
+        say(f"storage disk {store or '(none set)'} is not there: nothing moved")
+        return 0
+    if schedule.busy() or keeper.SOCKET.exists():     # the keeper holds the camera from setup to the night's end
+        say("the camera or mount is in use: nothing moved")
+        return 0
+    return tidy(store, say=say, stacked=True)
+
+
+def install(say=print):
+    """processed() every hour, as a systemd user timer."""
+    place = Path.home() / ".config" / "systemd" / "user"
+    place.mkdir(parents=True, exist_ok=True)
+    (place / "ty-archive.service").write_text(
+        "[Unit]\nDescription=TelescopeYoke: stacked sessions' raw frames to the storage disk\n\n"
+        f"[Service]\nType=oneshot\nWorkingDirectory={config.ROOT}\n"
+        f"ExecStart={sys.executable} {config.ROOT / 'storage.py'} --processed\nNice=15\nIOSchedulingClass=idle\n",
+        encoding="utf-8")
+    (place / "ty-archive.timer").write_text(
+        "[Unit]\nDescription=TelescopeYoke: archive stacked sessions every hour\n\n"
+        "[Timer]\nOnBootSec=15min\nOnUnitActiveSec=1h\n\n[Install]\nWantedBy=timers.target\n",
+        encoding="utf-8")
+    subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+    subprocess.run(["systemctl", "--user", "enable", "--now", "ty-archive.timer"], check=True)
+    say("Stacked sessions are archived every hour. Stop it: systemctl --user disable --now ty-archive.timer")
+
+
+def _tidy(store, data, say, dry_run, now, stacked):
+    """tidy()'s moves, with its lock held."""
     moved = 0
     for video in finished_videos(data, now):
         size = video.stat().st_size
@@ -128,7 +187,7 @@ def tidy(store=None, data=None, say=print, dry_run=False, now=None):
             move(video, store, data)
         moved += size
         say(f"{'would move' if dry_run else 'moved'} {video.name} ({size / 1e9:.1f} GB)")
-    for session, lights in finished_frames(data, now).items():
+    for session, lights in finished_frames(data, now, stacked).items():
         size = sum(f.stat().st_size for f in lights)
         if not dry_run:
             for f in lights:
@@ -151,12 +210,19 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--tidy", action="store_true", help="move finished Moon videos and old raw frames to the storage disk")
     ap.add_argument("--dry-run", action="store_true", help="say what would be moved")
+    ap.add_argument("--processed", action="store_true",
+                    help="move sessions already stacked, unless the camera or mount is in use")
+    ap.add_argument("--install", action="store_true", help="with --processed: do it every hour (a systemd user timer)")
     args = ap.parse_args(argv)
+    if args.processed and args.install:
+        return install()
+    if args.processed and not args.dry_run:
+        return processed()
     store = archive()
     print(f"laptop: {free() / 1e9:.0f} GB free"
           + (f"; storage disk {store}: {free(store) / 1e9:.0f} GB free" if store else "; no storage disk set"))
-    if args.tidy:
-        tidy(store, dry_run=args.dry_run)
+    if args.tidy or args.processed:
+        tidy(store, dry_run=args.dry_run, stacked=args.processed)
 
 
 if __name__ == "__main__":
