@@ -1246,12 +1246,14 @@ def searchable(session):
                    and answer[s].get("refused") not in (None, "INVALID_REQUEST")]
         if not passing:
             return False
-    ref, owner = reference.for_field(session.parent.name)
-    if ref is None or (reference.newest(session.parent.name) is None and is_panel(session.parent.name)):
+    # In the stack's own band: a B or R look at Tabby is not searched against L.
+    band = reference.stack_band(session / "final.fits")
+    ref, owner = reference.for_field(session.parent.name, band)
+    if ref is None or (reference.newest(session.parent.name, band) is None and is_panel(session.parent.name)):
         # A mosaic panel with no reference of its own: searched all the same,
         # so its depth is measured and its first good night becomes its reference.
         return is_panel(session.parent.name)
-    return session.resolve() not in reference.sessions_used(owner)
+    return session.resolve() not in reference.sessions_used(owner, band)
 
 
 def is_panel(field):

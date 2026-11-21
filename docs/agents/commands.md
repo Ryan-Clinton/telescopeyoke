@@ -152,7 +152,10 @@ patrol and its checks, measures it against the stars round it, keeps each
 night in `frames/NAME/starwatch.json` and calls a night 0.03 mag or more
 fainter than usual, beyond its scatter, a dip (`schemas/starwatch.schema.json`);
 `--plan` moves nothing, `--measure SESSION` and `--history` only read frames
-already taken. Reporting a dip is a person's.
+already taken. Only nights of the same camera and filter share a usual level.
+`--colour [MINUTES]` (moves the mount; 5 minutes each by default) images it in
+B then R and, once each band has three earlier nights, says whether B changed
+more than R that night. Reporting a dip is a person's.
 
 ## Uses the camera, not the mount
 

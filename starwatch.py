@@ -7,6 +7,7 @@ warning when it is fainter than usual.
     ./starwatch.py tabby                 point, image for 10 minutes, measure, and say if it is dipping
     ./starwatch.py tabby --measure frames/Tabby/20261020-193000    a night already taken
     ./starwatch.py tabby --history       every night measured so far
+    ./starwatch.py tabby --colour        5 minutes each in B and R, each against its own nights
 
 KIC 8462852 (Tabby's star, or Boyajian's star, V 11.7 in Cygnus) dimmed by
 up to 22% in irregular dips of days in the Kepler spacecraft's four years
@@ -33,6 +34,10 @@ forum, its observation upload) is a person's decision.
 import argparse
 import json
 import math
+import os
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -47,6 +52,8 @@ STARS = {
 }
 MINUTES = 10.0
 BIN = 10
+COLOUR_BANDS = ("B", "R")
+COLOUR_MINUTES = 5.0     # each band; 30 batches' worth of 4 s frames between them
 BRIGHTEST = 10.5         # G: trusted in its programme's 4 s frames (16 s ones fill the wells near G 13)
 WARN = 0.03              # magnitudes fainter than usual that make a dip
 BASELINE_NIGHTS = 3      # nights measured before a usual level is trusted
@@ -109,8 +116,30 @@ def judge_night(nights, latest):
     dimmer = latest["mag"] - usual
     dipping = dimmer >= WARN and dimmer >= 3 * math.hypot(error, spread)
     return {"baseline": round(usual, 3), "dimmer": round(dimmer, 3), "dipping": bool(dipping),
+            "uncertainty": round(math.hypot(error, spread), 4),
             "why": f"{dimmer:+.3f} mag against the usual {usual:.3f} (night-to-night spread {spread:.3f}, "
                    f"tonight's error {error:.3f})"}
+
+
+def colour_change(nights, blue="B", red="R"):
+    """Whether the blue band has dimmed more than the red on the same night,
+    each against its own usual level. Positive: redder than usual. A colour
+    change is evidence about what is in the way, not an answer."""
+    def last(band):
+        found = [n for n in nights if n.get("filter") == band]
+        return found[-1] if found else None
+    b, r = last(blue), last(red)
+    if b is None or r is None:
+        return {"change": None, "why": f"no {blue if b is None else red} night measured yet"}
+    if b.get("jd") is None or r.get("jd") is None or abs(b["jd"] - r["jd"]) > 0.5:
+        return {"change": None, "why": f"the latest {blue} and {red} are not from the same night"}
+    jb, jr = judge_night(nights, b), judge_night(nights, r)
+    if jb["dimmer"] is None or jr["dimmer"] is None:
+        return {"change": None, "why": f"{blue} and {red} each need {BASELINE_NIGHTS} earlier nights for a usual level"}
+    change = jb["dimmer"] - jr["dimmer"]
+    error = math.hypot(jb["uncertainty"], jr["uncertainty"])
+    return {"change": round(change, 3), "uncertainty": round(error, 4), "significant": bool(abs(change) >= 3 * error),
+            "why": f"{blue} {jb['dimmer']:+.3f}, {red} {jr['dimmer']:+.3f}: {blue}-{red} {change:+.3f} ± {error:.3f} mag"}
 
 
 def measure(key, session, size=BIN, say=print, night=None):
@@ -180,8 +209,52 @@ def look(key, minutes=MINUTES, plan=False, dry_run=False, say=print, patrol_run=
     return dict(measure_run(), patrol=done)
 
 
+def colour_look(key, minutes=COLOUR_MINUTES, dry_run=False, say=print, run_command=subprocess.run):
+    """The star in B then R, each measured against its own earlier nights.
+    Through mount.py and shoot.py, which keep every check; shoot.py moves
+    and focuses the filter. The search is left out: this measures one star."""
+    import mount
+    import patrol
+    s = star(key)
+    p = patrol.programme(s["programme"])
+    extra = ["--dry-run"] if dry_run else []
+    frames = math.ceil(minutes * 60 / p["exposure"])
+
+    def step(script, *words):
+        done = run_command([sys.executable, str(config.ROOT / script), *words, *extra],
+                           env=dict(os.environ, TY_PATROL="1"))
+        if done.returncode:
+            raise interface.Refusal("INVALID_REQUEST", f"{script} stopped (exit {done.returncode}).")
+
+    if not dry_run:
+        mount.claim("starwatch.py --colour")
+    try:
+        step("mount.py", "goto", s["name"], "--solve")
+        measured = []
+        for band in COLOUR_BANDS:
+            began = time.time()
+            step("shoot.py", s["name"], "--filter", band, "--frames", str(frames), "--minutes",
+                 f"{minutes * patrol.SHOOT_CAP:g}", "--exposure", str(p["exposure"]), "--gain", str(p["gain"]))
+            if dry_run:
+                continue
+            session = patrol.newest_session(s["name"], began)
+            if session is None:
+                raise interface.Refusal("NO_SESSION", f"No {band} frames of {s['id']} were kept.")
+            measured.append(measure(key, session, BIN, say))
+    finally:
+        if not dry_run:
+            mount.release()
+    if dry_run:
+        return {"star": s["id"], "name": s["name"], "kind": "inferred"}
+    colour = colour_change(history(s)["nights"], *COLOUR_BANDS)
+    say(f"Colour: {colour['why']}")
+    return {"star": s["id"], "name": s["name"], "bands": measured, "colour": colour, "kind": "measured"}
+
+
 def run(args, say=print):
     s = star(args.star)
+    if args.colour is not None:
+        return colour_look(args.star, args.colour, args.plan or args.dry_run, say)
     if args.history:
         record = history(s)
         for n in record["nights"]:
@@ -200,6 +273,8 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="every step as it would be run")
     ap.add_argument("--measure", metavar="SESSION", help="only measure a night already taken")
     ap.add_argument("--history", action="store_true", help="every night measured so far")
+    ap.add_argument("--colour", type=float, nargs="?", const=COLOUR_MINUTES, metavar="MINUTES",
+                    help=f"image in {' then '.join(COLOUR_BANDS)}, this long each (default {COLOUR_MINUTES:g})")
     ap.add_argument("--bin", type=int, default=BIN, help=f"frames in each point (default {BIN})")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
