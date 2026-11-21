@@ -194,7 +194,9 @@ def told(args, send=None):
     if args.kind == "flat":
         bands = result.get("filters", [])
         missing = [b for b in (args.filters or []) if b not in bands]
-        exposures = " ".join(f"{s:g}" for s in sorted(set(result.get("exposures", []))))
+        # In full: a flat-dark is matched on the flat's exact exposure, and the
+        # rounded 1.77677 for 1.776766... was refused (21 November 2026).
+        exposures = " ".join(repr(float(s)) for s in sorted(set(result.get("exposures", []))))
         send(f"Dawn flats kept in {', '.join(bands)}"
              + (f"; none in {', '.join(missing)} (the sky grew too bright)" if missing else "")
              + ". They are used once their flat-darks exist: "
@@ -303,7 +305,7 @@ def run_matched(args, camera):
             if not kept:
                 raise SystemExit("No flat was kept.")
             print("Their flat-darks: with the cap on, ./calibrate.py dark --exposure "
-                  + " ".join(f"{s:g}" for s in sorted(set(exposures))) + f" --gain {args.gain}")
+                  + " ".join(repr(float(s)) for s in sorted(set(exposures))) + f" --gain {args.gain}")
             return {"kind": "flat", "frames": args.frames, "gain": args.gain, "files": kept,
                     "exposures": exposures, "filters": bands}
     print(f"saved {path}")
