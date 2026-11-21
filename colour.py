@@ -27,9 +27,12 @@ the nebula's own colours more or less, and needs no SII. Every filter is
 lined up on the Ha stack, which has the most stars, and the balance is made
 on the stars as for R, G and B, so the stars come out near white and the
 nebula takes the palette's colours. There is no L to take the detail from.
+Each filter is stretched on its own and kept unrounded until the picture is
+saved; a stack not calibrated makes a picture called a preview.
 """
 import argparse
 import json
+from pathlib import Path
 
 import numpy as np
 from astropy.io import fits
@@ -48,18 +51,33 @@ PALETTES = {"LRGB": (COLOURS, "L", "L"),
             "HOO": (("Ha", "OIII", "OIII"), "Ha", None)}
 
 
-def sessions(name, night=None):
+def holds(session):
+    """The names of the sessions in a stack: its own, or a combination's."""
+    if not session.name.startswith("combined-"):
+        return {session.name}
+    try:
+        kept = json.loads((session / "restack.json").read_text(encoding="utf-8"))["summary"]["sessions"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return set()
+    return {Path(s).name for s in kept}
+
+
+def sessions(name, night=None, say=None):
     """{filter: the deepest stack} for this object: each session's own, and
     restack.py's combinations of several (combined-FILTER), the one with the
     most exposure winning. 5 November 2026: the newest won, so a 28-frame
-    restart of M33 in L would have stood in for the 126-frame stack."""
+    restart of M33 in L would have stood in for the 126-frame stack. With a
+    night, a combination counts only if all it holds is from that night.
+    Sessions left out of the stack chosen are said, not added: whether they
+    belong together is restack's to judge (21 November 2026: NGC 2174's 16 s
+    Ha mixed with its 120 s lost most of the deep frames)."""
     folder = config.DATA / "frames" / stacking.folder_name(name)
-    found = {}
+    found, dated = {}, {}
     for session in sorted(p for p in folder.glob("*") if p.is_dir()):
         combined = session.name.startswith("combined-")
         if not (combined or session.name[:8].isdigit()):
             continue
-        if night and not combined and not session.name.startswith(night):
+        if night and not (all(s.startswith(night) for s in holds(session)) and holds(session)):
             continue
         stack = next((session / f for f in ("final.fits", "live.fits") if (session / f).exists()), None)
         if stack is None:
@@ -73,9 +91,16 @@ def sessions(name, night=None):
             band = stacking.load_light(light)[1].get("FILTER")   # in the compressed image's header, not the primary
         if not band:
             continue
+        if not combined:
+            dated.setdefault(str(band), []).append(session.name)
         depth = float(fits.getheader(stack).get("EXPTIME") or 0)
         if depth >= found.get(str(band), (0.0, None))[0]:
             found[str(band)] = (depth, stack)
+    if say:
+        for band, (_, stack) in sorted(found.items()):
+            left = [s for s in dated.get(band, []) if s not in holds(stack.parent)]
+            if left:
+                say(f"  {band}: not in the stack used: {', '.join(left)} (./restack.py can combine them)")
     return {band: stack for band, (_, stack) in found.items()}
 
 
@@ -85,20 +110,28 @@ def brightness(path):
     return data.mean(axis=0) if data.ndim == 3 else data
 
 
+def fits_well(info):
+    """Enough stars matched, and they landed where they should."""
+    return (stacking.lined_up(info["matched"]) and info["residual"] is not None
+            and info["residual"] <= stacking.FLIP_RESIDUAL)
+
+
 def lined_up(image, reference):
     """`image` moved onto `reference` (a dict of its "square" and "stars").
     Stacks from either side of the meridian are half a turn apart, so a stack
     that does not match is tried turned round (21 November 2026: NGC 2174's
-    Ha before the flip, its OIII and SII after)."""
+    Ha before the flip, its OIII and SII after). So is one that matches
+    enough stars but fits them badly, which chance can do. Returns the image,
+    the match, and whether it was turned."""
     stars = stacking.find_stars(np.nan_to_num(image))
     moved, info = stacking.register(image[..., None], np.nan_to_num(image), stars, reference)
-    if not stacking.lined_up(info["matched"]):
+    if not fits_well(info):
         turned = np.ascontiguousarray(image[::-1, ::-1])
         clean = np.nan_to_num(turned)
         again, second = stacking.register(turned[..., None], clean, stacking.find_stars(clean), reference)
-        if second["matched"] > info["matched"]:
-            return again[..., 0], second
-    return moved[..., 0], info
+        if fits_well(second) or (not fits_well(info) and second["matched"] > info["matched"]):
+            return again[..., 0], second, True
+    return moved[..., 0], info, False
 
 
 MIN_COVERED = 0.75   # share of the frame every filter must cover for the target to be in the picture
@@ -106,7 +139,7 @@ GREEN_KEPT = 0.25    # of the green above the red and blue's average, in the Hub
 OIII_SHARE = 0.8     # OIII fills two channels in HOO: at full strength the stars come out cyan
 
 
-def narrowband(rgb, channels, saturation):
+def narrowband(rgb, channels, saturation, background=2):
     """Each filter stretched on its own, so a strong Ha does not drown the
     others (21 November 2026: NGC 2174's SHO, balanced together, was almost
     all green). In SHO, Ha is in green: most of the green the red and blue
@@ -115,7 +148,7 @@ def narrowband(rgb, channels, saturation):
     for c, band in enumerate(channels):
         if band not in stretched:
             plane = np.repeat(rgb[..., c, None], 3, axis=2)
-            stretched[band] = process.process(plane, saturation=1.0)[..., 0].astype(np.float32)
+            stretched[band] = process.process(plane, saturation=1.0, background=background, whole=False)[..., 0]
     colour = np.stack([stretched[b] for b in channels], axis=2)
     if channels[1] == "Ha":
         before = colour.mean(axis=2)
@@ -132,7 +165,7 @@ def narrowband(rgb, channels, saturation):
     return grey + saturation * (colour - grey)
 
 
-def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette="LRGB"):
+def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette="LRGB", background=2):
     """The colour picture (8-bit RGB array) and what went into it."""
     channels, base, detail_band = PALETTES[palette]
     needed = tuple(dict.fromkeys(channels))
@@ -151,28 +184,35 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
     ref_image = np.nan_to_num(images[base])
     reference = {"square": stacking.centre_square(ref_image), "stars": stacking.find_stars(ref_image)}
     used = {"palette": palette, base: {"stack": str(stacks[base]), "matched": None}}
+    # A stack labelled uncalibrated is allowed, as a preview, and called one.
+    raw = [b for b in have if fits.getheader(stacks[b]).get("TY_CALIB") is not True]
+    used["calibrated"] = not raw
+    if raw:
+        say(f"  PREVIEW: {', '.join(raw)} not calibrated; this is not a finished picture")
     for band in have:
         if band == base:
             continue
-        images[band], info = lined_up(images[band], reference)
+        images[band], info, turned = lined_up(images[band], reference)
         used[band] = {"stack": str(stacks[band]), "matched": info["matched"],
                       "residual_px": None if info["residual"] is None else round(float(info["residual"]), 2),
-                      "shift_px": [round(v, 1) for v in info["shift"]]}
+                      "shift_px": [round(v, 1) for v in info["shift"]], "turned": turned}
         say(f"  {band} lined up on {base}: {info['matched']} stars matched, shift "
             f"{info['shift'][0]:+.1f}, {info['shift'][1]:+.1f} px")
-        if not stacking.lined_up(info["matched"]):
-            raise interface.Refusal("NO_STARS", f"The {band} stack matched only {info['matched']} stars of the "
-                                    f"{base} stack (at least {stacking.LINED_UP} are needed): "
+        if not fits_well(info):
+            raise interface.Refusal("NO_STARS", f"The {band} stack matched {info['matched']} stars of the {base} "
+                                    f"stack, {info['residual'] if info['residual'] is None else round(info['residual'], 2)} "
+                                    f"px apart (needs {stacking.LINED_UP} stars within {stacking.FLIP_RESIDUAL:g} px): "
                                     "the colours would not line up.")
     valid = np.all([np.isfinite(i) for i in images.values()], axis=0)
     rgb = np.stack([np.where(valid, images[b], 0) for b in channels], axis=2)
     if palette == "LRGB":
-        colour = process.process(rgb, saturation=saturation).astype(np.float32)
+        colour = process.process(rgb, saturation=saturation, background=background, whole=False)
     else:
-        colour = narrowband(rgb, channels, saturation)
+        colour = narrowband(rgb, channels, saturation, background)
     if detail_band in images:
         grey = np.where(valid, images[detail_band], 0)
-        detail = process.process(np.repeat(grey[..., None], 3, axis=2), saturation=1.0)[..., 0].astype(np.float32)
+        detail = process.process(np.repeat(grey[..., None], 3, axis=2), saturation=1.0, background=background,
+                                 whole=False)[..., 0]
         # The colour's own brightness swapped for L's: hue and saturation from
         # R, G and B, detail and depth from L.
         light = colour.mean(axis=2, keepdims=True)
@@ -219,10 +259,12 @@ def main():
 
 
 def run(args):
-    stacks = sessions(args.name, args.night)
+    # At least a tilt: a level alone left NGC 2174's sky teal on one side and red on
+    # the other (21 November 2026), and a flat plane cannot take a nebula away.
+    stacks = sessions(args.name, args.night, say=print)
     print("stacks: " + (", ".join(f"{b} {p.parent.name}" for b, p in sorted(stacks.items())) or "none"))
     picture, used = combine(stacks, args.saturation, min_covered=0.0 if args.any_coverage else MIN_COVERED,
-                            palette=args.palette)
+                            palette=args.palette, background=max(process.sky_for(args.name), 1))
     suffix = "colour" if args.palette == "LRGB" else args.palette
     out = config.DATA / "web" / f"{stacking.folder_name(args.name)}-{suffix}.jpg"
     out.parent.mkdir(exist_ok=True)

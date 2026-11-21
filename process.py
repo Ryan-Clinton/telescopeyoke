@@ -24,8 +24,9 @@ import stacking
 ROOT = Path(__file__).parent
 
 
-def process(rgb, detail=0.8, colour=5.0, stretch=None, background=2, saturation=1.25):
-    """rgb: float array (rows, cols, 3) from a stack. Returns 8-bit RGB."""
+def process(rgb, detail=0.8, colour=5.0, stretch=None, background=2, saturation=1.25, whole=True):
+    """rgb: float array (rows, cols, 3) from a stack. Returns 8-bit RGB, or
+    with `whole` false the same 0 to 255 scale unrounded, for mixing further."""
     rgb = rgb.astype(np.float32)
     # Level each channel: take out the sky glow and its gradient, then match
     # the channels' scales on the stars so the sky is neutral grey.
@@ -97,7 +98,8 @@ def process(rgb, detail=0.8, colour=5.0, stretch=None, background=2, saturation=
     # A little more colour, pushed out from each pixel's own grey level.
     grey = out.mean(axis=2, keepdims=True)
     out = grey + saturation * (out - grey)
-    return (255 * np.clip(out, 0, 1)).astype(np.uint8)
+    out = 255 * np.clip(out, 0, 1)
+    return out.astype(np.uint8) if whole else out.astype(np.float32)
 
 
 def sky_for(name):
