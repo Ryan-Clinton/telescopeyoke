@@ -218,8 +218,14 @@ one-off measurements, each planted at 1 and 3 times the pixel noise):
   80 per session) found 55 frames (4.3%) with a fixed offset of 3 counts or more
   that does not follow the flat: 37 of them 4 to 6 counts, both signs, in every
   filter and at 4, 16 and 120 s. That points at the camera's level rather than one
-  exposure or filter, but some could be sky. The cause is not known. Stage B must
-  settle it.
+  exposure or filter, but some could be sky. Compared with the 622 other frames of
+  those sessions, 47 of the 55 have their stars within 10% of normal, so cloud does
+  not explain them; 8 are dimmed. Sensor temperature and the gap before the frame
+  show no link, and about half are single frames. The usual size, 4 to 6 counts,
+  matches the 78-79 against 83-84 flips seen in capped darks, so **the camera's
+  black level changing between frames is the likely cause. It is not proven**: raw
+  darks were not kept. Stage B needs a run of capped darks with each frame's level
+  logged, and should level each frame before pairing frames for training.
 
 - *Star reduction* (`--star-reduction`, off by default). Each star keeps its peak
   and loses its wings, with one gain across filters. At 2 on NGC 2174, star width
