@@ -53,10 +53,11 @@ def remove_sky(rgb, background=2):
     return rgb
 
 
-def display(rgb, detail=0.8, colour=5.0, stretch=None, saturation=1.25, whole=True, light=None):
+def display(rgb, detail=0.8, colour=5.0, stretch=None, saturation=1.25, whole=True, light=None, white=None):
     """A linear picture in units of the sky noise, stretched for the eye: 8-bit
     RGB, or with `whole` false the same scale unrounded. `light`, when given,
-    is the brightness to use in place of the colour's own."""
+    is the brightness to use in place of the colour's own, and `white`, when
+    given, the level that comes out white."""
     # Smooth brightness a little and colour a lot.
     brightness = rgb.mean(axis=2)
     tint = rgb - brightness[..., None]
@@ -68,7 +69,8 @@ def display(rgb, detail=0.8, colour=5.0, stretch=None, saturation=1.25, whole=Tr
 
     # Sky just above black; stretch so faint glow shows without lifting grain.
     softness = 1.0 / np.sqrt(1 + detail ** 2 * 12)   # noise left after smoothing
-    black, white = -2.0 * softness, np.percentile(brightness, 99.995)
+    black = -2.0 * softness
+    white = np.percentile(brightness, 99.995) if white is None else white
     scaled = np.clip((rgb - black) / (white - black), 0, 1)
     if stretch is None:
         stretch = auto_stretch((FAINT - black) / (white - black))

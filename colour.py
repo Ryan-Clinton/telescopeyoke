@@ -326,6 +326,16 @@ def layers(plane, star):
     return nebula, plane - nebula
 
 
+def star_gain(stars, power):
+    """How much of each pixel of a star layer to keep, so that each star
+    keeps its peak and loses its wings: raising a star's profile to `power`
+    narrows it by the square root of that. One gain for every filter, so a
+    star's colour does not change."""
+    bright = np.maximum(stars, 0)
+    peak = ndimage.maximum_filter(bright, 15)
+    return np.clip((bright / np.maximum(peak, 1e-6)) ** (power - 1), 0, 1)
+
+
 def local_contrast(picture, nebula, where):
     """The nebula's ridges and lanes brought out: its structure between
     about 3 and 24 pixels across, measured on the star-free layer so no star
@@ -342,7 +352,8 @@ def local_contrast(picture, nebula, where):
     return picture * gain[..., None]
 
 
-def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=False, contrast=True):
+def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=False, contrast=True,
+                      star_power=1.0):
     """The narrowband picture made in the light's own units: sky off, star
     widths matched, the palette mixed, and one stretch at the very end.
     Nebula and stars are balanced apart: the nebula on its own strength, so
@@ -403,21 +414,36 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
         colour[..., 1:] *= LINEAR_OIII
     even_stars = np.stack([stars[b] / flux[b] * level for b in channels], axis=2)
     white = even_stars.mean(axis=2, keepdims=True)
-    colour += white + STAR_TINT * (even_stars - white)
-    light = np.mean([sharp_nebula[b] / scale[b] + sharp_stars[b] / flux[b] * level for b in channels], axis=0)
+    star_colour = white + STAR_TINT * (even_stars - white)
+    star_light = np.mean([sharp_stars[b] / flux[b] * level for b in channels], axis=0)
+    plain_light = np.mean([sharp_nebula[b] / scale[b] for b in channels], axis=0)
+    # The white point stays where the full stars put it, so the nebula's
+    # stretch does not change when the stars are made smaller.
+    white_level = None
+    if star_power != 1:
+        full = ndimage.gaussian_filter(plain_light + star_light, 0.8)
+        white_level = float(np.percentile(full, 99.995))
+        kept = star_gain(white[..., 0], star_power)[..., None]
+        # The tint is blurred later: left at full width it rings a smaller
+        # star in purple, so it is kept to the star's core.
+        star_colour = white * kept + STAR_TINT * (even_stars - white) * kept ** 3
+        star_light = star_light * star_gain(star_light, star_power)
+    colour += star_colour
+    light = plain_light + star_light
     # The stretch is set by the grain as it was: set by the reduced grain, it
     # lifted the sky's blotches along with the nebula.
     raw = np.mean([untouched[b] / scale[b] + sharp_stars[b] / flux[b] * level for b in channels], axis=0)
     sky = raw[clear & (star < 0.1)] if open_sky >= MIN_CLEAR else raw     # nebula would count as grain
     noise = 1.4826 * np.median(np.abs(sky - np.median(sky))) + 1e-6
     bright_part = ndimage.gaussian_filter((~clear).astype(np.float32), 16) if open_sky >= MIN_CLEAR else np.ones_like(light)
-    picture = process.display(colour / noise, saturation=saturation, whole=False, light=light / noise)
+    picture = process.display(colour / noise, saturation=saturation, whole=False, light=light / noise,
+                              white=None if white_level is None else white_level / noise)
     plain = np.mean([sharp_nebula[b] / scale[b] for b in channels], axis=0) / noise
     if contrast:
         picture = local_contrast(picture, plain, bright_part)
     if grain:
         say("  grain in the clear sky: " + ", ".join(f"{b} x{v:.2f}" for b, v in grain.items()))
-    done = {"method": "linear", "picture_version": PICTURE_VERSION, "local_contrast": contrast, "clear_sky_share": round(open_sky, 3),
+    done = {"method": "linear", "picture_version": PICTURE_VERSION, "local_contrast": contrast, "star_power": star_power, "clear_sky_share": round(open_sky, 3),
             "sky_map": open_sky >= MIN_CLEAR, "sky_guide": guide, "grain_kept": grain, "nebula_scale": {b: round(v, 2) for b, v in scale.items()},
             "star_flux": {b: round(v, 2) for b, v in flux.items()},
             "star_width_px": {b: round(v, 2) for b, v in before.items() if v},
@@ -452,7 +478,7 @@ def narrowband(rgb, channels, saturation, background=2):
 
 
 def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette="LRGB", background=2,
-            stretched=False, quiet=False, contrast=True, linear_background=None):
+            stretched=False, quiet=False, contrast=True, linear_background=None, star_power=1.0):
     """The colour picture (8-bit RGB array) and what went into it."""
     channels, base, detail_band = PALETTES[palette]
     needed = tuple(dict.fromkeys(channels))
@@ -502,7 +528,7 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
     else:
         colour, linear, done = linear_narrowband(rgb, channels, saturation,
                                                  background if linear_background is None else linear_background,
-                                                 say, quiet, contrast)
+                                                 say, quiet, contrast, star_power)
         used.update(done)
     if detail_band in images:
         grey = np.where(valid, images[detail_band], 0)
@@ -559,6 +585,8 @@ def main():
                     help="narrowband: wavelet noise reduction (off by default: on NGC 2174 and NGC 281 it kept no more "
                          "faint detail than a plain blur)")
     ap.add_argument("--no-contrast", action="store_true", help="narrowband: leave out local contrast, for comparison")
+    ap.add_argument("--star-reduction", type=float, default=1.0, metavar="POWER",
+                    help="narrowband: smaller stars, keeping their peaks and colours (1 is none, 2 is 30%% narrower)")
     ap.add_argument("--any-coverage", action="store_true",
                     help="make the picture even when the filters share under 75%% of the frame")
     ap.add_argument("--plan", action="store_true",
@@ -589,7 +617,8 @@ def run(args):
     picture, used, linear = combine(stacks, saturation, min_covered=0.0 if args.any_coverage else MIN_COVERED,
                             palette=args.palette, background=background,
                             stretched=args.stretched, quiet=args.noise_reduction,
-                            contrast=not args.no_contrast, linear_background=process.sky_for(args.name))
+                            contrast=not args.no_contrast, linear_background=process.sky_for(args.name),
+                            star_power=args.star_reduction)
     suffix = "colour" if args.palette == "LRGB" else args.palette
     # A comparison keeps its own files, so it never replaces the picture.
     if args.stretched:
@@ -598,6 +627,8 @@ def run(args):
         suffix += "-quiet"
     if args.no_contrast:
         suffix += "-nocontrast"
+    if args.star_reduction != 1:
+        suffix += f"-stars{args.star_reduction:g}"
     if args.saturation:
         suffix += f"-sat{args.saturation:g}"
     out = config.DATA / "web" / f"{stacking.folder_name(args.name)}-{suffix}.jpg"
@@ -605,7 +636,7 @@ def run(args):
     Image.fromarray(picture).save(out, quality=93)
     print(f"saved {out}")
     settings = {"saturation": saturation, "background": background, "stretched": args.stretched,
-                "noise_reduction": args.noise_reduction, "local_contrast": not args.no_contrast, "night": args.night,
+                "noise_reduction": args.noise_reduction, "local_contrast": not args.no_contrast, "star_power": args.star_reduction, "night": args.night,
                 "any_coverage": args.any_coverage}
     if linear_mix:
         settings.update(green_kept=GREEN_KEPT, linear_oiii=LINEAR_OIII, star_tint=STAR_TINT, edge_trim=EDGE_TRIM,
