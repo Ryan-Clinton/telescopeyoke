@@ -1779,6 +1779,7 @@ class Supervisor:
         self.site = site
         self.run = self.pid = self.pid_start = None
         self.launched = False          # this run started it, so this run stops it
+        self.west = None               # the pier side the guider was started on
         self.active = False
         self.restarts = 0
 
@@ -1805,6 +1806,7 @@ class Supervisor:
     def start(self):
         """A guider guiding, with the creep off. One already guiding (healthy)
         is used; otherwise one is started."""
+        self.west = self.side()
         state = read_state()
         ok, _ = health(state)
         held = owner()
@@ -1921,11 +1923,35 @@ class Supervisor:
         if self.active:
             self.order("pause")
 
+    def side(self):
+        """True west of the pier, False east, None when the mount does not say."""
+        import mount
+        try:
+            return mount.Mount(watch=False).west()
+        except (OSError, SystemExit):
+            return None
+
     def after_move(self):
-        """The creep the GoTo set turned off again, and a new lock where the star now is."""
-        if self.active:
+        """The creep the GoTo set turned off again, and a new lock where the star now is.
+        A GoTo that put the tube on the other side of the pier turns the guide
+        camera half round: the guider running steers by the old side's columns
+        and pushes the star away (21 November 2026, 02:42: a re-centre's swing
+        over the pole, RA run away to 207" and guided imaging stopped). So that
+        guider is ended and a new one started, which turns the calibration
+        round (reuse) and checks it (verify) before guiding."""
+        if not self.active:
+            return
+        now = self.side()
+        if now is not None and self.west is not None and now != self.west:
+            self.say(f"  guide: the tube is now {'west' if now else 'east'} of the pier: "
+                     "restarting the guider for this side")
+            self.end_launched()
+            self.active, self.west = False, now
             self.creep_off()
-            self.order("relock")
+            self.launch(GUIDE_START_S)
+            return
+        self.creep_off()
+        self.order("relock")
 
     # -- before and during each frame
 
