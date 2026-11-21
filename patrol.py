@@ -85,7 +85,7 @@ def readiness(p):
     items.append({"what": "motion lock", "ok": not locked, "stops": locked,
                   "detail": mount.LOCK_FILE.read_text(encoding="utf-8").strip() if locked else "none"})
     items += sky_now(p)
-    ref, owner = reference.for_field(p["target"])
+    ref, owner = reference.for_field(p["target"], p.get("filter") or reference.CURRENT)
     items.append({"what": "reference", "ok": ref is not None, "stops": False,
                   "detail": (str(ref) if owner == p["target"] else
                              f"{owner}'s ({ref}) where it overlaps; tonight's stack becomes the panel's own"
@@ -208,6 +208,7 @@ def steps(p, dry_run=False):
             [sys.executable, str(ROOT / "shoot.py"), p["target"], *count,
              "--minutes", f"{rule['cap_minutes'] if rule else p['minutes'] * SHOOT_CAP:g}",   # the programme's own cap
              "--exposure", str(p["exposure"]), "--gain", str(p["gain"]),
+             *(["--filter", p["filter"]] if p.get("filter") else []),
              *(["--dither", str(p["dither"])] if p.get("dither") else []), *extra]]
 
 
@@ -494,6 +495,7 @@ def second_look(p, name, say=print, dry_run=False, run_command=None, search=None
     cap = minutes * SHOOT_CAP if most_minutes is None else max(1.0, min(minutes * SHOOT_CAP, most_minutes))
     cmd = [sys.executable, str(ROOT / "shoot.py"), name, "--frames", str(frames), "--exposure", str(p["exposure"]),
            "--gain", str(p["gain"]), "--minutes", f"{cap:.1f}", "--dither-first",
+           *(["--filter", p["filter"]] if p.get("filter") else []),
            *(["--dry-run"] if dry_run else [])]
     # Its exposure and its time said apart: the frames are the minutes of
     # exposure, the clock may run to the cap.
@@ -1211,7 +1213,9 @@ def due_step():
 def first_reference(name, session, say=print):
     """A panel's first night becomes its own reference, once measured."""
     import reference
-    if reference.newest(name) is not None or not (session / "depth.json").exists():
+    # A reference in the stack's own band: an R night does not wait on L's.
+    if reference.newest(name, reference.stack_band(session / "final.fits")) is not None \
+            or not (session / "depth.json").exists():
         return None
     try:
         made = reference.make(name, str(session / "final.fits"))

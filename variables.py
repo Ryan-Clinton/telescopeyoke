@@ -35,6 +35,7 @@ import argparse
 import json
 import math
 import time
+from pathlib import Path
 
 import numpy as np
 import requests
@@ -79,6 +80,34 @@ def sessions_of(name, least):
     folder = config.DATA / "frames" / stacking.folder_name(name)
     return [s for s in sorted(p for p in folder.glob("*") if p.is_dir() and any(p.glob("light-*.fits")))
             if len(vet.restack_frames(s)) >= least]
+
+
+def session_series(session):
+    """(camera, filter) of a session, from its own frames: light curves
+    are only ever compared within one."""
+    import filters
+    import stacking
+    from astropy.io import fits
+    session = Path(session)
+    lights = sorted(session.glob("light-*.fits"))
+    if lights:
+        return filters.band_key(stacking.load_light(lights[0])[1])
+    final = session / "final.fits"
+    return filters.band_key(fits.getheader(final)) if final.exists() else (config.LEGACY_CAMERA, None)
+
+
+def one_series(sessions, wanted=None):
+    """The sessions of one camera and filter: `wanted`'s filter, else the
+    newest session's. Returns (series, kept, left out with why)."""
+    named = [(s, session_series(s)) for s in sessions]
+    matching = [k for _, k in named if k[1] == wanted] if wanted else [named[-1][1]] if named else []
+    if not matching:
+        raise interface.Refusal("NO_SESSION", f"No session in {wanted}.")
+    chosen = matching[-1]
+    kept = [s for s, k in named if k == chosen]
+    left = [{"session": s.name, "why": f"another camera or filter ({k[0]}, {k[1] or 'unfiltered'})"}
+            for s, k in named if k != chosen]
+    return chosen, kept, left
 
 
 def batches(paths, size):
@@ -146,22 +175,28 @@ def surface(xy, values, extra=(), rounds=3):
     return design @ fit
 
 
-def on_gaia(fluxes, g, xy=None, glow=None):
+def on_gaia(fluxes, g, xy=None, glow=None, colour=None):
     """Each batch's measured light put on Gaia's G scale: by a smooth
     surface over the picture through all its stars where they are many
     (with `xy`), also following the glow under each star (with `glow`) and
     its brightness, as sharp seeing measures a star on a galaxy and a
-    nearly full well differently from soft; else by their median. Rows of
-    batches, columns of stars, NaN where unmeasured."""
+    nearly full well differently from soft; else by their median. With
+    `colour` (each star's Gaia BP-RP, for a filtered band, which is not G),
+    the surface also follows the stars' colour, batch by batch, so a blue
+    or red filter's colour term and its change with airmass do not move a
+    star's level. Rows of batches, columns of stars, NaN where unmeasured."""
     fluxes = np.asarray(fluxes, float)
     with np.errstate(invalid="ignore", divide="ignore"):
         inst = np.where(fluxes > 0, -2.5 * np.log10(fluxes), np.nan)
     offsets = g[None, :] - inst
     out = np.empty_like(inst)
+    tint = ()
+    if colour is not None and np.isfinite(colour).any():
+        tint = (np.where(np.isfinite(colour), colour, np.nanmedian(colour)),)
     for b in range(len(inst)):
         if xy is not None and np.isfinite(offsets[b]).sum() >= SURFACE:
             extra = () if glow is None else (np.nan_to_num(glow, nan=1.0), g, (g - np.nanmedian(g)) ** 2)
-            out[b] = inst[b] + surface(xy, offsets[b], extra)
+            out[b] = inst[b] + surface(xy, offsets[b], extra + tint)
         else:
             out[b] = inst[b] + np.nanmedian(offsets[b])
     return out
@@ -280,7 +315,8 @@ def night(session, name, size, say=print, stack=None, solve=None, gaia=None, bri
     xy = np.array(r["xy"], float).reshape(-1, 2)
     glow = np.array([np.inf if v is None else v for v in r["glow"]], float)
     keep = np.array(r["alone"], bool) & (glow <= GLOW) & (stars[:, 2] >= brightest)
-    mags = on_gaia(flux[:, keep], stars[keep, 2], xy[keep], glow[keep])
+    tint = stars[keep, 3] if session_series(session)[1] else None
+    mags = on_gaia(flux[:, keep], stars[keep, 2], xy[keep], glow[keep], tint)
     return {"session": r["session"], "jd": r["jd"], "stars": stars[keep], "mags": mags,
             "noise": noise_of(mags, stars[keep, 2]), "fwhm_px": r["fwhm_px"]}
 
@@ -512,7 +548,11 @@ def run(args, say=print):
     sessions = [folder / s for s in args.session] if args.session else sessions_of(args.name, 2 * args.bin)
     if not sessions:
         raise interface.Refusal("NO_SESSION", f"No session of {args.name} with {2 * args.bin} frames or more.")
-    nights, skipped = [], []
+    series, sessions, skipped = one_series(sessions, getattr(args, "filter", None))
+    say(f"{args.name}: {series[0]}, {series[1] or 'unfiltered'}: {len(sessions)} session(s)")
+    # The 183C's unfiltered record stays where it was; each filtered band has its own.
+    stem = f"variables-{series[0]}-{series[1]}" if series[1] else "variables"
+    nights = []
     for s in sessions:
         try:
             nights.append(night(s, args.name, args.bin, say))
@@ -532,7 +572,7 @@ def run(args, say=print):
         except requests.RequestException as error:
             say(f"  VSX not asked ({error.__class__.__name__})")
     listed = judge(curves, known)
-    out = folder / "variables"
+    out = folder / stem
     out.mkdir(parents=True, exist_ok=True)
     for s in listed:
         s["picture"] = draw(s, out / f"{key(s['ra'], s['dec'])}.png")
@@ -540,11 +580,12 @@ def run(args, say=print):
     new = [s for s in listed if (s["variable"] or s["dips"]) and not s["vsx"]]
     found = [s for s in listed if (s["variable"] or s["dips"]) and s["vsx"]]
     quiet = [s for s in listed if s["vsx"] and not s["variable"] and not s["dips"]]
-    answer = {"field": args.name, "bin": args.bin, "sessions": [n["session"] for n in nights], "skipped": skipped,
+    answer = {"field": args.name, "camera": series[0], "filter": series[1], "bin": args.bin,
+              "sessions": [n["session"] for n in nights], "skipped": skipped,
               "stars": measured, "vsx_asked": not args.offline,
               "known_found": len(found), "known_quiet": len(quiet), "candidates": len(new),
               "stars_listed": listed, "kind": "measured"}
-    records.write(folder / "variables.json", answer, schema="variables", stamp=True)
+    records.write(folder / f"{stem}.json", answer, schema="variables", stamp=True)
     say(f"{measured} stars measured over {len(nights)} nights in batches of {args.bin} frames")
     for s in found:
         say(f"  known, and seen to vary: {s['vsx']['name']} ({s['vsx']['type']}), G {s['median']:.2f}, "
@@ -560,7 +601,7 @@ def run(args, say=print):
     if new:
         say("Look at each curve. A real variable repeats on another night, and a real dip shows on the star alone, "
             "not on its neighbours; a blend, an edge or a satellite does not.")
-    say(f"kept as {folder / 'variables.json'}")
+    say(f"kept as {folder / (stem + '.json')}")
     return answer
 
 
@@ -568,6 +609,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("name", help="the field, as the frames' folder is named (M31)")
     ap.add_argument("--session", action="append", help="one session folder's name (repeat for more; default all)")
+    ap.add_argument("--filter", help="the filter to measure (default: the newest session's camera and filter)")
     ap.add_argument("--bin", type=int, default=BIN, help=f"frames in each point (default {BIN})")
     ap.add_argument("--offline", action="store_true", help="do not ask VSX which stars are known")
     ap.add_argument("--json", action="store_true", help="answer in JSON")

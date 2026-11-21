@@ -7,6 +7,8 @@
   "required": ["field", "bin", "sessions", "skipped", "stars", "vsx_asked", "known_found", "known_quiet", "candidates", "stars_listed", "kind"],
   "properties": {
     "field": {"type": "string"},
+    "camera": {"type": "string", "description": "The one camera these light curves were measured with."},
+    "filter": {"type": ["string", "null"], "description": "The one filter; null for an unfiltered camera. Another series is listed in skipped."},
     "bin": {"type": "integer", "description": "Frames in each point of a light curve."},
     "sessions": {"type": "array", "items": {"type": "string"}},
     "skipped": {"type": "array", "items": {"type": "object", "required": ["session", "why"],
