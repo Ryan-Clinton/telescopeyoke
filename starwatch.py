@@ -116,10 +116,22 @@ def judge_night(nights, latest):
     error = latest["scatter"] / math.sqrt(max(latest["points"], 1))
     dimmer = latest["mag"] - usual
     dipping = dimmer >= WARN and dimmer >= 3 * math.hypot(error, spread)
+    why = (f"{dimmer:+.3f} mag against the usual {usual:.3f} (night-to-night spread {spread:.3f}, "
+           f"tonight's error {error:.3f})")
+    # A dip is the star's alone: not on a night whose check stars were unsteady or moved with it.
+    doubt = None
+    if latest.get("check_scatter") is not None and latest["check_scatter"] >= WARN:
+        doubt = f"the check stars scattered {latest['check_scatter']:.3f} mag that night"
+    levels = [n["check_level"] for n in nights if n["session"] != latest["session"]
+              and series(n) == series(latest) and n.get("check_level") is not None]
+    if doubt is None and latest.get("check_level") is not None and len(levels) >= BASELINE_NIGHTS:
+        moved = latest["check_level"] - float(np.median(levels))
+        if abs(moved) >= WARN / 2:
+            doubt = f"the check stars moved {moved:+.3f} mag themselves"
+    if dipping and doubt:
+        dipping, why = False, f"{why}; not called a dip: {doubt}"
     return {"baseline": round(usual, 3), "dimmer": round(dimmer, 3), "dipping": bool(dipping),
-            "uncertainty": round(math.hypot(error, spread), 4),
-            "why": f"{dimmer:+.3f} mag against the usual {usual:.3f} (night-to-night spread {spread:.3f}, "
-                   f"tonight's error {error:.3f})"}
+            "uncertainty": round(math.hypot(error, spread), 4), "why": why}
 
 
 def colour_change(nights, blue="B", red="R"):
@@ -188,15 +200,16 @@ def transit_window(nights, windows, depth=TRANSIT_DEPTH):
 
 
 def check_stars(n, j):
-    """How steady the stars of about the target's brightness were that night:
-    the typical scatter of up to 10 of them, so a noisy night is told from a
-    change in the star."""
+    """How up to 10 stars of about the target's brightness behaved that night:
+    (their typical scatter, their typical level against Gaia), so a noisy
+    night or a shifted scale is told from a change in the star."""
     stars, mags = np.asarray(n["stars"]), np.asarray(n["mags"])
     near = np.argsort(np.abs(stars[:, 2] - stars[j, 2]))
     near = [i for i in near if i != j and np.isfinite(mags[:, i]).sum() >= 3][:10]
     if not near:
-        return None
-    return round(float(np.median([np.nanstd(mags[:, i], ddof=1) for i in near])), 4)
+        return None, None
+    return (round(float(np.median([np.nanstd(mags[:, i], ddof=1) for i in near])), 4),
+            round(float(np.median([np.nanmedian(mags[:, i]) - stars[i, 2] for i in near])), 4))
 
 
 def measure(key, session, size=BIN, say=print, night=None):
@@ -219,10 +232,12 @@ def measure(key, session, size=BIN, say=print, night=None):
     if not len(mags):
         raise interface.Refusal("NO_SESSION", f"{s['id']} was not measured in any batch of {session.name}.")
     jd = [t for t in n["jd"] if t is not None]
+    check_scatter, check_level = check_stars(n, j)
     latest = {"session": session.name, "jd": round(float(np.mean(jd)), 5) if jd else None,
               "mag": round(float(np.median(mags)), 4), "points": int(len(mags)),
               "scatter": round(float(np.std(mags, ddof=1)) if len(mags) > 1 else 0.0, 4),
-              "batches": [round(float(m), 4) for m in mags], "check_scatter": check_stars(n, j),
+              "batches": [round(float(m), 4) for m in mags], "check_scatter": check_scatter,
+              "check_level": check_level,
               **session_band(session)}
     record = history(s)
     record["nights"] = [x for x in record["nights"] if x["session"] != latest["session"]] + [latest]

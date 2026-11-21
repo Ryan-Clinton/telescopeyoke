@@ -988,13 +988,26 @@ def characterise(name, wanted, dry_run=False, say=print, run_command=None, bands
         chosen = [candidates.find(book, one.strip()) for one in wanted.split(",")]   # one set of frames serves them all
     extra = ["--dry-run"] if dry_run else []
     run_command = run_command or (lambda c: subprocess.run(c, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")))
+    # Before anything moves: frames without matched masters could not be measured.
+    import stacking
+    settings = config.hardware()
+    gaps = []
+    for band, exposure, _ in bands:
+        cards = {"INSTRUME": config.camera_name(), "EXPTIME": exposure, "GAIN": 1500, "FILTER": band,
+                 "OFFSET": settings["camera"].get("offset"), "READSPD": settings["camera"].get("readout_speed"),
+                 "SET-TEMP": settings["camera"].get("tec_target"), "XBINNING": 1, "TELESCOP": settings["train"]["name"]}
+        missing = stacking.Calibration(exposure, 1500, cards).missing
+        if missing:
+            gaps.append(f"{band} at {exposure:g} s: {'; '.join(missing)}")
+    if gaps:
+        raise interface.Refusal("INVALID_REQUEST", "Not calibrated for this follow-up: " + " | ".join(gaps))
     reach = {band: band_reach(band, minutes * 60) for band, _, minutes in bands}
     for k in chosen:
         seen = [n["mag"] for n in k.get("nights", []) if n.get("seen") and n.get("mag") is not None]
         for band, limit in reach.items():
             if seen and limit is not None and limit < seen[-1]:
-                say(f"  {k['id']}: last seen at {seen[-1]:.2f}; {band} should reach about {limit:.2f} in this time, "
-                    "so a miss would say nothing")
+                say(f"  {k['id']}: last seen at {seen[-1]:.2f}; {band} should reach about {limit:.2f} on its own scale "
+                    "in this time (a rough guide): a miss would say nothing")
 
     def step(script, *words, optional=False):
         done = run_command([sys.executable, str(ROOT / script), *words])
@@ -1010,23 +1023,29 @@ def characterise(name, wanted, dry_run=False, say=print, run_command=None, bands
         for band, exposure, minutes in bands:
             began = time.time()
             step("shoot.py", name, "--filter", band, "--frames", str(math.ceil(minutes * 60 / exposure)),
-                 "--minutes", f"{minutes * SHOOT_CAP:g}", "--exposure", str(exposure), "--gain", "1500", *extra)
+                 "--minutes", f"{minutes * SHOOT_CAP:g}", "--exposure", str(exposure), "--gain", "1500",
+                 "--no-restack", *extra)
             if dry_run:
                 continue
             session = newest_session(name, began)
             if session is None:
                 say(f"  no {band} frames kept")
                 continue
-            sessions[band] = session.name
-            if not step("depth.py", str(session), "--plant", optional=True):
-                say(f"  {band}: its depth could not be measured, so it has no magnitude")
+            sessions[band] = session
     finally:
         if not dry_run:
             mount.release()
     if dry_run:
         return {"dry_run": True, "object": name}
+    # The telescope is free from here: stacking and measuring move nothing.
+    import restack
+    for band, session in sessions.items():
+        if not (session / "final.fits").is_file():
+            restack.run(session, say=say)
+        if not step("depth.py", str(session), "--plant", optional=True):
+            say(f"  {band}: its depth could not be measured, so it has no magnitude")
+    sessions = {band: session.name for band, session in sessions.items()}
     tonight = set(sessions.values())
-    import stacking
     answers = []
     for k in chosen:
         # Its own detections beside tonight's, so the packet shows L with R and Ha.

@@ -592,8 +592,12 @@ def mineral_file(stems, details=None, strength="standard", site=None, say=print,
     detail_stems = [Path(str(s).removesuffix(".ser")) for s in (details or (stems[1:2] if mono else stems))]
     from astropy.io import fits
     colours, ceilings, flats = [], [], []
-    for stem in stems:
+    for stem, wanted in zip(stems, ("B", "G", "R") if mono else [None] * len(stems)):
         done = json.loads(stem.with_suffix(".stack.json").read_text(encoding="utf-8"))
+        if mono and (not done.get("mono") or done.get("filter") != wanted):
+            raise SystemExit(f"{stem.name}: --mono needs a mono video taken through {wanted} "
+                             f"(lucky capture --filter {wanted}); this one is "
+                             f"{'mono' if done.get('mono') else 'not mono'}, filter {done.get('filter')}")
         largest = max(done["kept"], key=float)
         colours.append(fits.getdata(stem.with_name(f"{stem.name}.best{largest}.fits")))
         ceilings.append(white_level(stem))

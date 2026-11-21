@@ -372,6 +372,9 @@ def parse(argv=None):
 
 def main(argv=None):
     args = parse(argv)
+    if (args.mineral or args.colour) and config.hardware()["camera"].get("mono"):
+        raise SystemExit("A mono camera has no colour in one video: take B, G and R with "
+                         "./ty lucky capture --filter, stack each, then ./ty lucky mineral --mono B G R.")
     if args.dry_run:
         site = (config.example() if config.DEMO else config.load())["site"]
         out = plan(args, site)

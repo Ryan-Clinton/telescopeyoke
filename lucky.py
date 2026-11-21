@@ -56,6 +56,7 @@ PREVIEW = config.DATA / "web" / "stack.jpg"
 PROGRESS = config.DATA / "web" / "lucky.json"
 SER_HEADER = 178
 SER_RGGB = 8         # SER's colour ID for an RGGB Bayer mosaic
+SER_MONO = 0         # and for a mono sensor's frames
 BOX = 96             # alignment point size, pixels
 STEP = 48            # spacing of the grid the points are chosen from
 MAX_POINTS = 600     # at most this many, the ones with most detail
@@ -94,14 +95,14 @@ class SerWriter:
     their bottom four bits, or kept whole in 16-bit words with the header
     saying 12."""
 
-    def __init__(self, path, width, height, instrument="", depth=8, white=4095):
+    def __init__(self, path, width, height, instrument="", depth=8, white=4095, colour=SER_RGGB):
         self.path, self.width, self.height, self.count = Path(path), width, height, 0
         self.depth, self.shift = depth, max(0, int(white).bit_length() - 8) if depth == 8 else 0
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.file = open(self.path, "wb")
         # a 16-bit video says the camera's own bits (12): its white level is then known from it
         self.file.write(ser_header(width, height, 0, depth=8 if depth == 8 else int(white).bit_length(),
-                                   instrument=instrument))
+                                   colour=colour, instrument=instrument))
 
     def frame_bytes(self):
         return self.width * self.height * (1 if self.depth == 8 else 2)
@@ -375,7 +376,9 @@ def stack(frames, keeps=KEEPS, points=True, local=True, in_colour=False, report=
     say = report or (lambda line: None)
     total = len(frames)
     look = green
-    if pixels == "all":
+    if pixels == "mono":
+        look = lambda frame: np.asarray(frame, dtype=np.float32)   # noqa: E731 - every pixel as it is
+    elif pixels == "all":
         middle = np.asarray(frames[total // 2], dtype=np.float32)
         g = (middle[0::2, 1::2].mean() + middle[1::2, 0::2].mean()) / 2
         gains = (g / max(middle[0::2, 0::2].mean(), 1e-6), g / max(middle[1::2, 1::2].mean(), 1e-6))
@@ -539,8 +542,12 @@ def stack_file(path, keeps=KEEPS, in_colour=False, publish=True, pixels="green",
     from astropy.io import fits
     path = Path(path)
     frames, code = read_ser(path)
-    if code != SER_RGGB:
-        raise SystemExit(f"{path}: only RGGB colour videos are read (colour ID {code})")
+    if code not in (SER_RGGB, SER_MONO):
+        raise SystemExit(f"{path}: only RGGB colour and mono videos are read (colour ID {code})")
+    if code == SER_MONO:
+        if in_colour:
+            raise SystemExit(f"{path}: a mono video has no colour; take one video per filter (lucky capture --filter)")
+        pixels = "mono"
     depth = ser_facts(path)[0]
     white = 2 ** (config.hardware()["camera"]["bit_depth"] if depth >= 16 else depth) - 1
     flat_path = None
@@ -574,6 +581,9 @@ def stack_file(path, keeps=KEEPS, in_colour=False, publish=True, pixels="green",
     done["shown"] = shown
     done["white_level"] = white
     done["flat"] = str(flat_path) if flat_path else None
+    done["mono"] = code == SER_MONO
+    notes = path.with_suffix(".json")
+    done["filter"] = json.loads(notes.read_text(encoding="utf-8")).get("filter") if notes.exists() else None
     (path.with_suffix(".stack.json")).write_text(json.dumps(done, indent=1), encoding="utf-8")
     progress("done", frames=done["frames"], kept=done["kept"][shown], points=done["alignment_points"], share=shown)
     if publish:
@@ -596,7 +606,8 @@ def capture_into(cam, path, frames, exposure, roi=None, depth=8, writer=None, pu
     last_seq, dropped, n = None, 0, 0
     for n, (mosaic, _, seq) in enumerate(cam.video(exposure, frames, roi=roi), 1):
         if writer is None:
-            writer = SerWriter(path, mosaic.shape[1], mosaic.shape[0], instrument=cam.name, depth=depth, white=white)
+            writer = SerWriter(path, mosaic.shape[1], mosaic.shape[0], instrument=cam.name, depth=depth, white=white,
+                               colour=SER_MONO if getattr(cam, "mono", False) else SER_RGGB)
         writer.add(mosaic)
         if seq and last_seq and seq > last_seq + 1:
             dropped += seq - last_seq - 1
@@ -619,11 +630,14 @@ def write_notes(path, notes):
 
 
 @activity.during("Taking a lucky-imaging video", "{target}")
-def capture(target, frames, exposure, gain, roi=None, depth=8):
+def capture(target, frames, exposure, gain, roi=None, depth=8, band=None):
     import director
     import shoot
     from camera import Camera
     _rig = shoot.hold_the_rig(f"{target} video")
+    if band:                                # confirmed by the wheel, and kept with the video
+        import filters
+        filters.turn_wheel(band)
     director.filming(target)                # the stream names what is filmed, not the last run
     path = OUT / f"{target.replace(' ', '')}-{datetime.now():%Y%m%d-%H%M%S}.ser"
     cam = Camera(gain=gain)
@@ -637,7 +651,8 @@ def capture(target, frames, exposure, gain, roi=None, depth=8):
             writer.close()
         cam.close()
     came.pop("last", None)
-    write_notes(path, {"target": target, "exposure": exposure, "gain": gain, "roi": roi, "depth": depth, **came})
+    write_notes(path, {"target": target, "exposure": exposure, "gain": gain, "roi": roi, "depth": depth,
+                       "filter": band, **came})
     print(f"{came['frames']} frames in {came['seconds']:.0f} s ({came['fps']} a second, {came['dropped']} dropped "
           f"by the camera): {path}", flush=True)
     return path
@@ -662,6 +677,7 @@ def main():
     ap.add_argument("--pixels", choices=("green", "all"), default="green",
                     help="stack: the detail picture from the greens filled in, or every pixel balanced")
     ap.add_argument("--then-stack", action="store_true", help="capture: stack it straight after")
+    ap.add_argument("--filter", help="capture: turn the wheel to this filter first and keep its name with the video")
     ap.add_argument("--flat", action="store_true", help="stack: divide each frame by the flat first (for colour)")
     ap.add_argument("--detail", nargs="+", metavar="SER", help="mineral: stacked videos for the detail (default: the colour ones)")
     ap.add_argument("--strength", default="standard", help="mineral: mild, standard, strong, auto, or a number")
@@ -696,7 +712,8 @@ def main():
         return
     args.target = args.target[0]
     if args.command == "capture":
-        path = capture(args.target, args.frames, args.exposure, args.gain, roi=args.roi, depth=args.depth)
+        path = capture(args.target, args.frames, args.exposure, args.gain, roi=args.roi, depth=args.depth,
+                       band=args.filter)
         if args.then_stack:
             stack_file(path, keeps=args.keep, in_colour=args.colour, pixels=args.pixels, flat=args.flat)
     else:

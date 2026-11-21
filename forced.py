@@ -159,9 +159,9 @@ def history(name, ra, dec, say=print, solve_with=None, subtract=False):
         if not inside:
             say(f"  {s['session']}: outside the picture")
         elif row["mag"] is not None:
-            say(f"  {s['session']}: G {row['mag']:.2f} ± {row['error']:.2f}")
+            say(f"  {s['session']}: {named or 'G'} {row['mag']:.2f} ± {row['error']:.2f}")
         else:
-            say(f"  {s['session']}: not seen, fainter than G {row['limit']}")
+            say(f"  {s['session']}: not seen, fainter than {named or 'G'} {row['limit']}")
     return rows
 
 

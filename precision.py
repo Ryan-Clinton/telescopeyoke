@@ -43,6 +43,7 @@ import records
 
 RADII = (1.0, 1.5, 2.0, 2.5, 3.0)     # aperture radii, times the stars' width (FWHM)
 ANNULUS = (4.0, 6.0)                  # the sky round each star, times the FWHM
+MEASURED_VERSION = 2   # of precision-flux.npz: raise it when calibration or the measuring changes
 CHANNELS = ("all", "red", "green", "blue")
 VARIANTS = ("destriped", "as read")
 APERTURES = tuple(f"{r:g} FWHM" for r in RADII) + ("weighted",)
@@ -166,9 +167,10 @@ def measure_night(session, planet, say=print, again=False, workers=None, first=N
     if kept.exists() and not again:
         saved = np.load(kept)
         # The flux is [variants, channels, frames, stars, apertures].
-        if saved["flux"].shape[2] == len(frames) and saved["flux"].shape[3] == len(xy):
+        current = "version" in saved.files and int(saved["version"]) == MEASURED_VERSION
+        if current and saved["flux"].shape[2] == len(frames) and saved["flux"].shape[3] == len(xy):
             say(f"{session.name}: {len(frames)} frames, as measured before")
-            return p, stars, {k: saved[k] for k in saved.files}
+            return p, stars, {k: saved[k] for k in saved.files if k != "version"}
     log = {r["index"]: r for r in (json.loads(line) for line in
                                    (session / "frames.jsonl").read_text(encoding="utf-8").splitlines() if line)}
     head = stacking.load_light(frames[0])[1]
@@ -197,7 +199,7 @@ def measure_night(session, planet, say=print, again=False, workers=None, first=N
            "y": np.array([(r.get("shift") or (0, 0))[1] for r in rows], float),
            "fwhm": np.array([r.get("fwhm", np.nan) for r in rows], float),
            "sky": np.array([r.get("background", np.nan) for r in rows], float)}
-    np.savez_compressed(kept, **out)
+    np.savez_compressed(kept, version=MEASURED_VERSION, **out)
     return p, stars, out
 
 
@@ -388,31 +390,40 @@ def run(args, say=print):
 
 def compare_filters(field, say=print):
     """Which filter has measured a field's transits best, from the kept
-    precision.json of each session: the worse of each night's baseline and
-    in-transit scatter for its best way. Only one camera's filters are
-    weighed, and with fewer than two filters measured nothing is chosen."""
+    precision.json of each session: the worse of each session's baseline
+    and in-transit scatter for its best way. Filters are weighed only
+    against each other on the same night with one camera, so the sky is
+    shared. One such night is provisional; a firm choice needs the same
+    filter to win on two or more."""
+    import datetime
     import stacking
     import variables
-    best = {}
+    rows = []
     for kept in sorted((config.DATA / "frames" / stacking.folder_name(field)).glob("*/precision.json")):
         ways = json.loads(kept.read_text(encoding="utf-8")).get("ways") or []
         scatter = [v for v in (ways[0].get("baseline_rms_mmag"), ways[0].get("transit_rms_mmag"))
                    if v is not None and np.isfinite(v)] if ways else []
         if not scatter:
             continue
-        series = variables.session_series(kept.parent)
-        if series not in best or max(scatter) < best[series]["mmag"]:
-            best[series] = {"camera": series[0], "filter": series[1], "session": kept.parent.name,
-                            "mmag": round(float(max(scatter)), 2)}
-    rows = sorted(best.values(), key=lambda r: r["mmag"])
+        camera, band = variables.session_series(kept.parent)
+        began = datetime.datetime.strptime(kept.parent.name[:15], "%Y%m%d-%H%M%S")
+        rows.append({"camera": camera, "filter": band, "session": kept.parent.name,
+                     "night": f"{began - datetime.timedelta(hours=12):%Y-%m-%d}", "mmag": round(float(max(scatter)), 2)})
     for r in rows:
-        say(f"  {r['camera']}, {r['filter'] or 'unfiltered'}: {r['mmag']} mmag ({r['session']})")
-    newest = rows and max(rows, key=lambda r: r["session"])["camera"]
-    filtered = [r for r in rows if r["camera"] == newest and r["filter"]]
-    choice = filtered[0]["filter"] if len(filtered) >= 2 else None
-    say(f"Use {choice}: the lowest measured scatter." if choice
-        else "No choice yet: this needs two filters measured with one camera.")
-    return {"field": field, "filters": rows, "choice": choice, "kind": "measured"}
+        say(f"  {r['night']} {r['camera']}, {r['filter'] or 'unfiltered'}: {r['mmag']} mmag ({r['session']})")
+    newest = max(rows, key=lambda r: r["session"])["camera"] if rows else None
+    nights = {}
+    for r in rows:
+        if r["camera"] == newest and r["filter"]:
+            held = nights.setdefault(r["night"], {})
+            held[r["filter"]] = min(r["mmag"], held.get(r["filter"], r["mmag"]))
+    wins = [min(held, key=held.get) for held in nights.values() if len(held) >= 2]
+    choice = wins[0] if wins and len(set(wins)) == 1 else None
+    firm = bool(choice and len(wins) >= 2)
+    say(f"Use {choice}: lowest scatter on {len(wins)} shared night(s)" + ("." if firm else ", provisional.") if choice
+        else f"No choice: {len(wins)} night(s) with two filters, and they {'disagree' if wins else 'are needed'}.")
+    return {"field": field, "filters": rows, "shared_nights": len(wins), "choice": choice, "firm": firm,
+            "kind": "measured"}
 
 
 def main():

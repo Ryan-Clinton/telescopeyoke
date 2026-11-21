@@ -14,6 +14,7 @@
                              "points": {"type": "integer"}, "scatter": {"type": "number"},
                              "batches": {"type": "array", "items": {"type": "number"}},
                              "check_scatter": {"type": ["number", "null"], "description": "The typical batch scatter of up to 10 stars of about the target's brightness that night."},
+                             "check_level": {"type": ["number", "null"], "description": "Those stars' typical level against Gaia; a dip is not called when it has moved."},
                              "camera": {"type": "string", "description": "The camera profile; a kept night without one is the 183C's."},
                              "filter": {"type": ["string", "null"], "description": "The filter; null for an unfiltered camera. Only nights of the same camera and filter share a baseline."},
                              "band": {"type": ["string", "null"], "description": "The instrumental band in words, e.g. L (Optolong), 183M."}}},
