@@ -87,11 +87,20 @@ PyTorch's notice says 2.14 is the last release with CUDA 12.x wheels, so the
 environment must pin **PyTorch 2.14 or earlier, `cu126`**. Running it under WSL
 on this card has not been tried, and is the first step of stage 1.
 
-**One open fault that affects training.** Today's long darks flip between
+**Star size, measured on the NGC 2174 stacks** (second moments of unsaturated
+stars, so a rough figure): Ha 4.66 stack pixels (6.8"), OIII 3.75 (5.5"), SII
+3.71 (5.4"). Ha, from a different session, is about 25% wider. A star wider in
+one channel gets a coloured rim, which fits the red-and-cyan stars in the HOO
+picture, though that cause is not yet proven.
+
+**One open fault that gates training.** Today's long darks flip between
 median levels about 5 counts apart (78-79 and 83-84) from frame to frame, at
-every exposure from 150 to 240 s. The cause is unknown. Whether light frames
-do the same must be measured before a training set is made, because a shift
-shared unevenly between two half-stacks would be learned as signal.
+every exposure from 150 to 240 s. The cause is unknown. In the 20 raw SII
+light frames checked (two sessions, 120 s) no such jump appears: frame-to-frame
+shifts are 0 to 1 count and even across the sensor. That is one filter on one
+night, so the check is repeated over every session entering a training set. A
+shift shared unevenly between two half-stacks would be learned as signal. It
+does not hold up the plain picture work.
 
 ## 3. What the paid tools have that we do not
 
@@ -114,9 +123,10 @@ network is the right tool or plain code is.
 | 12 | Local normalisation | APP LNC, PixInsight | Evens out sessions before stacking | Frame-level only | No | **4** |
 | 13 | Per-pixel noise tracking | StarTools Tracking | Knows each pixel's noise through every step | No | Feeds 2 and 7 | **4** |
 | 14 | Drizzle | PixInsight, Siril | Recovers resolution from undersampled data | No | - | **Not needed** |
+| 15 | PSF matching between filters | PixInsight workflows | Brings each filter's stars to one width before colour is made | No | No | **1** |
 
 Drizzle is rejected on the figures. The 183M at 675 mm is 0.73"/px, and 1.47"/px
-at the 2x2 scale. Our stars are about 5 pixels FWHM at that scale, so the data are
+at the 2x2 scale. Our stars are about 3.7 to 4.7 pixels FWHM at that scale, so the data are
 not undersampled. Full resolution is already a setting (`processing_scale = 1`).
 
 **What the money really buys.** Items 3 to 6 and 9 to 13 are ordinary
@@ -131,14 +141,15 @@ that cannot beat a wavelet denoiser is not worth keeping.
 
 | Stage | Delivers | Needs |
 |---|---|---|
-| A | Star mask and separation; wavelet noise reduction; GHS; local contrast; better gradient | Plain code, no new dependency |
-| B | Own-data denoiser (section 5) | PyTorch on the desktop |
-| C | Star removal model (section 6.1) | Stage A's separation, stage B's tooling |
-| D | Photometric colour, narrowband into RGB, continuum subtraction | Filter curves, Gaia |
-| E | Sharpening and star repair model (section 6.2) | Survey data, measured star shapes |
+| A | PSF matching between filters; star mask and separation; wavelet noise reduction; photometric colour; GHS; local contrast; better gradient; narrowband into RGB; continuum subtraction | Plain code, filter curves, Gaia |
+| B | Training-data diagnostics: the level flips, and the half-stack checks of section 5 | Plain code |
+| C | Own-data denoiser (section 5) | PyTorch on the desktop; B passed |
+| D | Star removal model (section 6.1) | Stage A's separation, stage C's tooling |
+| E | Star repair, then separately modest sharpening (section 6.2) | Survey data, measured star shapes |
 
-A and B can run side by side. C to E each start only when the one before has
-passed its acceptance.
+A and B can run side by side, and A's pictures do not wait for B. C to E each
+start only when the one before has passed its acceptance. Channels already
+stay in floating point through colour assembly (`process.process(whole=False)`).
 
 **Where it would live (proposed).** A `finish.py` command for the picture
 steps, called by `colour.py`; `train.py` for building sets and training, which
@@ -148,7 +159,7 @@ its `--json`. On the desktop everything is under `~/telescopeyoke-laptop/trainin
 PyTorch stays on the desktop and does not become a dependency of the laptop or
 of a normal install.
 
-## 5. Stage B: a denoiser from our own frames
+## 5. Stage C: a denoiser from our own frames
 
 **Method.** Noise2Noise: a network trained to predict one noisy image from
 another of the same scene converges on the clean image, provided the two
@@ -165,42 +176,60 @@ instruments limited. That last result is a reason to train on our own camera.
 1. Use sessions with at least 8 accepted frames. Calibrate and register them
    with the existing pipeline onto one reference per session.
 2. For each session make 4 random disjoint splits of the frames into A and B,
-   and stack each half with the same weights and clipping as a normal stack.
+   balanced by frame FWHM so the two halves have matching star shapes. Each
+   half is stacked alone: its own means, clipping and normalisation, computed
+   from its own frames only. Halves are then matched in brightness scale.
    About 17 MB per image at the 2x2 scale, so roughly 5 GB in all.
 3. Vary the split (1:1, 1:3) so the network sees several noise levels. A full
    stack has less noise than any half, and a network trained at one level
    misjudges another.
 4. Give the network a noise-level map as a second input channel, from the
-   frame scatter at each pixel.
+   frame scatter of the **input** half only.
 5. Hold out whole **targets**, never just patches. **NGC 2174 is held out** in
    every filter until acceptance, because it is the picture we most want to
    judge and has Ha, OIII and SII.
+6. SII has only that one target, so holding it out leaves no SII in training.
+   SII results are reported apart, as a test on an unseen filter, and SII
+   support stays **experimental** until a second SII target exists. OIII has
+   two targets and is reported apart too.
+
+More crops and more splits of the same frames do not add new sky. About 2,200
+patch positions is enough to attempt a small denoiser, not evidence that it
+will generalise.
 
 **What breaks the method.** Anything shared by both halves is learned as real:
 residual dark or flat error, hot pixels, banding, walking noise when dithering
-was small, and the unexplained level flips of section 2. Interpolation
-correlates noise between neighbouring pixels within a frame, but not between
-different frames, so it should not break the pairing (our reasoning: no source
-was found on this exact case). Each session is checked first by correlating
-the A-B difference with the dark and flat residuals.
+was small, cloud that varies through the session, and the unexplained level
+flips of section 2. Interpolation correlates noise between neighbouring pixels
+within a frame, but not between different frames, so it should not break the
+pairing (our reasoning: no source was found on this exact case).
+
+**Stage B's entry check for each pair.** Measure the correlation between the
+two halves' residuals, in blank sky and in rings around stars, and correlate
+the A-B difference with the dark and flat residuals. A pair with a significant
+correlation, unstable detector levels or strong cloud variation stays out.
 
 **Network (proposed).** A small residual U-Net, 4 levels, 32 base channels,
 predicting a correction to its input. One model for all filters at first, with
 the filter given as a condition only if results differ by filter. 256-pixel
-crops, batch about 8, mixed precision to fit 8 GB. Training time on the 1080 is
-unknown until measured; a night or a few is our guess.
+crops, in FP32. Reported FP16 throughput on this GPU family is very poor (we
+could not open NVIDIA's page to confirm it), so the batch is reduced before
+mixed precision is tried, and it is kept only if a benchmark shows a gain.
+Training time on the 1080 is unknown until that benchmark.
 
-**Loss.** Noise-weighted L2 in **linear** units. A loss taken after a stretch
+**Loss.** Noise-weighted L2 in **linear** units, the weights never derived
+from the noisy target itself, which would bias the result. A loss taken after a stretch
 would bias the mean of a noisy target and so bias flux. The input may be
 compressed for the network to see, but its output and loss stay linear. A
 flux-preserving correction after inference puts back the input's large-scale
-level, so the network can only change fine structure.
+level. That protects only large scales, so small faint structures rely on the
+acceptance measures of section 7.
 [PAU Survey](https://arxiv.org/abs/2611.05447) reports the same risk (erased
 faint emission, biased fluxes) and uses flux-aware losses.
 
 ## 6. Later models
 
-### 6.1 Star removal (stage C)
+### 6.1 Star removal (stage D)
 
 Supervised, with partly synthetic pairs. Take nebula patches with their stars
 removed by stage A, then add stars of known position and brightness, using
@@ -226,9 +255,15 @@ undo it. **The choice of sharp data decides how honest this is.**
 | [Hubble via MAST](https://archive.stsci.edu/hst/) | Far sharper | WFC3 is about 166" x 175", some 110 of our pixels | Real F656N, F502N, F673N, but too small and too sharp: teaches detail we could never resolve |
 | Hobbyist uploads | Varies | Varies | **No**: licences mostly unstated |
 
-IPHAS is sharper than our 1.47"/px by a moderate margin, so the network is only
-asked to recover what the sky could plausibly show. Asking it to reach Hubble's
-detail is how a sharpener starts inventing structure.
+**Pixel scale is not resolution.** IPHAS's median is 1.1" and our stars are
+about 5.4" to 6.8", so the gap is **five to six times in FWHM**. The target of
+training is therefore not the IPHAS image itself: it is IPHAS blurred to a
+modest improvement over our measured PSF, so the network is asked for a small,
+defensible gain. Asking it for IPHAS's or Hubble's detail is how a sharpener
+starts inventing structure.
+
+**Order.** Star-shape repair is trained and accepted first, against our measured
+field-varying PSF. Sharpening of nebulae is a separate, later model.
 
 **Hallucination is the main risk here.** It is measured directly in published
 work ([SUNet deconvolution](https://arxiv.org/abs/2405.07842),
@@ -247,6 +282,10 @@ frames as the input, and use the other three quarters as an independent
 reference. Nothing the model saw is in the reference, so a detail it invents
 will not be there.
 
+Every figure is reported with its uncertainty (from the repeated splits) and
+separately for stars, blank sky and nebula. These thresholds are starting
+points, not validated limits.
+
 | Measure | Denoiser passes when |
 |---|---|
 | Error against the independent reference, in sky and in nebula | At least 10% lower than the wavelet baseline at equal smoothing |
@@ -255,12 +294,16 @@ will not be there.
 | Faint planted stars | At least as many recovered as in the untouched stack |
 | False sources | No more detections absent from the reference than the baseline has |
 | Faint extended signal | Outer nebula level kept within 5%, on planted faint glows |
-| Across filters | Holds in Ha, OIII and SII separately, or is limited to those that pass |
+| Flux spread | Scatter of star flux error, and its trend with brightness, no worse than the baseline; faint stars reported apart |
+| Fine detail | Keeps comparable power at small scales against the reference, so a result cannot pass by being smoother |
+| Across filters | Holds in Ha, OIII and SII separately, or is limited to those that pass; never averaged into one score |
 | By eye | The owner prefers it on NGC 2174, beside the baseline |
 
-A sharpener adds: no structures in its output that are absent from a deeper
-stack of the same field, and star shape improved across the frame rather than
-only at the centre.
+A sharpener adds: star shape improved across the frame rather than only at the
+centre, and new structure confirmed in a genuinely deeper independent stack of
+the same field. Absence from a noisy reference does not prove a feature was
+invented, so an unconfirmed feature counts as unproven, and the model is not
+accepted on it.
 
 ## 8. Risks
 
@@ -280,7 +323,8 @@ only at the centre.
 | Our own frames | Ours |
 | Hubble via MAST | Sourced: mostly CC0 with acknowledgement requested; some collections excepted, such as the Digitized Sky Survey (non-commercial) |
 | Legacy Surveys | Sourced: acknowledgement text and a credit line on images; no licence for the data found |
-| IPHAS, VPHAS+, DECaPS2 | Public releases; **reuse terms not established. Check before downloading** |
+| IPHAS | Read 21 Nov 2026. 1.6 TB of processed images, downloadable by run and CCD. Its pages state **no licence**, and ask for citation and an acknowledgement in papers. The ING's policy says its data enter "the public domain" after one year. Enough for private training; **any release of weights trained on it waits for the providers' written answer** |
+| VPHAS+, DECaPS2 | Public releases; **reuse terms not established. Check before downloading** |
 | GraXpert models | Reported CC BY-NC-SA on a third-party mirror, unconfirmed; application GPL-3. Not used |
 | StarNet | Free; licence not established. Not used |
 | AstroBackyard samples | No licence stated. Not used without the author's agreement |
@@ -291,18 +335,11 @@ text. Models trained from it name that manifest.
 
 ## 10. Questions for review
 
-1. Is Noise2Noise from odd and even half-stacks sound for registered,
-   outlier-clipped stacks, or does the clipping or weighting break the
-   independence it depends on?
-2. Is a noise-weighted linear L2 loss with a large-scale flux correction the
-   right way to protect faint signal?
-3. Is about 2,200 patch positions enough for a useful denoiser, or should the
-   183C's sessions be added as a separate input type?
-4. Is the plain-code-first order right, or should star removal come before the denoiser?
-5. Is IPHAS the right sharp source for stage E, and does degrading it to 1.47"/px
-   leave enough for a network to learn?
-6. Are the acceptance thresholds in section 7 too loose or too strict?
-7. Is there a capability the paid tools have that section 3 has missed?
+1. Are the half-stack entry checks of section 5 enough to catch a shared artefact?
+2. What PSF-matching method suits a stack whose star width varies across the
+   frame, without softening the sharpest filter more than it must?
+3. How large a sharpening gain over our measured PSF is defensible for stage E?
+4. Is there a capability the paid tools have that section 3 has still missed?
 
 ## Sources
 
@@ -326,5 +363,8 @@ text. Models trained from it name that manifest.
 - MAST data use: <https://archive.stsci.edu/publishing/data-attributions>
 - Legacy Surveys acknowledgement: <https://www.legacysurvey.org/acknowledgment-old/>
 - IPHAS DR2: <https://arxiv.org/abs/1406.4862>
+- IPHAS images and data: <https://www.iphas.org/images>, <https://www.iphas.org/data.html>
+- ING data ownership: <https://www.ing.iac.es//astronomy/observing/data_ownership.html>
+- Noise2Noise: <https://proceedings.mlr.press/v80/lehtinen18a.html>
 - VPHAS+: <https://doi.eso.org/10.18727/archive/65>
 - DECaPS2: <https://arxiv.org/abs/2206.11909>
