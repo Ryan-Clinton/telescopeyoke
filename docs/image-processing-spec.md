@@ -216,6 +216,16 @@ one-off measurements, each planted at 1 and 3 times the pixel noise):
   shown. One SII frame is exactly 5 counts low with its sky unchanged, the size of
   the dark level flips. The cause is not known. Stage B must settle it.
 
+- *Star reduction* (`--star-reduction`, off by default). Each star keeps its peak
+  and loses its wings, with one gain across filters. At 2 on NGC 2174, star width
+  went from 7.1 to 5.3 px and all 1042 measured stars stayed. Measured before the
+  final change to how the peak fades, which removed a ring round bright stars.
+- *Deconvolution* (`--sharpen`, off by default). Richardson-Lucy on the star-free
+  brightness, only where the nebula stands above the grain. On a Ha crop, 3 steps
+  raised fine detail by a third with agreement with another night's stack almost
+  unchanged (r 0.175 to 0.172). By 20 steps planted lines rang and r was 0.135. In
+  the finished picture it still looks grainier at today's depth.
+
 Local contrast is built (structure from 3 to 24 px, on the star-free layer), on
 median scales. Beside a planted hard edge its dark rim is 22 px wide against 73 px
 for Gaussians, at the same depth (30%), so a rim remains. `--no-contrast` leaves

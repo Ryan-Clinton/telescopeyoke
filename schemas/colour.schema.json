@@ -19,7 +19,8 @@
         "stretched": {"type": "boolean"},
         "noise_reduction": {"type": "boolean"},
         "local_contrast": {"type": "boolean"},
-        "star_power": {"type": "number"}
+        "star_power": {"type": "number"},
+        "sharpen_steps": {"type": "integer"}
       }
     },
     "filters": {
