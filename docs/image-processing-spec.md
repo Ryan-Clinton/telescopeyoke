@@ -202,6 +202,17 @@ one-off measurements, each planted at 1 and 3 times the pixel noise):
   through alignment as a mask. None of the six stacks measured had any, so
   today's pictures do not change because of this.
 
+- *Horizontal streaks in NGC 2174's Ha.* Real nebula. The same pattern appears
+  on two nights lined up on the sky (r 0.975) and not on the sensor (r -0.09), the
+  framing about 680 px apart.
+- *TGV noise reduction.* At equal grain it kept the same planted filaments as a
+  plain blur (96 to 99% against 97 to 98%), in Ha and OIII at 1 and 3 times the
+  noise, on one 420 px crop. Not added.
+- *Level jumps between frames.* Fitting each frame against the session's median
+  and the flat separates sky (which follows the flat) from a fixed offset. In the
+  NGC 2174 Ha session, offsets of +5 to +34 counts do not follow the flat; one SII
+  frame is exactly 5 counts low. The cause is not known. Stage B must settle it.
+
 Local contrast is built (structure from 3 to 24 px, on the star-free layer), on
 median scales. Beside a planted hard edge its dark rim is 22 px wide against 73 px
 for Gaussians, at the same depth (30%), so a rim remains. `--no-contrast` leaves

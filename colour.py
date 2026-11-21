@@ -151,6 +151,31 @@ def lined_up(image, reference):
     return placed(moved), info, False
 
 
+def restack_plan(name):
+    """For each filter, the sessions worth stacking together: those at the
+    exposure holding the most light, as restack.py would be told them.
+    Mixing lengths lost NGC 2174's deep Ha frames (21 November 2026)."""
+    folder = config.DATA / "frames" / stacking.folder_name(name)
+    found = {}
+    for session in sorted(p for p in folder.glob("*") if p.is_dir() and p.name[:8].isdigit()):
+        lights = sorted(session.glob("light-*.fits"))
+        if not lights:
+            continue
+        head = stacking.load_light(lights[0])[1]
+        band, length = head.get("FILTER"), float(head.get("EXPTIME") or 0)
+        if band and length:
+            found.setdefault(str(band), {}).setdefault(length, []).append((session, len(lights)))
+    plan = {}
+    for band, lengths in sorted(found.items()):
+        best = max(lengths, key=lambda t: t * sum(n for _, n in lengths[t]))
+        chosen = lengths[best]
+        plan[band] = {"exposure_s": best, "frames": sum(n for _, n in chosen),
+                      "minutes": round(best * sum(n for _, n in chosen) / 60, 1),
+                      "sessions": [str(p.relative_to(config.DATA)) for p, _ in chosen],
+                      "left_out": [str(p.relative_to(config.DATA)) for t, v in lengths.items() if t != best for p, _ in v]}
+    return plan
+
+
 MIN_COVERED = 0.75   # share of the frame every filter must cover for the target to be in the picture
 GREEN_KEPT = 0.25    # of the green above the red and blue's average, in the Hubble palette
 LINEAR_OIII = 0.55   # OIII fills two channels in HOO: mixed linearly at full strength the nebula goes grey
@@ -536,9 +561,21 @@ def main():
     ap.add_argument("--no-contrast", action="store_true", help="narrowband: leave out local contrast, for comparison")
     ap.add_argument("--any-coverage", action="store_true",
                     help="make the picture even when the filters share under 75%% of the frame")
+    ap.add_argument("--plan", action="store_true",
+                    help="change nothing: say which sessions of each filter to restack together, and the commands")
     ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
     args = ap.parse_args()
-    return interface.main("colour", lambda: run(args), args.json)
+    return interface.main("colour", lambda: show_plan(args.name) if args.plan else run(args), args.json)
+
+
+def show_plan(name):
+    plan = restack_plan(name)
+    for band, p in plan.items():
+        print(f"{band}: {p['minutes']:g} min, {p['frames']} frames of {p['exposure_s']:g} s, {len(p['sessions'])} sessions")
+        if p["left_out"]:
+            print(f"  left out, another length: {', '.join(Path(x).name for x in p['left_out'])}")
+        print("  ./restack.py " + " ".join(p["sessions"]))
+    return {"name": name, "plan": plan}
 
 
 def run(args):
