@@ -466,6 +466,9 @@ def build(cfg, date=None, offline=False, demo=False):
         # sky is only sampled every ten minutes.
         t["now"] = t["start"] <= now + timedelta(minutes=sky.STEP_MIN) and now <= t["end"]
         t["tags"] = target_tags(t, pollution, now)
+    import filters
+    for t in results:
+        t["moon_filter"] = filters.for_moon(t, pollution["sqm"] if pollution else 21.0)   # advice only
     mid = len(night.unix) // 2
     # Moonrise and moonset only matter between dusk and dawn.
     moon_rise, moon_set = night.crossings(night.moon_alt, 0, night.sun_alt < 0)
@@ -655,11 +658,12 @@ def target_row(i, t):
             f"{hm(t['start'])}-{hm(t['end'])}",
             "" if t["moon_sep"] is None else f"{t['moon_sep']}°",
             f"{t['sky']:.1f}", f"{t['score']:.0f}",
-            "" if t.get("rating") is None else f"{t['rating']}/5"]
+            "" if t.get("rating") is None else f"{t['rating']}/5",
+            " ".join((t.get("moon_filter") or {}).get("filters", []))]
 
 
 TARGET_HEAD = ["#", "Object", "Name", "Type", "Mag", "Size", "Best", "Alt",
-               "Window", "Moon", "Sky", "Score", "Imm"]
+               "Window", "Moon", "Sky", "Score", "Imm", "Filter"]
 WEATHER_HEAD = ["Time", "Cloud", "Low/Mid/High", "Rain", "Temp", "Dew gap",
                 "Wind/gust from", "Seeing", "Transp."]
 

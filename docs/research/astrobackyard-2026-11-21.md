@@ -23,18 +23,16 @@ In the order they would help this rig.
    filter changes *(deep-sky how-to, partly summary; the hourly figure on the
    focus page is from commenters)*. We refocus after a filter change
    (`filters.size_check`) and keep every focus with the focuser's temperature
-   (`focus.py` `FOCUS_LOG`), but no trigger was found that refocuses a run
-   when FWHM grows or the temperature falls. On 19 November focus crept
-   outward about 6 half-steps a minute. A change here alters how a night runs,
-   so its commit must state the effect on framing, sensor temperature, minutes
-   lost and mount safety.
+   (`focus.py` `FOCUS_LOG`). On 19 November focus crept outward about 6
+   half-steps a minute. **Built 21 November 2026** (`refocus.py`,
+   `docs/focus.md`), not yet tried on the sky.
 2. **Choose the filter by the Moon.** The site's consistent advice: broadband
    for galaxies, reflection nebulae and clusters on dark nights; Ha and OIII
    for emission nebulae, planetary nebulae and supernova remnants when the
-   Moon is up. It gives no numeric threshold. `sky.moonlight` already gives
-   the Moon's added sky brightness at a target, and no code was found that
-   uses it to choose a filter. The threshold should be measured from our own
-   frames, by band, and not borrowed.
+   Moon is up. It gives no numeric threshold. **Built 21 November 2026** as
+   advice in the planner (`filters.for_moon`, the Filter column). It changes
+   at the point the Moon doubles the sky, a first estimate: our frames have
+   only one moonlit L run to measure it from.
 3. **Bias the RA balance slightly east-heavy** so the RA gears stay loaded
    against the worm ([autoguiding](https://astrobackyard.com/autoguiding/)).
    Costs nothing, needs hands at the mount, and matters while guiding is

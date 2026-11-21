@@ -441,7 +441,8 @@ def _target(t):
     return {"id": t["id"], "name": t["name"], "kind": t["kind"], "score": t["score"],
             "observable_now": t["now"], "best_time": t["best"], "best_altitude_deg": t["best_alt"],
             "direction": t["direction"], "window": [t["start"], t["end"]], "tags": t["tags"],
-            "rating": t.get("rating"), "note": t.get("note", ""), "palette": t.get("palette")}
+            "rating": t.get("rating"), "note": t.get("note", ""), "palette": t.get("palette"),
+            "moon_filter": t.get("moon_filter")}
 
 
 def spots():

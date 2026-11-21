@@ -329,6 +329,48 @@ def size_check(fwhm, store=None, tolerance=None, name=None):
 
 # --- the change, one transaction ------------------------------------------------------
 
+MOON_ADDS = 1.0     # the Moon adding this many times the moonless sky: the point the advice changes
+MOON_KINDS = ("galaxy", "nebula", "planetary nebula", "cluster+nebula", "dark nebula", "open cluster", "globular")
+
+
+def for_moon(target, dark_sky, cfg=None):
+    """Which filters suit a planner target under tonight's Moon, as advice:
+    nothing here changes what a run is taken in. {"filters", "moon_adds",
+    "why"}, or None on a light path without the wheel or for a target that
+    is not deep sky. `target["sky"]` is the sky at its best (sky.assess),
+    `dark_sky` the site's moonless sky, both in mag/arcsec².
+
+    MOON_ADDS is a first estimate: where the sky has doubled, the same depth
+    in broadband takes twice the time. Our frames have only one moonlit L
+    run to go on (21 November 2026), and narrowband's sky was 25 to 50 times
+    fainter than L's. The palette is Gary Imm's where the Compendium has
+    one; without it a nebula is taken as emission, and said to be."""
+    import sxwheel
+    if not wheel_in_train(cfg) or target.get("kind") not in MOON_KINDS or target.get("sky") is None:
+        return None
+    have = [name for name in sxwheel.names(cfg) if name]
+    adds = max(0.0, 10 ** (0.4 * (dark_sky - target["sky"])) - 1)
+    broadband = [name for name in ("L", "R", "G", "B") if name in have]
+    if adds < MOON_ADDS:
+        return {"filters": broadband, "moon_adds": round(adds, 1),
+                "why": "the Moon adds little here: broadband"} if broadband else None
+    palette, assumed = (target.get("palette") or {}).get("name"), False
+    if not palette and target["kind"] == "planetary nebula":
+        palette = "HOO"
+    elif not palette and target["kind"] in ("nebula", "cluster+nebula"):
+        palette, assumed = "HOO", True
+    narrow = {"SHO": ("SII", "Ha", "OIII"), "HOO": ("Ha", "OIII"), "Ha+RGB": ("Ha",)}.get(palette, ())
+    narrow = [name for name in narrow if name in have]
+    if narrow:
+        why = f"the Moon adds {adds:.1f} times the dark sky: narrowband"
+        return {"filters": narrow, "moon_adds": round(adds, 1), "why": why + (", if it is an emission nebula" if assumed else "")}
+    if not broadband:
+        return None
+    return {"filters": broadband, "moon_adds": round(adds, 1),
+            "why": f"broadband target under the Moon: about {1 + adds:.0f} times the exposure for the same depth, "
+                   "better on a darker night"}
+
+
 def _refused(why):
     return interface.Refusal("FILTER_NOT_CONFIRMED", f"Stopped before keeping a frame: {why}.")
 
