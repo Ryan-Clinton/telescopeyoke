@@ -35,6 +35,7 @@ for measurement. A stack not calibrated makes a picture called a preview.
 import argparse
 import hashlib
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -153,26 +154,40 @@ def lined_up(image, reference):
 
 def restack_plan(name):
     """For each filter, the sessions worth stacking together: those at the
-    exposure holding the most light, as restack.py would be told them.
-    Mixing lengths lost NGC 2174's deep Ha frames (21 November 2026)."""
+    settings holding the most light, as restack.py would be told them. Every
+    frame's header is read. A session with more than one set of settings is
+    left out and named, as restack.py takes the first frame's for them all
+    (M34's of 19 October 2026 changed gain part way). Mixing lengths lost
+    NGC 2174's deep Ha frames (21 November 2026)."""
     folder = config.DATA / "frames" / stacking.folder_name(name)
-    found = {}
+    found, mixed = {}, {}
     for session in sorted(p for p in folder.glob("*") if p.is_dir() and p.name[:8].isdigit()):
-        lights = sorted(session.glob("light-*.fits"))
-        if not lights:
-            continue
-        head = stacking.load_light(lights[0])[1]
-        band, length = head.get("FILTER"), float(head.get("EXPTIME") or 0)
-        if band and length:
-            found.setdefault(str(band), {}).setdefault(length, []).append((session, len(lights)))
+        counts = {}
+        for light in session.glob("light-*.fits"):
+            head = stacking.load_light(light)[1]
+            key = (str(head.get("FILTER") or ""), float(head.get("EXPTIME") or 0), head.get("GAIN"), head.get("OFFSET"),
+                   head.get("XBINNING")) + stacking.camera_of(head)
+            counts[key] = counts.get(key, 0) + 1
+        bands = {k[0] for k in counts}
+        if len(counts) > 1:
+            for band in bands:
+                mixed.setdefault(band or "no filter", []).append(str(session.relative_to(config.DATA)))
+        elif counts:
+            key, frames = next(iter(counts.items()))
+            if key[1]:
+                found.setdefault(key[0] or "no filter", {}).setdefault(key[1:], []).append((session, frames))
     plan = {}
-    for band, lengths in sorted(found.items()):
-        best = max(lengths, key=lambda t: t * sum(n for _, n in lengths[t]))
-        chosen = lengths[best]
-        plan[band] = {"exposure_s": best, "frames": sum(n for _, n in chosen),
-                      "minutes": round(best * sum(n for _, n in chosen) / 60, 1),
+    for band in sorted(set(mixed) - set(found)):
+        plan[band] = {"exposure_s": 0.0, "gain": None, "camera": None, "frames": 0, "minutes": 0.0, "sessions": [],
+                      "left_out": [], "mixed_settings": mixed[band]}
+    for band, sets in sorted(found.items()):
+        best = max(sets, key=lambda k: k[0] * sum(n for _, n in sets[k]))
+        chosen = sets[best]
+        plan[band] = {"exposure_s": best[0], "gain": best[1], "camera": best[4], "frames": sum(n for _, n in chosen),
+                      "minutes": round(best[0] * sum(n for _, n in chosen) / 60, 1),
                       "sessions": [str(p.relative_to(config.DATA)) for p, _ in chosen],
-                      "left_out": [str(p.relative_to(config.DATA)) for t, v in lengths.items() if t != best for p, _ in v]}
+                      "left_out": [str(p.relative_to(config.DATA)) for k, v in sets.items() if k != best for p, _ in v],
+                      "mixed_settings": mixed.get(band, [])}
     return plan
 
 
@@ -183,7 +198,7 @@ NARROWBAND_SATURATION = 1.8   # mixed linearly the palette is paler than separat
 EDGE_TRIM = 0.035    # of the picture's shorter side, off every edge of a linear narrowband picture
 QUIET = (0.7, 0.6, 0.5, 0.4)    # times its noise each scale needs to be fully kept: at this, on NGC 2174, 99% of the faintest stars stay, their flux within 1%
 MIN_CLEAR = 0.3      # of the frame clear of nebula, or the sky is not mapped
-PICTURE_VERSION = 4  # of the method below: changes what the same stacks give
+PICTURE_VERSION = 5  # of the method below: changes what the same stacks give
 EDGE_BAND = 0.25     # of the shorter side: how far in from the edge the sky map acts
 CONTRAST = 0.3       # how far local contrast may lift or lower the nebula
 SKY_CELLS = 5        # how smooth the sky map is, in cells of 16 pixels: far wider than any star
@@ -367,7 +382,7 @@ def sharpened(nebula, fwhm, iterations):
     return (where * (estimate - lift) + (1 - where) * nebula).astype(np.float32)
 
 
-def local_contrast(picture, nebula, where):
+def contrast_gain(nebula, where):
     """The nebula's ridges and lanes brought out: its structure between
     about 3 and 24 pixels across, measured on the star-free layer so no star
     gets a halo, and applied as a gain, so colours keep their ratios.
@@ -380,7 +395,7 @@ def local_contrast(picture, nebula, where):
     inside = band[where > 0.5]
     spread = 1.4826 * float(np.median(np.abs(inside - np.median(inside)))) + 1e-6 if inside.size else 1.0
     gain = 1 + CONTRAST * np.clip(band / (3 * spread), -1, 1) * where
-    return picture * gain[..., None]
+    return gain
 
 
 def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=False, contrast=True,
@@ -469,11 +484,16 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
     sky = raw[clear & (star < 0.1)] if open_sky >= MIN_CLEAR else raw     # nebula would count as grain
     noise = 1.4826 * np.median(np.abs(sky - np.median(sky))) + 1e-6
     bright_part = ndimage.gaussian_filter((~clear).astype(np.float32), 16) if open_sky >= MIN_CLEAR else np.ones_like(light)
-    picture = process.display(colour / noise, saturation=saturation, whole=False, light=light / noise,
-                              white=None if white_level is None else white_level / noise)
+    # All in single precision, as the FITS keeps them, and the level
+    # process.display would choose: so the file makes this picture exactly.
+    colour, light, noise = colour.astype(np.float32), light.astype(np.float32), np.float32(noise)
+    white_shown = np.float32(np.percentile(ndimage.gaussian_filter(light / noise, 0.8), 99.995)
+                             if white_level is None else white_level / noise)
+    picture = process.display(colour / noise, saturation=saturation, whole=False, light=light / noise, white=white_shown)
     plain = np.mean([sharp_nebula[b] / scale[b] for b in channels], axis=0) / noise
-    if contrast:
-        picture = local_contrast(picture, plain, bright_part)
+    gain = contrast_gain(plain, bright_part).astype(np.float32) if contrast else None
+    if gain is not None:
+        picture = picture * gain[..., None]
     if grain:
         say("  grain in the clear sky: " + ", ".join(f"{b} x{v:.2f}" for b, v in grain.items()))
     done = {"method": "linear", "picture_version": PICTURE_VERSION, "local_contrast": contrast, "star_power": star_power, "sharpen_steps": sharpen, "clear_sky_share": round(open_sky, 3),
@@ -481,7 +501,8 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
             "star_flux": {b: round(v, 2) for b, v in flux.items()},
             "star_width_px": {b: round(v, 2) for b, v in before.items() if v},
             "star_width_matched_px": {b: round(v, 2) for b, v in after.items() if v}}
-    return picture, colour, done
+    return picture, {"colour": colour, "light": light, "gain": gain, "noise": float(noise), "white": float(white_shown),
+                     "saturation": float(saturation)}, done
 
 
 def narrowband(rgb, channels, saturation, background=2):
@@ -551,6 +572,7 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
                                     f"px apart (needs {stacking.LINED_UP} stars within {stacking.FLIP_RESIDUAL:g} px): "
                                     "the colours would not line up.")
     linear = None
+    crop = [0, images[base].shape[0], 0, images[base].shape[1]]
     valid = np.all([np.isfinite(i) for i in images.values()], axis=0)
     rgb = np.stack([np.where(valid, images[b], 0) for b in channels], axis=2)
     if palette == "LRGB":
@@ -584,7 +606,7 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
         r0, r1, c0, c1 = rows[0], rows[-1], cols[0], cols[-1]
         if r1 > r0 and c1 > c0:
             colour = colour[r0:r1 + 1, c0:c1 + 1]
-            linear = None if linear is None else linear[r0:r1 + 1, c0:c1 + 1]
+            crop = [int(r0), int(r1) + 1, int(c0), int(c1) + 1]
             share = float(valid[r0:r1 + 1, c0:c1 + 1].sum()) / valid.size     # pixels really covered, not the rectangle
             used["covered"] = round(float(share), 2)
             say(f"  every filter covers {share:.0%} of the frame; the picture is cropped to it")
@@ -600,7 +622,9 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
         # The stacks' outer edge is covered by only some of the frames and
         # shows as thin bright strips (21 November 2026, NGC 2174).
         trim = int(EDGE_TRIM * min(colour.shape[:2]))
-        colour, linear = colour[trim:-trim, trim:-trim], linear[trim:-trim, trim:-trim]
+        colour = colour[trim:-trim, trim:-trim]
+        crop = [crop[0] + trim, crop[1] - trim, crop[2] + trim, crop[3] - trim]
+        linear.update(valid=valid, crop=crop)
         used["edge_trimmed_px"] = trim
     return np.clip(colour, 0, 255).astype(np.uint8), used, linear
 
@@ -618,10 +642,10 @@ def main():
                     help="narrowband: wavelet noise reduction (off by default: on NGC 2174 and NGC 281 it kept no more "
                          "faint detail than a plain blur)")
     ap.add_argument("--no-contrast", action="store_true", help="narrowband: leave out local contrast, for comparison")
-    ap.add_argument("--star-reduction", type=float, default=1.0, metavar="POWER",
-                    help="narrowband: smaller stars, keeping their peaks and colours (1 is none, 2 is 30%% narrower)")
-    ap.add_argument("--sharpen", type=int, default=0, metavar="STEPS",
-                    help="narrowband: Richardson-Lucy steps on the nebula's brightness (3 was safe on NGC 2174; 0 is none)")
+    ap.add_argument("--star-reduction", type=bounded(float, 1.0, 3.0), default=1.0, metavar="POWER",
+                    help="narrowband: smaller stars, keeping their peaks and colours (1 is none, 2 is about 25%% narrower, 3 the most)")
+    ap.add_argument("--sharpen", type=bounded(int, 0, 5), default=0, metavar="STEPS",
+                    help="narrowband: Richardson-Lucy steps on the nebula's brightness (0 is none, 5 the most; 3 was safe on NGC 2174)")
     ap.add_argument("--any-coverage", action="store_true",
                     help="make the picture even when the filters share under 75%% of the frame")
     ap.add_argument("--plan", action="store_true",
@@ -643,19 +667,79 @@ def keep_replaced(out):
     copy.parent.mkdir(exist_ok=True)
     if not copy.exists():
         shutil.copy2(out, copy)
+    # The old FITS stays by a second name: a new run swaps the usual name to a new file.
+    old_linear = out.with_name(out.stem + "-linear.fits")
+    kept_linear = copy.with_name(copy.stem + "-linear.fits")
+    if old_linear.exists() and old_linear.stat().st_nlink == 1 and not kept_linear.exists():
+        os.link(old_linear, kept_linear)
     record = out.with_suffix(".json")
     if record.exists() and not copy.with_suffix(".json").exists():
-        shutil.copy2(record, copy.with_suffix(".json"))
+        old = json.loads(record.read_text(encoding="utf-8"))
+        old.update(picture=str(copy), replaced_from=str(out))
+        if kept_linear.exists():
+            old["linear"] = str(kept_linear)
+        records.write(copy.with_suffix(".json"), old)
     return copy
+
+
+def bounded(kind, low, high):
+    """An argparse type: a number within what has been tried."""
+    def read(text):
+        value = kind(text)
+        if not low <= value <= high:
+            raise argparse.ArgumentTypeError(f"must be from {low} to {high}")
+        return value
+    return read
+
+
+def write_linear(path, linear, palette):
+    """Everything the finished picture is made from, in one FITS file, read
+    back by picture_from. A picture product, never for measurement."""
+    head = fits.Header()
+    head["PALETTE"] = palette
+    head["TY_PICT"] = (True, "picture product, not for measurement")
+    head["NOISE"] = (linear["noise"], "sky noise the picture is scaled by")
+    head["WHITE"] = (linear["white"], "level shown white, in units of NOISE")
+    head["SATUR"] = (linear["saturation"], "colour strength")
+    for key, value in zip(("CROPTOP", "CROPBOT", "CROPLEFT", "CROPRITE"), linear["crop"]):
+        head[key] = value
+    parts = [fits.PrimaryHDU(np.moveaxis(linear["colour"].astype(np.float32), 2, 0), head),
+             fits.ImageHDU(linear["light"].astype(np.float32), name="LIGHT"),
+             fits.ImageHDU(linear["valid"].astype(np.uint8), name="VALID")]
+    if linear["gain"] is not None:
+        parts.append(fits.ImageHDU(linear["gain"].astype(np.float32), name="GAIN"))
+    fits.HDUList(parts).writeto(path)
+    os.chmod(path, 0o444)
+
+
+def picture_from(path):
+    """The finished 8-bit picture, made again from a -linear.fits file."""
+    with fits.open(path) as hdus:
+        head = hdus[0].header
+        colour = np.moveaxis(hdus[0].data, 0, 2).astype(np.float32)
+        light = hdus["LIGHT"].data.astype(np.float32)
+        valid = hdus["VALID"].data.astype(bool)
+        gain = hdus["GAIN"].data.astype(np.float32) if "GAIN" in hdus else None
+    # Single precision, as they were when the picture was made.
+    noise, white = np.float32(head["NOISE"]), np.float32(head["WHITE"])
+    picture = process.display(colour / noise, saturation=head["SATUR"], whole=False, light=light / noise, white=white)
+    if gain is not None:
+        picture = picture * gain[..., None]
+    picture[~valid] = 0
+    picture = picture[head["CROPTOP"]:head["CROPBOT"], head["CROPLEFT"]:head["CROPRITE"]]
+    return np.clip(picture, 0, 255).astype(np.uint8)
 
 
 def show_plan(name):
     plan = restack_plan(name)
     for band, p in plan.items():
         print(f"{band}: {p['minutes']:g} min, {p['frames']} frames of {p['exposure_s']:g} s, {len(p['sessions'])} sessions")
+        if p["mixed_settings"]:
+            print(f"  left out, settings change inside: {', '.join(Path(x).name for x in p['mixed_settings'])}")
         if p["left_out"]:
             print(f"  left out, another length: {', '.join(Path(x).name for x in p['left_out'])}")
-        print("  ./restack.py " + " ".join(p["sessions"]))
+        if p["sessions"]:
+            print("  ./restack.py " + " ".join(p["sessions"]))
     return {"name": name, "plan": plan}
 
 
@@ -706,30 +790,37 @@ def run(args):
     for band, stack in stacks.items():
         if isinstance(used.get(band), dict):
             used[band]["sha256"] = storage.digest(stack)
-    # The usual name is always the latest; each different make is kept too.
-    made = json.dumps([PICTURE_VERSION, args.palette, settings, sorted(
+    # The usual name is always the latest. Each different make is kept too,
+    # identified by its method, settings, stacks, code and the picture itself,
+    # and never written over.
+    stamp = records.provenance()
+    made = json.dumps([PICTURE_VERSION, args.palette, settings, stamp.get("git_commit"), stamp.get("uncommitted_changes"), sorted(
         (b, v["sha256"]) for b, v in used.items() if isinstance(v, dict) and "sha256" in v)], sort_keys=True)
-    # The picture's bytes are in it: changed code gives a different picture
-    # and so a different copy, even at the same settings.
     run_id = hashlib.sha256(made.encode() + out.read_bytes()).hexdigest()[:12]
     copy = out.parent / "colour-runs" / f"{out.stem}-{run_id}.jpg"
     copy.parent.mkdir(exist_ok=True)
-    shutil.copy2(out, copy)
+    new_make = not copy.exists()
+    if new_make:
+        shutil.copy2(out, copy)
     result = {"name": args.name, "palette": args.palette, "picture": str(out), "run_id": run_id,
               "kept_copy": str(copy), "settings": settings, "filters": used}
+    kept_result = {**result, "picture": str(copy)}
     if linear is not None:
         # For processing again without restacking. A picture product: every
         # measurement keeps reading the filters' own final.fits.
         kept = out.with_name(out.stem + "-linear.fits")
-        head = fits.Header()
-        head["PALETTE"] = args.palette
-        head["TY_PICT"] = (True, "picture product, not for measurement")
-        fits.writeto(kept, np.moveaxis(linear.astype(np.float32), 2, 0), head, overwrite=True)
+        kept_linear = copy.with_name(copy.stem + "-linear.fits")
+        if not kept_linear.exists():
+            write_linear(kept_linear, linear, args.palette)
+        swap = kept.with_name(kept.name + ".new")
+        swap.unlink(missing_ok=True)
+        os.link(kept_linear, swap)
+        os.replace(swap, kept)
         result["linear"] = str(kept)
-    answer = records.write(out.with_suffix(".json"), result, schema="colour", stamp=True)
-    shutil.copy2(out.with_suffix(".json"), copy.with_suffix(".json"))
-    return answer
-
+        kept_result["linear"] = str(kept_linear)
+    if new_make:
+        records.write(copy.with_suffix(".json"), kept_result, schema="colour", stamp=True)
+    return records.write(out.with_suffix(".json"), result, schema="colour", stamp=True)
 
 if __name__ == "__main__":
     main()
