@@ -950,7 +950,63 @@ def last_watched(name):
     return sessions[-1].stat().st_mtime if sessions else None
 
 
+CHARACTERISE = (("R", 16, 5.0), ("Ha", 60, 10.0))   # filter, seconds a frame, minutes
+
+
+def characterise(name, wanted, dry_run=False, say=print, run_command=None):
+    """A candidate already found in L, measured in R and Ha for its evidence.
+    It adds nothing to the candidate's book: a detection here is never a
+    second night or a confirmation, and R holds Ha's light as well, so the
+    two are not a line strength until throughput and continuum are modelled."""
+    import candidates
+    import forced
+    import mount
+    k = candidates.find(candidates.load(name), wanted)
+    extra = ["--dry-run"] if dry_run else []
+    run_command = run_command or (lambda c: subprocess.run(c, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")))
+
+    def step(script, *words, optional=False):
+        done = run_command([sys.executable, str(ROOT / script), *words])
+        if done.returncode and not optional:
+            raise interface.Refusal("INVALID_REQUEST", f"{script} stopped (exit {done.returncode}).")
+        return not done.returncode
+
+    if not dry_run:
+        mount.claim(f"patrol.py --characterise {wanted}")
+    sessions = {}
+    try:
+        step("mount.py", "goto", name, "--solve", *extra)
+        for band, exposure, minutes in CHARACTERISE:
+            began = time.time()
+            step("shoot.py", name, "--filter", band, "--frames", str(math.ceil(minutes * 60 / exposure)),
+                 "--minutes", f"{minutes * SHOOT_CAP:g}", "--exposure", str(exposure), "--gain", "1500", *extra)
+            if dry_run:
+                continue
+            session = newest_session(name, began)
+            if session is None:
+                say(f"  no {band} frames kept")
+                continue
+            sessions[band] = session.name
+            if not step("depth.py", str(session), "--plant", optional=True):
+                say(f"  {band}: its depth could not be measured, so it has no magnitude")
+    finally:
+        if not dry_run:
+            mount.release()
+    if dry_run:
+        return {"dry_run": True, "object": name}
+    tonight = set(sessions.values())
+    rows = [r for r in forced.history(name, k["ra"], k["dec"], say) if r["session"] in tonight]
+    answer = {"object": name, "candidate": wanted, "ra": k["ra"], "dec": k["dec"], "sessions": sessions,
+              "measurements": rows, "confirms": False, "kind": "measured",
+              "note": "Instrumental, each in its own band. Not a confirmation or a line strength."}
+    import stacking
+    records.write(config.DATA / "frames" / stacking.folder_name(name) / f"characterise-{wanted}.json", answer, stamp=True)
+    return answer
+
+
 def run(args, say=print):
+    if getattr(args, "characterise", None):
+        return characterise(args.programme, args.characterise, args.dry_run, say)
     if getattr(args, "sweep", False):
         return sweep(args.all_history, say=say, dry_run=args.dry_run)
     if args.analyse:
@@ -1361,6 +1417,8 @@ def main():
     ap.add_argument("--sweep", action="store_true", help=f"search every session of the last {SWEEP_DAYS} days "
                     "not yet searched")
     ap.add_argument("--all-history", action="store_true", help="with --sweep: every session kept")
+    ap.add_argument("--characterise", metavar="CANDIDATE",
+                    help="with a field: measure that candidate in R and Ha, as evidence only (moves the mount)")
     ap.add_argument("--dry-run", action="store_true", help="every step as it would be run; nothing moved or taken")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
