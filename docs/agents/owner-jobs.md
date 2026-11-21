@@ -65,8 +65,6 @@ result is recorded.
    (`owner-rig.md`).
 9. **The skyline survey again** (`./horizon.py --trace`): the tube moved up
    its rings on 17 November and was lowered on 20 November.
-10. **Darks for the 183M**, cap on, -5 °C: 60 s, then 180 s and 240 s (20
-    each).
 11. **The guide camera at full resolution**, cap on: an overnight run of
     the 512 x 960 window (`./guidecam.py probe --size 0 --roi 512x960
     --speed 0 --speed-first --exposures 2 --window 28800`), then 480 x 960;
@@ -102,6 +100,20 @@ result is recorded.
 22. **The real/bogus model is stale** (trained on uncommitted code):
     `./realbogus.py train`, minutes of computing, not while imaging.
 
+23. **The filter wheel hang.** On 21 November at 19:58 it stopped taking
+    commands as it turned to G, just as `./sxwheel.py status` was run from
+    another process; whether that caused it is not known. Switching its hub
+    port off and on made it drop off USB (error -71), and only a replug
+    brought it back. Wanted: one process at a time on the wheel, and no
+    status read while it turns.
+24. **The schedule's times after a skip or move.** On 21 November, steps
+    after a `--not-before` step showed the wrong clock times and false
+    "behind something" warnings, though they run in the right order.
+25. **The camera's warm-up warning.** It says "cut short" when the sensor
+    cannot warm to its starting temperature because the night air is colder
+    (21 November: 1.7 °C against 13.3 °C, air about -2.5 °C by the model).
+    It should compare with the outside air and warn only on a real failure.
+
 ## In the next clear gap
 
 18. **truehome**: `./mount.py findhome`, and if accepted `truehome`
@@ -115,3 +127,44 @@ result is recorded.
 15. **The Dec pile-up cap A/B**: run 20 November with Dec north only
     ([dec-one-way.md](../nights/2026-11-20/dec-one-way.md)): `--dec-stuck
     3` did not stop the jumps. Again only once job 2 is done.
+
+## The filter science: built on 21 November, still to prove on the sky
+
+Each result goes in `docs/validation.md` when it has run on real data, and
+its job comes off this list.
+
+26. **Tabby's baseline.** 21 November gave the 183M's first night in L
+    (11.879 ± 0.011), B (11.832 ± 0.040), R (11.804 ± 0.019) and G
+    (11.880 ± 0.014). Each band needs three nights before a dip or colour
+    change can be judged: `./starwatch.py tabby`, then `--colour`.
+27. **`./starwatch.py tabby --colour` from start to finish.** On 21 November
+    B and R were finished by hand after the fix that takes both bands before
+    stacking, so the command as it now stands has only had a dry run.
+28. **Tabby's proposed 1.1% transit.** Next windows from 14 and 16 January
+    2027. Before them, `./starwatch.py tabby --transit-reach` must say the L
+    nights are steady enough. It compares nights; it has not recovered a
+    real 21-hour transit in a time series.
+29. **The 183M's L references for M31 and M33.** The patrols' first good
+    dark visits make them. Dark, Moon-down evenings with both well up:
+    28 November 18:20-20:20, 29 November to 22:00, 30 November to 23:30.
+30. **Nova follow-up in R and Ha**, `./patrol.py M31-P4 --characterise
+    M31-P4-20261018-225844-001,M31-P4-20261018-233620-003`, on a dark night
+    after job 29. Not yet run on the sky. Those candidates were last seen at
+    G 17.4 and 18.0, too faint under a bright Moon.
+31. **The filters compared fairly.** Every filter has a first depth from
+    21 November (half of planted stars: B 15.62, G 15.75, R 15.05, Ha 15.32,
+    OIII 16.22, SII 15.81), but from different fields, exposures and sky.
+    Ranking them needs the same field on the same night.
+32. **L or R for transits**: a whole transit in each on shared nights, then
+    `./precision.py SESSION --planet NAME` and `--compare FIELD`. One shared
+    night is provisional, two wins are firm. `precision.py`'s mono path has
+    not yet run on a real 183M transit.
+33. **The narrowband focus offsets.** SII, Ha and OIII need one more night
+    of `./focus.py --auto --offset Ha` before a scheduled run can use them.
+    Until then, a queue moves the wheel and focuses in each filter first.
+34. **Mono Moon video.** `./ty moon` and `./ty lucky` now write and stack the
+    183M's video as mono; not yet run on a real video.
+35. **Mineral Moon from B, G and R** (`./ty lucky capture --filter`, stack
+    each, `./ty lucky mineral --mono B G R`), and **a supernova's colour**
+    (`./patrol.py TARGET --colour-at RA,DEC`): both built, neither run on
+    the sky. The owner chose not to run them on 21 November.
