@@ -23,6 +23,6 @@ both_halves = false
 # window). A night inside one is a night to measure the star's level; nights
 # either side give the level out of transit to set it against.
 [[watch]]
-what = "a transit of the proposed giant companion: 1.1% deep, about 21 hours"
+what = "a transit of the proposed giant companion: 1.1% deep (0.012 mag, too shallow for the 0.03 mag dip alert), about 21 hours"
 source = "https://doi.org/10.1093/mnras/stag1273"
 windows = [[2461332.2, 2461337.3], [2461419.8, 2461421.8], [2461464.8, 2461466.8]]

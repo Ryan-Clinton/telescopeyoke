@@ -105,13 +105,17 @@ def measure_frame(path, exposure, gain, xy, shift, rotation, fwhm):
     """One frame, every way: [variants, channels, stars, apertures]."""
     import forced
     import stacking
-    from camera import colour
-    calibration = stacking._calibration(exposure, gain)
-    raw = calibration.apply(stacking.load_light(path)[0])
+    from camera import colour, is_mono
+    mosaic, header = stacking.load_light(path)
+    # The frame's own header chooses its masters (camera, filter, settings)
+    # and says whether its pixels are a Bayer mosaic at all.
+    calibration = stacking._calibration(exposure, gain, stacking.worker_cards(header))
+    raw = calibration.apply(mosaic)
+    mono = is_mono(header)
     here = positions(xy, shift, rotation)
     out = np.full((len(VARIANTS), len(CHANNELS), len(xy), len(APERTURES)), np.nan)
     for v, frame in enumerate((stacking.destripe(raw), raw)):
-        rgb = stacking.clean(colour(frame))
+        rgb = stacking.clean(colour(frame, mono=mono, block=stacking.PROCESSING_SCALE if mono else 2))
         lum = rgb.sum(axis=2)
         if v == 0:
             here = centred(lum, here)
@@ -311,8 +315,12 @@ def judge(p, stars, xy, data):
         raise interface.Refusal("NO_SESSION", "Too little of the night was before the transit to measure its baseline.")
     mass = airmass(jd, p["ra"], p["dec"])
     rows = []
+    # A mono frame's three "colours" are one grey: ranked once, as "all".
+    grey = np.array_equal(flux[0, 1], flux[0, 2], equal_nan=True) and np.array_equal(flux[0, 2], flux[0, 3], equal_nan=True)
     for v, variant in enumerate(VARIANTS):
         for c, channel in enumerate(CHANNELS):
+            if grey and c:
+                continue
             for a, aperture in enumerate(APERTURES):
                 f = flux[v, c, :, :, a]
                 target, comps = f[:, 0], f[:, 1:]

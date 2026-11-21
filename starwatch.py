@@ -24,9 +24,10 @@ camera's wells on a star of G 11.8) as variables.py measures every star: batches
 on Gaia's scale by the other stars in the picture. The night's median goes
 into frames/FIELD/starwatch.json beside the nights before; once there are
 BASELINE_NIGHTS of them, a night WARN magnitudes or more fainter than
-their median, and well outside its own scatter, is called a dip. The
-brightness is unfiltered on Gaia's G scale, so it compares night with
-night here, not with V-band reports elsewhere. Reporting a dip (AAVSO's
+their median, and well outside its own scatter, is called a dip. Only
+nights of the same camera and filter are compared. The brightness is that
+camera's instrumental band put on Gaia's G scale, so it compares night with
+night in that band here, not with V-band reports elsewhere. Reporting a dip (AAVSO's
 forum, its observation upload) is a person's decision.
 """
 import argparse
@@ -69,12 +70,39 @@ def history(s):
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"star": s["id"], "nights": []}
 
 
+def session_band(session):
+    """The camera and filter a session was taken with, from its own frames."""
+    import filters
+    import stacking
+    from astropy.io import fits
+    lights = sorted(session.glob("light-*.fits"))
+    try:
+        header = stacking.load_light(lights[0])[1] if lights else fits.getheader(session / "final.fits")
+    except (OSError, IndexError, ValueError) as why:
+        # An unknown band must not join any night's baseline.
+        raise interface.Refusal("NO_SESSION", f"Cannot read the camera and filter of {session.name}: {why}") from None
+    camera, name = filters.band_key(header)
+    return {"camera": camera, "filter": name, "band": filters.band(header)}
+
+
+def series(night):
+    """Which nights can be compared. One kept with no camera is the 183C's,
+    unfiltered: every night before 21 November 2026."""
+    return night.get("camera") or config.LEGACY_CAMERA, night.get("filter") or None
+
+
+def scale(night):
+    return f"{night['band']}, on Gaia's G scale," if night.get("band") else "G"
+
+
 def judge_night(nights, latest):
-    """How the latest night compares with the usual level of the others."""
-    before = [n["mag"] for n in nights if n["session"] != latest["session"]]
+    """How the latest night compares with the usual level of the others
+    taken with the same camera and filter."""
+    before = [n["mag"] for n in nights if n["session"] != latest["session"] and series(n) == series(latest)]
     if len(before) < BASELINE_NIGHTS:
         return {"baseline": None, "dimmer": None, "dipping": False,
-                "why": f"{len(before)} other night(s) measured; a usual level needs {BASELINE_NIGHTS}"}
+                "why": f"{len(before)} other night(s) measured with this camera and filter; "
+                       f"a usual level needs {BASELINE_NIGHTS}"}
     usual = float(np.median(before))
     spread = 1.4826 * float(np.median(np.abs(np.array(before) - usual)))
     error = latest["scatter"] / math.sqrt(max(latest["points"], 1))
@@ -108,7 +136,7 @@ def measure(key, session, size=BIN, say=print, night=None):
     latest = {"session": session.name, "jd": round(float(np.mean(jd)), 5) if jd else None,
               "mag": round(float(np.median(mags)), 4), "points": int(len(mags)),
               "scatter": round(float(np.std(mags, ddof=1)) if len(mags) > 1 else 0.0, 4),
-              "batches": [round(float(m), 4) for m in mags]}
+              "batches": [round(float(m), 4) for m in mags], **session_band(session)}
     record = history(s)
     record["nights"] = [x for x in record["nights"] if x["session"] != latest["session"]] + [latest]
     record["nights"].sort(key=lambda x: x["session"])
@@ -118,7 +146,8 @@ def measure(key, session, size=BIN, say=print, night=None):
     verdict = judge_night(record["nights"], latest)
     answer = {"star": s["id"], "name": s["name"], "night": latest, "nights_measured": len(record["nights"]),
               **verdict, "kind": "measured"}
-    say(f"{s['id']} on {session.name}: G {latest['mag']:.3f} ± {latest['scatter']:.3f} over {latest['points']} batches")
+    say(f"{s['id']} on {session.name}: {scale(latest)} {latest['mag']:.3f} ± {latest['scatter']:.3f} "
+        f"over {latest['points']} batches")
     say(("DIPPING: " if verdict["dipping"] else "  ") + verdict["why"])
     if verdict["dipping"]:
         say("Look again tomorrow night, and see the AAVSO's forum for whether others see it too; telling them is "
@@ -156,7 +185,7 @@ def run(args, say=print):
     if args.history:
         record = history(s)
         for n in record["nights"]:
-            say(f"  {n['session']}: G {n['mag']:.3f} ± {n['scatter']:.3f} ({n['points']} batches)")
+            say(f"  {n['session']}: {scale(n)} {n['mag']:.3f} ± {n['scatter']:.3f} ({n['points']} batches)")
         return {"star": s["id"], "name": s["name"], "nights": record["nights"], "kind": "measured"}
     if args.measure:
         return measure(args.star, args.measure, args.bin, say)
