@@ -214,7 +214,12 @@ one-off measurements, each planted at 1 and 3 times the pixel noise):
   follow the flat. All seven were already rejected from the stack, and the two
   largest have star flux down by 75 to 90% or more, so cloud is likely but not
   shown. One SII frame is exactly 5 counts low with its sky unchanged, the size of
-  the dark level flips. The cause is not known. Stage B must settle it.
+  the dark level flips. A scan of 1,267 saved 183M lights in 31 sessions (at most
+  80 per session) found 55 frames (4.3%) with a fixed offset of 3 counts or more
+  that does not follow the flat: 37 of them 4 to 6 counts, both signs, in every
+  filter and at 4, 16 and 120 s. That points at the camera's level rather than one
+  exposure or filter, but some could be sky. The cause is not known. Stage B must
+  settle it.
 
 - *Star reduction* (`--star-reduction`, off by default). Each star keeps its peak
   and loses its wings, with one gain across filters. At 2 on NGC 2174, star width
