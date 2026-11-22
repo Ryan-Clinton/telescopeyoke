@@ -1,0 +1,182 @@
+[
+ {
+  "name": "IC405-20261119-233452",
+  "target": "IC405",
+  "role": "test",
+  "filter": "Ha",
+  "seconds": 16.0,
+  "frames": 31,
+  "dither": 33.2,
+  "splits": 1
+ },
+ {
+  "name": "IC405-20261119-235909",
+  "target": "IC405",
+  "role": "test",
+  "filter": "Ha",
+  "seconds": 120.0,
+  "frames": 10,
+  "dither": 15.5,
+  "splits": 1
+ },
+ {
+  "name": "IC405-20261120-233305",
+  "target": "IC405",
+  "role": "test",
+  "filter": "Ha",
+  "seconds": 120.0,
+  "frames": 17,
+  "dither": 26.3,
+  "splits": 1
+ },
+ {
+  "name": "IC405-20261121-203056",
+  "target": "IC405",
+  "role": "test",
+  "filter": "Ha",
+  "seconds": 120.0,
+  "frames": 12,
+  "dither": 29.1,
+  "splits": 1
+ },
+ {
+  "name": "IC405-20261121-211523",
+  "target": "IC405",
+  "role": "test",
+  "filter": "Ha",
+  "seconds": 120.0,
+  "frames": 53,
+  "dither": 31.4,
+  "splits": 1
+ },
+ {
+  "name": "IC405-20261122-001737",
+  "target": "IC405",
+  "role": "test",
+  "filter": "SII",
+  "seconds": 120.0,
+  "frames": 26,
+  "dither": 29.1,
+  "splits": 1
+ },
+ {
+  "name": "M106-20261105-034022",
+  "target": "M106",
+  "role": "check",
+  "filter": "L",
+  "seconds": 16.0,
+  "frames": 21,
+  "dither": 7.8,
+  "splits": 1
+ },
+ {
+  "name": "M31-P4-20261120-200333",
+  "target": "M31-P4",
+  "role": "train",
+  "filter": "L",
+  "seconds": 16.0,
+  "frames": 13,
+  "dither": 45.9,
+  "splits": 4
+ },
+ {
+  "name": "M33-20261105-001232",
+  "target": "M33",
+  "role": "train",
+  "filter": "L",
+  "seconds": 16.0,
+  "frames": 120,
+  "dither": 71.2,
+  "splits": 4
+ },
+ {
+  "name": "M33-20261105-015832",
+  "target": "M33",
+  "role": "train",
+  "filter": "R",
+  "seconds": 16.0,
+  "frames": 42,
+  "dither": 89.8,
+  "splits": 4
+ },
+ {
+  "name": "M33-20261105-023051",
+  "target": "M33",
+  "role": "train",
+  "filter": "G",
+  "seconds": 16.0,
+  "frames": 79,
+  "dither": 133.3,
+  "splits": 4
+ },
+ {
+  "name": "M33-20261105-030457",
+  "target": "M33",
+  "role": "train",
+  "filter": "B",
+  "seconds": 16.0,
+  "frames": 82,
+  "dither": 124.4,
+  "splits": 4
+ },
+ {
+  "name": "NGC2174-20261120-014420",
+  "target": "NGC2174",
+  "role": "test",
+  "filter": "Ha",
+  "seconds": 16.0,
+  "frames": 100,
+  "dither": 49.8,
+  "splits": 1
+ },
+ {
+  "name": "NGC2174-20261121-005541",
+  "target": "NGC2174",
+  "role": "test",
+  "filter": "Ha",
+  "seconds": 120.0,
+  "frames": 17,
+  "dither": 33.4,
+  "splits": 1
+ },
+ {
+  "name": "NGC2174-20261121-024924",
+  "target": "NGC2174",
+  "role": "test",
+  "filter": "OIII",
+  "seconds": 120.0,
+  "frames": 27,
+  "dither": 22.0,
+  "splits": 1
+ },
+ {
+  "name": "NGC2174-20261121-053054",
+  "target": "NGC2174",
+  "role": "test",
+  "filter": "SII",
+  "seconds": 120.0,
+  "frames": 10,
+  "dither": 6.0,
+  "splits": 1
+ },
+ {
+  "name": "NGC281-20261104-232332",
+  "target": "NGC281",
+  "role": "train",
+  "filter": "L",
+  "seconds": 16.0,
+  "frames": 17,
+  "dither": 135.0,
+  "splits": 4
+ },
+ {
+  "name": "NGC281-20261119-204929",
+  "target": "NGC281",
+  "role": "train",
+  "filter": "Ha",
+  "seconds": 16.0,
+  "frames": 76,
+  "dither": 32.0,
+  "splits": 4
+ }
+]

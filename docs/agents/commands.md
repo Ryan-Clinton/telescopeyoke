@@ -176,6 +176,8 @@ Reporting a dip is a person's.
 
 `corners.py` (or `--file FRAME`, which uses no camera): star width, roundness and stretch direction in the four corners against the middle, at full resolution on the 183M, and which fault the pattern points to: the corrector's 55 mm spacing (all corners alike), tilt (corners unlike) or collimation (the middle too).
 
+`trainset.py build --out DIR` makes training pairs from saved 183M frames and `denoiser.py train|judge` trains and judges a denoiser on the desktop's GPU; neither uses a camera or changes a frame, stack or picture. The first model was not accepted (`docs/image-processing-spec.md`, 5.1).
+
 `calibrate.py index` uses no camera: it writes `calibration/INDEX.md`, every camera's newest darks and flats with their settings, frames, dates and whether each flat has its flat-dark. Every calibration run refreshes it; read it before asking for more.
 
 `calibrate.py dark|bias|flat` for the 183C is as it always was. For a camera with matched darks (the cooled 183M) it waits for the cooler, keeps each master as a new version never overwriting one, files darks by exposure, gain, offset, binning, readout speed and set temperature and flats by train and filter (its flat-dark is a dark at the flat's exposure), takes no bias, and `calibrate.py badpixels` makes the camera's bad-pixel map from its longest dark without the camera. Science (difference, depth, photometry, transits) refuses a 183M frame or stack whose masters are missing or do not match with `CALIBRATION_MISSING`; such a stack is labelled uncalibrated (`TY_CALIB`, `TY_MISS`, `restack.json` `calibration`) and is a quick look only (`docs/calibration.md`).

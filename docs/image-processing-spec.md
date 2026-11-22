@@ -1,7 +1,8 @@
 # Finished pictures: what the paid tools do, and our own trained models
 
-Spec, 21 November 2026. Part of stage A is built (section 4.1). Stages B to E
-are not, and no model or training data has been installed or downloaded. It covers two things: what the commercial astrophotography tools do that
+Spec, 21 November 2026. Part of stage A is built (section 4.1). Stage B's checks
+and a first stage C model were run on 22 November (section 5.1): **the model was
+not accepted and no picture uses it.** Stages D and E are not built. It covers two things: what the commercial astrophotography tools do that
 TelescopeYoke does not, and how to train our own small neural networks for
 the parts where training helps.
 
@@ -412,6 +413,47 @@ level. That protects only large scales, so small faint structures rely on the
 acceptance measures of section 7.
 [PAU Survey](https://arxiv.org/abs/2611.05447) reports the same risk (erased
 faint emission, biased fluxes) and uses flux-aware losses.
+
+### 5.1 First results (22 November 2026)
+
+Code: `trainset.py`, `denoiser.py`. The checks as run, their figures and the
+sessions are in `docs/research/denoiser-2026-11-22/`.
+
+**Data.** 18 of the 30 183M sessions with 8 or more frames gave pairs: 7 to train
+(4 of them M33, one in Ha), M106 to watch training, and 10 of NGC 2174 and IC 405
+held out. The rest had under 10 px of median dither or too few usable frames. So
+OIII and SII were tested with no training target of their own.
+
+**Stage B, provisionally passed.** The sensor pattern is at single pixels (gone
+after a 1 px shift, unchanged by removing rows and columns), the kind alignment
+scatters best. Planted defects, six random patterns each in three sessions, show
+what would still reach a pair at a correlation of 0.02: flat mottling of 0.15 to
+0.37 of one frame's noise, rows of 0.29 to 0.70, columns of 0.23 to 0.52 where
+detected, single pixels of 1.4 to 2.1 or not at all. A structured defect that
+size would need looking for directly, and no direct search of the pairs for one
+has been made.
+
+**Stage C, not accepted.** A 4-level U-Net, 12,000 steps (about 30 minutes without
+the survey, 50 with). One model used our frames alone; one added 767 IGAPS Ha
+frames with nebula, at our scale with our noise, as half of each batch's loss.
+Medians over the 10 held-out sessions, at equal grain against a Gaussian blur,
+stars taken from the input:
+
+| Grain left | Faint filament kept: own / with IGAPS / blur | Error above the reference's noise: own / with IGAPS / blur |
+|---|---|---|
+| 70% | 87% / 88% / 98% | 0.750 / 0.753 / 0.757 |
+| 50% | 78% / 80% / 96% | 0.557 / 0.560 / 0.566 |
+| 30% | 70% / 72% / 92% | 0.380 / 0.381 / 0.389 |
+
+The filaments were planted at the noise level. At three times the noise the
+network and the blur are within about 3 points. The network has lower error than
+the blur in 7 of 10 sessions alone and 9 of 10 with IGAPS, by about 1%, against
+the 10% required. It beat the starlet baseline by about 10% at the model's own
+strong smoothing, which says more about that baseline than the model. Star
+brightness with stars protected: median within 0.1%, worst session 1.3% (0.9%
+with IGAPS). Width: median within 0.2%, worst session 7.1% (6.3% with IGAPS),
+over the 3% limit. **The wait for more data is the honest next step:** Ha from
+more targets, dithered by at least 10 px.
 
 ## 6. Later models
 

@@ -66,6 +66,7 @@ COMMANDS = {
     "corners.py": ("hardware", {"--file": "read_only"}, {}),   # the camera only; with --file nothing
     "compare.py": ("local_write", {}, {}),
     "console.py": ("hardware", {}, {}),             # its server runs the other scripts on request
+    "denoiser.py": ("local_write", {}, {}),       # trains and judges on the desktop; touches no frame or stack
     "depth.py": ("local_write", {}, {}),
     "difference.py": ("local_write", {}, {}),
     "doctor.py": ("read_only", {}, {}),
@@ -134,6 +135,7 @@ COMMANDS = {
     "sxwheel.py": ("hardware", {"status": "read_only"}, {}),   # the filter wheel: status only asks
     "tonight.py": ("read_only", {}, {}),
     "tour.py": ("local_write", {}, {}),
+    "trainset.py": ("local_write", {}, {}),       # training pairs from saved frames; uses no camera
     "transits.py": ("local_write", {}, {}),
     "variables.py": ("local_write", {}, {}),
     "vet.py": ("local_write", {}, {}),
