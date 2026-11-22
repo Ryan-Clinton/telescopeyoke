@@ -55,3 +55,10 @@ Only on the person's word. The imaging run stops at its own limits
    overcast dawn makes good flats. Tell the person in one line to leave the
    camera, wheel and focus alone until they are done, and if they pack up
    first, the flats are lost: say so before, not after.
+7. The diary, where the person keeps one (`CLAUDE.local.md` says where):
+   write the night's titled entry from its running notes and post it,
+   without being asked, before this routine counts as finished. Do it
+   however the night ended, parked early or flats cancelled included, and
+   check the page is live. On the owner's rig the notes are
+   `~/ryanclinton.uk/notes/DATE.md` and posting is
+   `~/ryanclinton.uk/POSTING.md`.
