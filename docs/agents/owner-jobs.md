@@ -10,7 +10,7 @@ result is recorded.
 ## Pictures in progress
 
 Minutes in each filter's best stack on the 183M, as of the night of
-21 November 2026. Brought up to date at each night's end; the plan for a
+22 November 2026 (cloud: one 2-minute SII frame of IC 405, not added). Brought up to date at each night's end; the plan for a
 night reads it.
 
 | Target | Ha | OIII | SII | Next |
