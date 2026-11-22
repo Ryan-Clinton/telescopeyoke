@@ -43,6 +43,7 @@ import records
 
 ROOT = Path(__file__).parent
 STATE_FILE = config.DATA / "cache" / "direct_mount.json"
+BOARD_LOOKS = 5           # readings of the board before believing it has been changed
 PORT = 11880                 # the Wi-Fi adapter listens here, on UDP
 ADAPTER = "192.168.4.1"      # its address on the network it makes itself
 RA, DEC = "1", "2"           # the board's names for the axes
@@ -312,7 +313,10 @@ class DirectHandset:
         # so, and `./mount.py directions` is run again.
         model, firmware = self.board.version()
         board = [model, firmware, self.board.counts_per_turn[RA]]
+        if state.get("board") not in (None, board) and self._same_board(state["board"]):
+            board = state["board"]
         if state.get("board") not in (None, board):
+            model, firmware = board[:2]
             print(f"A different motor board answers (model {model}, firmware {firmware}) from the one home and "
                   "the Dec direction were found on: both are forgotten. With the mount at home, "
                   "./mount.py sethome, then ./mount.py directions with someone watching.", file=sys.stderr)
@@ -327,6 +331,33 @@ class DirectHandset:
             state["home"] = now
             self._save(state)
         return state
+
+    def _same_board(self, kept):
+        """Whether the board that home was found on is still the one here,
+        after a first reading that differed. One garbled answer must not
+        forget home (22 November 2026: it erased home and the Dec direction
+        in the middle of a night). Any reading that matches says it is, and
+        its gearing replaces the bad one. Only BOARD_LOOKS readings that all
+        agree on something else say it is not; anything less is refused with
+        the record left alone."""
+        seen = []
+        for _ in range(BOARD_LOOKS):
+            try:
+                model, firmware = self.board.version()
+                counts = {a: self.board.number("a", a) for a in (RA, DEC)}
+            except (Exception, SystemExit):     # a Refusal is a SystemExit
+                time.sleep(0.2)
+                continue
+            if [model, firmware, counts[RA]] == kept:
+                self.board.counts_per_turn = counts
+                return True
+            seen.append((model, firmware, counts[RA], counts[DEC]))
+            time.sleep(0.2)
+        if len(seen) == BOARD_LOOKS and len(set(seen)) == 1:
+            self.board.counts_per_turn = {RA: seen[0][2], DEC: seen[0][3]}
+            return False
+        raise Refusal("HANDSET_NOT_ANSWERING", "The motor board's answers about itself do not agree from one "
+                      "reading to the next. Home and the Dec direction are kept; try again.")
 
     def _save(self, state=None):
         self.state_file.parent.mkdir(exist_ok=True)
@@ -542,22 +573,24 @@ class DirectHandset:
             self._goto(ra, dec if dec < 180 else dec - 360, self.catch_up)
             return b"#"
         if kind == b"T":
-            self._need_home()
-            self.board.ready()
+            if c[1] != 0:                # stopping must work with no home recorded
+                self._need_home()
+                self.board.ready()
             self._track(c[1] != 0)
             return b"#"
         if kind == b"M":
             self._stop()
             return b"#"
         if kind == b"P":
-            self._need_home()
-            self.board.ready()
             axis, order = RA if c[2] == 16 else DEC, c[3]
             if order in (36, 37):        # fixed rate, 0 to 9
                 speed = RATES.get(c[4], 0)
             else:                        # 6, 7: variable, in quarter-arcseconds a second
                 speed = (c[4] * 256 + c[5]) / 4 / 3600
             speed = speed if order in (36, 6) else -speed
+            if speed:                    # a rate of 0 is a stop: it needs no home
+                self._need_home()
+                self.board.ready()
             self.target = None
             if axis == RA:
                 self.slew[RA] = speed

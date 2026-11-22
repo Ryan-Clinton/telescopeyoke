@@ -2594,6 +2594,10 @@ def act(args, site):
         # Never leave a motor running after an error or Ctrl+C.
         mount.stop()
         raise
+    if args.command == "stop" and (getattr(mount.s, "state", None) or {}).get("home", True) is None:
+        # Stopped is the answer; where it points cannot be said without a home.
+        print("Stopped. No home is recorded, so where it is pointing is not known.")
+        return None
     return report(mount)
 
 
