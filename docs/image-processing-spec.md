@@ -255,9 +255,11 @@ one-off measurements, each planted at 1 and 3 times the pixel noise):
   not explain them; 8 are dimmed. Sensor temperature and the gap before the frame
   show no link, and about half are single frames. The usual size, 4 to 6 counts,
   matches the 78-79 against 83-84 flips seen in capped darks, so **the camera's
-  black level changing between frames is the likely cause. It is not proven**: raw
-  darks were not kept. Stage B needs a run of capped darks with each frame's level
-  logged, and should level each frame before pairing frames for training.
+  black level changing between frames is the likely cause.** The per-frame log of
+  the 260 capped darks of 21 November settles that the camera does jump with no sky:
+  none of the 120 darks up to 3.7 s stepped by 3 counts or more, while from 30 s up
+  37 steps did, between levels about 5 apart (78-79, 83-84, 88). Stage B levels each
+  frame before pairing frames for training; no further darks are needed for this.
 
 - *Pattern fixed to the sensor (stage B pilot, 22 November 2026).* In calibrated
   frames held in sensor coordinates, two independent halves of a session share a
@@ -381,8 +383,10 @@ correlation, unstable detector levels or strong cloud variation stays out.
 An A-B difference **cannot** see a defect that is identical in both halves,
 since it cancels, so it is one diagnostic and not the gate. Stage B adds:
 
-- **Independently calibrated subsets:** the dark and flat frames are split so
-  each half uses masters made from different calibration frames, then compared.
+- **Calibration defects shared by both halves:** individual darks are not kept, so
+  masters cannot be split. A defect in a master is fixed to the sensor, so the
+  detector-fixed check below sees it, and carrying that pattern through each
+  frame's alignment measures what reaches the training pair.
 - **Detector-fixed structure:** frames are stacked in detector coordinates,
   without registration, so sky averages away across dithers and anything fixed
   to the sensor remains. Sessions with too little dither to separate the two
