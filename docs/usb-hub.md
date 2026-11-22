@@ -117,6 +117,34 @@ Amazon UK £55.99.
   on, so a camera jam means pulling the camera's lead. The camera has not
   jammed straight into the laptop since 20:35 on 1 November.
 
+### What the SV241 says about itself, 22 November 2026
+
+Plugged into the laptop at 18:21 UT with nothing on its ports, and read
+only: no port was switched and no device has run through it yet.
+
+- **No drivers.** Ubuntu's own `hub` driver took it at once. It adds no
+  serial port or HID device, so there is nothing for software to talk to:
+  no readings of volts, amps or temperature, and no control of the 12 V
+  outputs.
+- **What the laptop sees:** a VIA Labs hub, `2109:0817` on the USB 3 side
+  (USB 3.2 at 5 Gb/s, 4 ports) and `2109:2817` on the USB 2 side (480 Mb/s,
+  5 ports, a transaction translator per port). The fifth USB 2 port is
+  internal.
+- **The Billboard device** (`2109:8817`) is that fifth port. It has no
+  driver and needs none. It announces DisplayPort over USB-C (SVID
+  `0xFF01`), which is not configured and does not matter here.
+- **Port power: claimed, not proven.** Both sides' descriptors say
+  per-port power switching and per-port over-current protection, and
+  `sudo uhubctl -l 1-1` lists the USB 2 side as `ppps`. Svbony says the
+  ports are always on, and a hub can report this while leaving the 5 V on.
+  uhubctl finds no compatible hub at `2-1`, the USB 3 side, so a port
+  could not be fully cut through it as things stand. Whether the 5 V really
+  goes off needs a device on a port that shows it, such as a phone charging.
+- **Not yet tested:** a device through any port, the 12 V outputs, the
+  20-minute camera run and the hour with the Nano and handset above. The
+  hub connected at 18:21:42 and dropped at 18:21:46, then stayed up from
+  18:23:04; whether that was the plug being reseated is not recorded.
+
 ## What replaces it
 
 Budget: up to about £70 (the £20 refund plus £30 to £50). Facts checked on
