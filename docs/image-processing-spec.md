@@ -214,6 +214,15 @@ one-off measurements, each planted at 1 and 3 times the pixel noise):
   1 times the noise than a plain blur (85 to 93% against 97 to 98%) and about the
   same at 3 times (96 to 98% against 97 to 98%). Its error in the filament's shape
   was 2 to 4 times the blur's at 1 times the noise and up to twice at 3 times. Not added.
+- *Stacking against Siril 1.4.0-rc2.* IC 405 in Ha, the 89 frames our stack kept,
+  calibrated once by our code, then registered and stacked by each (Siril: global
+  star alignment, winsorized 3-sigma rejection, additive-scale normalisation; it
+  could not register 1 frame). Measured at our 2x2 pixels on the central 2000 x 1400:
+  ours found 937 stars at 5 sigma, Siril 957; signal-to-noise of the 100th, 300th and
+  600th brightest was 59.0, 19.9, 8.8 against 58.7, 20.1, 9.1; star width 5.03 against
+  5.08 px. Siril's wFWHM weighting was sharper (4.90 px) but shallower (912 stars).
+  **No meaningful difference**, so stacking is not where the next gain is. Only
+  registration and stacking were compared, on one target.
 - *Level jumps between frames.* Fitting each frame against the session's median
   and the flat separates sky (which follows the flat) from a fixed offset. In the
   NGC 2174 Ha session, seven frames have offsets of +5 to +34 counts that do not

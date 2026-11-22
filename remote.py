@@ -101,14 +101,14 @@ def restack(host, sessions, options, say=print):
     if sent.returncode:
         raise interface.Refusal("REMOTE_FAILED", f"Sending the code to {host} failed.")
     for s in sessions:
-        rsync([f"{s}/"], f"{host}:{there(s)}/", "--include=light-*.fits", "--include=*.json",
+        rsync([f"{s}/"], f"{host}:{there(s)}/", "--copy-links", "--include=light-*.fits", "--include=*.json",
               "--include=*.jsonl", "--exclude=*")
     ssh(host, f"cat > {PLACE}/code/config.toml", input=equipment(), text=True, check=True)
     camera = config.camera_name()
     if stacking.CALIBRATION.is_dir():
         masters = "calibration" if stacking.CALIBRATION.parent == config.DATA else f"{camera}/calibration"
         ssh(host, f"mkdir -p {PLACE}/data/{masters}", check=True)
-        rsync([f"{stacking.CALIBRATION}/"], f"{host}:{PLACE}/data/{masters}/")
+        rsync([f"{stacking.CALIBRATION}/"], f"{host}:{PLACE}/data/{masters}/", "--copy-links")
     runner = python if python == "python3" else f"~/{python}"
     # The copy there has no git history: say which commit it is, so its
     # records' provenance names the code that really ran.
