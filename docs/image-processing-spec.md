@@ -208,6 +208,12 @@ one-off measurements, each planted at 1 and 3 times the pixel noise):
 - *TGV noise reduction.* At equal grain it kept the same planted filaments as a
   plain blur (96 to 99% against 97 to 98%), in Ha and OIII at 1 and 3 times the
   noise, on one 420 px crop. Not added.
+- *BiShrink noise reduction* (each coefficient shrunk using its parent scale; an
+  undecimated db4 wavelet, not the original dual-tree transform). At equal grain, on
+  two 420 px crops of NGC 2174 in Ha and OIII, it kept less of a planted filament at
+  1 times the noise than a plain blur (85 to 93% against 97 to 98%) and about the
+  same at 3 times (96 to 98% against 97 to 98%). Its error in the filament's shape
+  was 2 to 4 times the blur's at 1 times the noise and up to twice at 3 times. Not added.
 - *Level jumps between frames.* Fitting each frame against the session's median
   and the flat separates sky (which follows the flat) from a fixed offset. In the
   NGC 2174 Ha session, seven frames have offsets of +5 to +34 counts that do not
