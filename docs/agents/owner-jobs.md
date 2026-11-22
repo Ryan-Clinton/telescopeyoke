@@ -86,6 +86,23 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
     480 x 240 at speed 4 against speed 0 (`docs/nights/2026-11-19/guide-camera-window.md`).
 12. **Python on the desktop** for `./restack.py --on desktop` (astropy,
     scipy, numpy, Pillow, in `~/telescopeyoke/.venv` there).
+39. **Slew in and around the place the motor board garbled its answers**,
+    to see whether it repeats there. Both faults of 22 November 2026 were
+    west of the meridian with the RA axis at about 309°:
+    - 17:43 UT, `'03'`, in findhome, leaving +1 h for the east side: the
+      mount stopped at RA axis 308.63°, Dec axis 105.59° (RA 18.83 h,
+      Dec +74.41°). Read on the old home, which was 1.04° out in RA and
+      8.00° in Dec.
+    - About 19:00 UT, `'85=101'`, at the GoTo to Tabby for its R frames:
+      hour angle +2.58 h, altitude 63°, about RA axis 309°, Dec axis 134°,
+      on the true home. The check that followed erased home and the Dec
+      direction.
+
+    By day, with nothing else asking the mount anything: GoTos into and
+    through RA axis 300-318°, at Dec axis 105° and 134° and between, from
+    both directions, and the same number elsewhere to compare. Two faults
+    do not yet show that the place is the cause. Until job 13 is done, a
+    repeat can erase home again, so keep home's counts first.
 
 ## In code, no hands needed
 
