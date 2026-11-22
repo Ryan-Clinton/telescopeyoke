@@ -160,8 +160,9 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
     in RA). The findhome answers turned down before it came from about 0.3°
     of RA slack: the same places read that far apart by the way they were
     reached. findhome now reaches every place moving west, and agreed with
-    itself to 0.04° over 12 places. The joints are still to be marked at
-    home, or the next switch-on by eye brings the error back.
+    itself to 0.04° over 12 places. Home by eye is only the start: the owner
+    relies on the search for accuracy, so run it at setup on a clear sky
+    rather than asking for the joints to be marked.
   The jobs owed are [owner-jobs.md](owner-jobs.md).
 - **Latitude bolts**: the rear bolt in lowers the axis, the front bolt in
   raises it (13 October 2026); the old rear bolt rises then jerks lower.
