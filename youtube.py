@@ -123,8 +123,21 @@ def _access(post=requests.post, clock=time.time):
 
 
 REFUSED = [None]            # why Google last refused the saved sign-in, None when it worked
-PHONE_EVERY_S = 1800        # a new sign-in code to the person's phone at most this often
-_phone = {"last": -1e9, "busy": False}
+# One sign-in code to the phone per failure, not one every half hour until
+# someone answers (22 November 2026: six in an evening nobody wanted them).
+# Kept in a file so a restarted stream does not send another; the next
+# evening's stream may ask again, and signing in clears it.
+PHONE_EVERY_S = 20 * 3600
+PHONE_STAMP = TOKEN_FILE.with_name("youtube-code-sent")
+_phone = {"busy": False}
+
+
+def _code_sent_ago():
+    """Seconds since a sign-in code last went to the phone."""
+    try:
+        return time.time() - PHONE_STAMP.stat().st_mtime
+    except OSError:
+        return float("inf")
 
 
 def refused(post=requests.post):
@@ -146,7 +159,7 @@ def sign_in_by_phone(say=print, send=None, post=requests.post, sleep=time.sleep,
     them to approve it on their phone. Google lets only the account's owner
     approve, so this is as far as it can go by itself. At most one at a time
     and one every PHONE_EVERY_S. True once signed in."""
-    if _phone["busy"] or clock() - _phone["last"] < PHONE_EVERY_S:
+    if _phone["busy"] or _code_sent_ago() < PHONE_EVERY_S:
         return False
     saved = _saved() or {}
     if not saved.get("client_id"):
@@ -154,7 +167,7 @@ def sign_in_by_phone(say=print, send=None, post=requests.post, sleep=time.sleep,
             saved["client_id"], saved["client_secret"] = client_from(CLIENT_FILE)
         except (OSError, ValueError, KeyError):
             return False
-    _phone.update(busy=True, last=clock())
+    _phone.update(busy=True)
     send = send or (lambda text: __import__("notify").send(text, say=say))
     try:
         client, secret = saved["client_id"], saved["client_secret"]
@@ -167,6 +180,8 @@ def sign_in_by_phone(say=print, send=None, post=requests.post, sleep=time.sleep,
                 f"(good for {start['expires_in'] // 60} min). Nothing else to do.")
         say(text)
         send(text)
+        PHONE_STAMP.parent.mkdir(parents=True, exist_ok=True)
+        PHONE_STAMP.touch()
         deadline = clock() + start["expires_in"]
         while clock() < deadline:
             sleep(start.get("interval", 5))
@@ -178,13 +193,14 @@ def sign_in_by_phone(say=print, send=None, post=requests.post, sleep=time.sleep,
                        "refresh_token": found.get("refresh_token") or saved.get("refresh_token"),
                        "expires_at": time.time() + found.get("expires_in", 0)})
                 REFUSED[0] = None
+                PHONE_STAMP.unlink(missing_ok=True)     # a later failure may say so at once
                 say("YouTube signed in again from the phone")
                 send("YouTube signed in again: the broadcast opens with the stream.")
                 return True
             if found.get("error") not in ("authorization_pending", "slow_down"):
                 say(f"YouTube sign-in from the phone refused: {found.get('error_description') or found.get('error')}")
                 return False
-        say("YouTube sign-in code ran out unapproved; a new one goes in half an hour")
+        say("YouTube sign-in code ran out unapproved; no other goes to the phone until the next evening's stream")
         return False
     except Exception as error:      # noqa: BLE001 - the stream goes on whatever Google says
         say(f"YouTube sign-in by phone failed: {type(error).__name__}")
