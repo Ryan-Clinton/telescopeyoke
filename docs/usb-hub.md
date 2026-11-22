@@ -142,8 +142,8 @@ only: no port was switched and no device has run through it yet.
   goes off needs a device on a port that shows it, such as a phone charging.
 - **Not yet tested:** a device through any port, the 12 V outputs, the
   20-minute camera run and the hour with the Nano and handset above. The
-  hub connected at 18:21:42 and dropped at 18:21:46, then stayed up from
-  18:23:04; whether that was the plug being reseated is not recorded.
+  hub's one disconnect, at 18:21:46, was the owner checking its mains plug
+  was switched on, not a fault; it has stayed up from 18:23:04.
 
 ## What replaces it
 
