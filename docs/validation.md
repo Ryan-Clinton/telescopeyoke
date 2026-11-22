@@ -98,6 +98,18 @@ The account of everything tried so far, feature by feature, is at the end:
 | 16 | Does the handset take its clock from the computer? | `./mount.py settime` with the handset at its main menu, then read its date on its own screen. | Yes, once: 7 October 2026, at the main menu, it read back the computer's time to the second and its sidereal clock came to 0.01° from true. The date on its own screen was not looked at. |
 | 17 | Can it predict what a turn of a bolt does? | During polar alignment: measure; turn the left azimuth bolt in exactly half a turn; measure again saying so (`--turned 0.5 0`, or the screen); then another half turn the same way and measure again. | Partly, 17 October 2026, not in exact half turns: a quarter turn moved the axis about 0.2° east (the program learnt 0.72° a turn from it), and the next adjustment, told nothing, moved it 2.9°, about 1.7° a turn if it was the advised one and three quarters. The learnt figure was too small: the advice in turns is not yet to be believed. |
 
+### Our own denoiser, 22 November 2026
+
+❌ **Not accepted; no picture uses it.** Two small networks trained on this rig's
+frames, one with IGAPS Ha nebulae added, judged on 10 sessions of two targets never
+trained on (NGC 2174, IC 405). At equal grain they keep 70 to 88% of a faint planted
+filament where a blur keeps 92 to 98%, and their error is about 1% lower against the
+10% required. With stars protected, star width still moves 6 to 7% in the worst
+session. ✅ All 39 training and test pairs pass the sensor-pattern check (under 0.02).
+✅ The camera's level jumps, seen with the cap on, did not change four normal stacks.
+Not yet retrained since the survey noise and pair fixes. Two targets are too few to
+say how it generalises. Details: `docs/image-processing-spec.md`, section 5.1.
+
 ### Narrowband pictures, 21 November 2026
 
 Measured on stacks from this rig, NGC 2174 (Ha, OIII, SII) and NGC 281 (Ha,

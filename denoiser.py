@@ -8,6 +8,8 @@ Pictures only: nothing here touches a raw frame, a stack or a measurement.
 PyTorch is needed only by this script, and only on the computer that runs it.
 """
 import argparse
+import hashlib
+import inspect
 import json
 import time
 from pathlib import Path
@@ -117,11 +119,15 @@ class Survey:
         import multiprocessing
         from concurrent.futures import ProcessPoolExecutor
         self.rng = np.random.default_rng(seed)
-        cache = Path(folder).parent / "survey-tiles.npy"
+        paths = sorted(map(str, Path(folder).glob("*.fits.fz")))
+        # The cache is named by the frames and the code that made it: a kept
+        # one from an older filter was silently reused on 22 November 2026.
+        key = hashlib.sha256(json.dumps([[Path(p).name, Path(p).stat().st_size] for p in paths]).encode()
+                             + inspect.getsource(survey_tile).encode()).hexdigest()[:16]
+        cache = Path(folder).parent / f"survey-tiles-{key}.npy"
         if cache.exists():
             self.tiles = list(np.load(cache))
         else:
-            paths = sorted(map(str, Path(folder).glob("*.fits.fz")))
             with ProcessPoolExecutor(12, mp_context=multiprocessing.get_context("spawn")) as pool:
                 self.tiles = [t for t in pool.map(survey_tile, paths, chunksize=8) if t is not None]
             np.save(cache, np.stack(self.tiles))
@@ -132,8 +138,14 @@ class Survey:
         r, c = self.rng.integers(tile.shape[0] - CROP), self.rng.integers(tile.shape[1] - CROP)
         clean = tile[r:r + CROP, c:c + CROP] * float(self.rng.uniform(1, 12))   # the nebula, in our noise
         x, y, s, _ = self.noise.crop()
-        grain = (x - y) / np.sqrt(2)
+        grain = x - y
         grain = grain - ndimage.gaussian_filter(grain, 8)
+        # Stars leave shape differences between the halves, not noise.
+        clear = s < 1.5
+        if clear.mean() < 0.5:
+            clear = np.ones_like(clear)
+        grain = grain / max(1.4826 * float(np.median(np.abs(grain[clear] - np.median(grain[clear])))), 1e-6)
+        grain = np.where(clear, grain, self.rng.standard_normal(grain.shape, dtype=np.float32))    # unit noise, as s says
         grain = np.clip(grain, -6, 6)
         return (clean + grain).astype(np.float32), clean.astype(np.float32), np.ones_like(s), np.ones_like(s)
 

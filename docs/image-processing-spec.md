@@ -424,14 +424,25 @@ sessions are in `docs/research/denoiser-2026-11-22/`.
 held out. The rest had under 10 px of median dither or too few usable frames. So
 OIII and SII were tested with no training target of their own.
 
-**Stage B, provisionally passed.** The sensor pattern is at single pixels (gone
-after a 1 px shift, unchanged by removing rows and columns), the kind alignment
-scatters best. Planted defects, six random patterns each in three sessions, show
-what would still reach a pair at a correlation of 0.02: flat mottling of 0.15 to
-0.37 of one frame's noise, rows of 0.29 to 0.70, columns of 0.23 to 0.52 where
-detected, single pixels of 1.4 to 2.1 or not at all. A structured defect that
-size would need looking for directly, and no direct search of the pairs for one
-has been made.
+**Stage B, passed for the present pairs.** The sensor pattern is at single pixels
+(gone after a 1 px shift, unchanged by removing rows and columns), the kind
+alignment scatters best. `trainset.py` now measures every pair: each half's own
+sensor pattern, moved as that half's frames really were, and how far the two then
+correlate. A pair above 0.02 is refused. All 39 pairs pass: at most 0.002 among
+those trained on, and 0.013 for the test session with a 6 px median dither.
+Planted defects, six random patterns each in three sessions, show what would reach
+a pair at 0.02: flat mottling of 0.15 to 0.37 of one frame's noise, rows of 0.29 to
+0.70, columns of 0.23 to 0.52 where detected, single pixels of 1.4 to 2.1 or not at
+all. Each kept session names its frames, masters, code, settings and software, and
+is rebuilt when any of them changes.
+Removing a faulty missing-pixel test from the half-stacks left the first pair of all
+18 sessions unchanged on a one-in-sixteen pixel sample.
+
+**The level jumps do not change a normal stack.** Four sessions stacked as now and
+with every frame levelled (up to 40 frames each; 4 to 22 frames off by 3 counts or
+more, the largest by 17): the sky moved by 0.11 to 0.32 counts, the grain by at most
+0.14%, the share of pixels kept by at most 0.01 points, and star flux and width in
+fixed apertures by less than 0.0001%. Stacking is left as it is.
 
 **Stage C, not accepted.** A 4-level U-Net, 12,000 steps (about 30 minutes without
 the survey, 50 with). One model used our frames alone; one added 767 IGAPS Ha
@@ -452,8 +463,23 @@ the 10% required. It beat the starlet baseline by about 10% at the model's own
 strong smoothing, which says more about that baseline than the model. Star
 brightness with stars protected: median within 0.1%, worst session 1.3% (0.9%
 with IGAPS). Width: median within 0.2%, worst session 7.1% (6.3% with IGAPS),
-over the 3% limit. **The wait for more data is the honest next step:** Ha from
-more targets, dithered by at least 10 px.
+over the 3% limit.
+
+The 10 test sessions are **two independent targets**. Faint filament kept at 50%
+grain, by target and filter (with IGAPS, own frames alone in brackets; blur 96 to 97%
+in every row), and sessions with lower error than the blur:
+
+| Target and filter | Sessions | Filament kept | Lower error than blur |
+|---|---:|---|---|
+| IC 405 Ha | 5 | 80% (78%) | 5 (4) |
+| IC 405 SII | 1 | 78% (80%) | 1 (1) |
+| NGC 2174 Ha | 2 | 79% (78%) | 1 (1) |
+| NGC 2174 OIII | 1 | 80% (83%) | 1 (1) |
+| NGC 2174 SII | 1 | 80% (74%) | 1 (0) |
+
+These models were trained before the survey noise was rescaled to the noise map and
+before the pair fixes above, and have not been retrained. Next: Ha, OIII and SII
+from more independent targets, dithered by at least 10 px, before changing the network.
 
 ## 6. Later models
 
