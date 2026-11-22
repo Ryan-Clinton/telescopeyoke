@@ -1991,6 +1991,8 @@ def home_leverage(rows, dec, fixed=False):
     angles cannot. `fixed`: only the two home errors are unknown, the rest
     taken from an earlier fit (check_home)."""
     import numpy as np
+    if not rows:                # a whole survey under cloud: no places, so no leverage
+        return math.inf
     model = home_model(rows, dec)[:, :2] if fixed else home_model(rows, dec)
     unknowns = model.shape[1]
     if len(model) < unknowns or np.linalg.matrix_rank(model) < unknowns:
