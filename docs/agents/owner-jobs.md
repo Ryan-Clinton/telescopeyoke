@@ -191,9 +191,6 @@ its job comes off this list.
     `./precision.py SESSION --planet NAME` and `--compare FIELD`. One shared
     night is provisional, two wins are firm. `precision.py`'s mono path has
     not yet run on a real 183M transit.
-33. **The narrowband focus offsets.** SII, Ha and OIII need one more night
-    of `./focus.py --auto --offset Ha` before a scheduled run can use them.
-    Until then, a queue moves the wheel and focuses in each filter first.
 34. **Mono Moon video.** `./ty moon` and `./ty lucky` now write and stack the
     183M's video as mono; not yet run on a real video.
 35. **Mineral Moon from B, G and R** (`./ty lucky capture --filter`, stack
