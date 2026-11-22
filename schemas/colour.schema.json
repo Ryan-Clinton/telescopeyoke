@@ -5,7 +5,7 @@
   "required": ["name", "palette", "picture", "settings", "filters", "provenance"],
   "properties": {
     "name": {"type": "string"},
-    "palette": {"enum": ["LRGB", "SHO", "HOO"]},
+    "palette": {"enum": ["LRGB", "SHO", "HOO", "HSS"]},
     "picture": {"type": "string"},
     "linear": {"type": "string"},
     "run_id": {"type": "string"},

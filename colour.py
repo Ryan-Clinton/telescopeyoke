@@ -56,7 +56,8 @@ COLOURS = ("R", "G", "B")
 # the filter giving the detail (None: the colour's own brightness)
 PALETTES = {"LRGB": (COLOURS, "L", "L"),
             "SHO": (("SII", "Ha", "OIII"), "Ha", None),
-            "HOO": (("Ha", "OIII", "OIII"), "Ha", None)}
+            "HOO": (("Ha", "OIII", "OIII"), "Ha", None),
+            "HSS": (("Ha", "SII", "SII"), "Ha", None)}   # no OIII yet: Ha red, SII green and blue
 
 
 def holds(session):
@@ -193,7 +194,7 @@ def restack_plan(name):
 
 MIN_COVERED = 0.75   # share of the frame every filter must cover for the target to be in the picture
 GREEN_KEPT = 0.25    # of the green above the red and blue's average, in the Hubble palette
-LINEAR_OIII = 0.55   # OIII fills two channels in HOO: mixed linearly at full strength the nebula goes grey
+LINEAR_OIII = 0.55   # OIII (SII in HSS) fills two channels in HOO: mixed linearly at full strength the nebula goes grey
 NARROWBAND_SATURATION = 1.8   # mixed linearly the palette is paler than separate stretches' colours
 EDGE_TRIM = 0.035    # of the picture's shorter side, off every edge of a linear narrowband picture
 QUIET = (0.7, 0.6, 0.5, 0.4)    # times its noise each scale needs to be fully kept: at this, on NGC 2174, 99% of the faintest stars stay, their flux within 1%
@@ -417,7 +418,9 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
     # Where the sky is, from the filter that shows the nebula best: a weak
     # filter cannot tell its own nebula from its sky, and scaled up to match,
     # NGC 2174's SII turned the sky red (21 November 2026).
-    guide = max(planes, key=lambda b: nebula_level(planes[b]))
+    # In HSS the SII is too faint to say: guided by it, IC 405's outer Ha was
+    # fitted as sky, leaving black round the nebula (22 November 2026).
+    guide = "Ha" if channels[1] == "SII" else max(planes, key=lambda b: nebula_level(planes[b]))
     clear = clear_of_nebula(planes[guide])
     open_sky = float(clear.mean())
     if open_sky >= MIN_CLEAR:
@@ -635,7 +638,8 @@ def main():
     ap.add_argument("--night", metavar="YYYYMMDD", help="only sessions begun that date")
     ap.add_argument("--saturation", type=float, help="colour strength; 1 is as shot (default 1.25, linear narrowband 1.8)")
     ap.add_argument("--palette", choices=sorted(PALETTES), default="LRGB",
-                    help="LRGB (default), SHO (SII red, Ha green, OIII blue) or HOO (Ha red, OIII green and blue)")
+                    help="LRGB (default), SHO (SII red, Ha green, OIII blue), HOO (Ha red, OIII green and blue) "
+                    "or HSS (Ha red, SII green and blue)")
     ap.add_argument("--stretched", action="store_true",
                     help="narrowband: stretch each filter before mixing (the earlier method, for comparison)")
     ap.add_argument("--noise-reduction", action="store_true",
