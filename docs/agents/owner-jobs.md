@@ -167,7 +167,9 @@ its job comes off this list.
 
 26. **Tabby's baseline.** 21 November gave the 183M's first night in L
     (11.879 ± 0.011), B (11.832 ± 0.040), R (11.804 ± 0.019) and G
-    (11.880 ± 0.014). Each band needs three nights before a dip or colour
+    (11.880 ± 0.014). 22 November gave the second: L 11.849 ± 0.018, B
+    11.802 ± 0.013, R 11.858 ± 0.028, G 11.835 ± 0.039, each within 2 sigma
+    of the first. Each band needs three nights before a dip or colour
     change can be judged: `./starwatch.py tabby`, then `--colour`.
 27. **`./starwatch.py tabby --colour` from start to finish.** On 21 November
     B and R were finished by hand after the fix that takes both bands before
