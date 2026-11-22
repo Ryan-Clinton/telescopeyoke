@@ -256,6 +256,11 @@ SETTLE = 10       # seconds to wait after a slew before photographing: the skyli
 # A trailed picture costs about 3 s to take again; the wait cost 2 s a place.
 SETTLE_LEAST = 0
 SETTLE_MOST = 26
+# Degrees short of a side's first survey place to go first, so that every
+# place is reached moving west, as tracking turns the RA gears. 22 November
+# 2026: the same places read 0.3° apart in hour angle by the way they were
+# reached, and the first after a reversal up to 0.7° out, with round stars.
+SLACK_LEAD = 1.5
 # Median roundness of the stars below which a picture counts as trailed: a
 # first figure. The 183M's settled 2 s frames of 18 November 2026 read 0.81
 # to 0.94 in the middle of the frame, and one 4 s frame 0.56. A trail as
@@ -771,11 +776,9 @@ class Mount:
             self.save_clock(site)
         offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         rows, last = [], None
-        if over_pole(self.axes()[1]):
-            # Already on the west side: that side first, from the far end,
-            # then over the pole once to the east (19 November 2026: starting
-            # east from the west side swung over the pole twice, 25-30 s more).
-            spots = sorted((h for h in spots if h > 0), reverse=True) + sorted((h for h in spots if h <= 0), reverse=True)
+        led = set()
+        # East to west whichever side the tube starts on: an extra swing over
+        # the pole (25-30 s) buys every place reached the same way round.
         for hours_out in spots:
             # Aimed so that the tube really lands on the place planned, which
             # the limits and the skyline were checked for: once a place has
@@ -796,6 +799,13 @@ class Mount:
                     ha_aim -= ha_miss
                 dec_aim -= dec_miss
             began = time.monotonic()
+            if side not in led:
+                led.add(side)
+                short = ha_aim - SLACK_LEAD
+                import polaralign
+                height, _ = polaralign.to_altaz(polaralign.vector(short, dec_aim), site["latitude"])
+                if short * ha_aim > 0 and abs(short) > NEAR_MERIDIAN * 15 and height >= MIN_ALTITUDE:
+                    self.goto((true_sidereal(site) + offset - short) % 360, dec_aim, catch_up=False)
             self.goto((true_sidereal(site) + offset - ha_aim) % 360, dec_aim, catch_up=False)
             slewed = time.monotonic() - began
             self.tracking(True)
@@ -1743,7 +1753,8 @@ def plan_survey(site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None, for_home
         notes.append(f"From these places, a random error of 1° in each plate solve would leave home uncertain "
                      f"by about {leverage:.1f}°.")
     if any(h > 0 for h in spots):
-        notes.append("The tube will swing over the pole once, between the east side and the west.")
+        notes.append("The tube will swing over the pole between the east side and the west, "
+                     "and once more first if it starts on the west side.")
     return spots, notes
 
 
