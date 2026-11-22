@@ -125,8 +125,6 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
 
 ## In the next clear gap
 
-18. **truehome**: `./mount.py findhome`, and if accepted `truehome`
-    (20 November: refused twice, the runs 0.4-0.5° apart). After job 2.
 19. **Collimation** for Gary: 14% off centre, towards the left of the
     frame (20 November).
 
