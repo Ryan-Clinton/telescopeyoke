@@ -30,7 +30,10 @@ is `docs/agents/setup-routine.md` step 6b.
    - asked to compare the forecasts or models: `./tonight.py --forecast`
      (the forecast centres side by side, hour by hour), its table in the answer;
    - the last night's notes, where `CLAUDE.local.md` keeps them: what was
-     patrolled and how the sky really was (fog the forecast missed).
+     patrolled and how the sky really was (fog the forecast missed);
+   - on the owner's rig, "Pictures in progress" in
+     `docs/agents/owner-jobs.md`: the filters each nebula still needs go
+     into the plan for whatever time the discovery programmes leave.
 
    Answer from those at once, short and in plain words, at most about
    eight lines:

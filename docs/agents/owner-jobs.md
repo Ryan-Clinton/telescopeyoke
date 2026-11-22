@@ -7,6 +7,20 @@ there can pick it up. Read it at the start of a daytime conversation and
 before setup; strike a job out (delete it) when it is done, with where its
 result is recorded.
 
+## Pictures in progress
+
+Minutes in each filter's best stack on the 183M, as of the night of
+21 November 2026. Brought up to date at each night's end; the plan for a
+night reads it.
+
+| Target | Ha | OIII | SII | Next |
+|---|---|---|---|---|
+| IC 405, Flaming Star | 178 | none | 58 | SII under a bright Moon, OIII when the Moon is low or down. No more Ha for now |
+| NGC 2174, Monkey Head | 39 | 74 | 48 | Ha, its shortest stack, then SII |
+
+OIII suffers most from moonlight. A narrowband filter's first use in a
+queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
+
 ## By day, the owner's hands at the mount
 
 1. **Tube clearance on the west side near the meridian.** Every failed GoTo

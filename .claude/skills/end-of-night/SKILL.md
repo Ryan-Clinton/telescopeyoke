@@ -55,6 +55,9 @@ Only on the person's word. The imaging run stops at its own limits
    overcast dawn makes good flats. Tell the person in one line to leave the
    camera, wheel and focus alone until they are done, and if they pack up
    first, the flats are lost: say so before, not after.
+6b. On the owner's rig, bring "Pictures in progress" in
+   `docs/agents/owner-jobs.md` up to date: each target's stacked minutes
+   by filter and what it needs next. Commit and push it.
 7. The diary, where the person keeps one (`CLAUDE.local.md` says where):
    write the night's titled entry from its running notes and post it,
    without being asked, before this routine counts as finished. Do it
