@@ -97,6 +97,10 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
       hour angle +2.58 h, altitude 63°, about RA axis 309°, Dec axis 134°,
       on the true home. The check that followed erased home and the Dec
       direction.
+    - 19:57 UT, an empty answer, in findhome --check: stopped at RA axis
+      43.78°, Dec axis 40.42°, east of the meridian. So not only near 309°.
+      Garbled answers to read-only questions are now asked again, so a
+      repeat no longer ends a run: note how often they come.
 
     By day, with nothing else asking the mount anything: GoTos into and
     through RA axis 300-318°, at Dec axis 105° and 134° and between, from

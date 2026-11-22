@@ -179,6 +179,20 @@ def decode(text):
     return int(text[4:6] + text[2:4] + text[0:2], 16)
 
 
+# The questions that only read, and how many hex digits each answer has
+# (0: any number of them).
+ANSWER_DIGITS = {"a": 6, "b": 6, "e": 6, "f": 3, "g": 0, "j": 6}
+QUESTION_TRIES = 4
+
+
+def _whole(letter, text):
+    """Whether an answer is the shape its question's answer always is."""
+    if letter not in ANSWER_DIGITS:
+        return True
+    digits = ANSWER_DIGITS[letter]
+    return bool(text) and (not digits or len(text) == digits) and all(c in "0123456789ABCDEFabcdef" for c in text)
+
+
 class Board:
     """The questions and orders the motor board understands."""
 
@@ -189,13 +203,18 @@ class Board:
         self.high_ratio = {a: int(self.ask("g", a), 16) for a in (RA, DEC)}
 
     def ask(self, letter, axis, data=""):
-        reply = self.link.exchange(f":{letter}{axis}{data}\r".encode()).decode("ascii", "replace").strip()
-        if reply.startswith("!"):
-            raise Refusal("GOTO_REFUSED", f"The motor board refused '{letter}{axis}{data}' (error "
-                          f"{reply[1:] or '?'}).")
-        if not reply.startswith("="):
-            raise Refusal("HANDSET_NOT_ANSWERING", f"The motor board's answer made no sense: {reply!r}")
-        return reply[1:]
+        # A question that only reads is asked again when its answer comes back
+        # garbled (22 November 2026: '03', '85=101' and an empty one each ended
+        # a run). An order is never sent twice.
+        for _ in range(QUESTION_TRIES if letter in ANSWER_DIGITS else 1):
+            reply = self.link.exchange(f":{letter}{axis}{data}\r".encode()).decode("ascii", "replace").strip()
+            if reply.startswith("!"):
+                raise Refusal("GOTO_REFUSED", f"The motor board refused '{letter}{axis}{data}' (error "
+                              f"{reply[1:] or '?'}).")
+            if reply.startswith("=") and _whole(letter, reply[1:]):
+                return reply[1:]
+            time.sleep(0.05)
+        raise Refusal("HANDSET_NOT_ANSWERING", f"The motor board's answer made no sense: {reply!r}")
 
     def number(self, letter, axis):
         return decode(self.ask(letter, axis))
