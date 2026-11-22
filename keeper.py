@@ -200,6 +200,15 @@ def serve(cam, say=print):
             warmed = ("The camera is closing, but " + ("its cooler did not take the off command (closing the "
                       "camera stops it)" if off is False else "its sensor's temperature could not be read")
                       + ": whether it has warmed up is not known. Leave it a few minutes before switching off.")
+        elif (degrees < (ambient if ambient is not None else degrees) - 2 * altair.WARM_STEP_C
+              and getattr(cam, "warm_finished", False) and getattr(cam, "warm_from", None) is not None
+              and degrees >= cam.warm_from + altair.WARM_STEP_C):
+            # Every step taken and the sensor rose with them, but it began
+            # the night warmer than the air is now (21 November 2026: 1.7 °C
+            # against 13.3 °C, the air about -2.5 °C). Not a fault.
+            warmed = (f"The camera's warm-up finished at {degrees:.1f} °C, below the {ambient:.1f} °C it started "
+                      "from, most likely because the night air is colder now. Its cooler is off: safe to "
+                      "switch off.")
         elif degrees is not None and ambient is not None and degrees < ambient - 2 * altair.WARM_STEP_C:
             # The warm-up was cut short (its time up, a refused step, a
             # faulted cooler): said as it is, not as a finished warm-up.

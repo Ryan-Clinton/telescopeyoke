@@ -104,15 +104,10 @@ result is recorded.
     commands as it turned to G, just as `./sxwheel.py status` was run from
     another process; whether that caused it is not known. Switching its hub
     port off and on made it drop off USB (error -71), and only a replug
-    brought it back. Wanted: one process at a time on the wheel, and no
-    status read while it turns.
-24. **The schedule's times after a skip or move.** On 21 November, steps
-    after a `--not-before` step showed the wrong clock times and false
-    "behind something" warnings, though they run in the right order.
-25. **The camera's warm-up warning.** It says "cut short" when the sensor
-    cannot warm to its starting temperature because the night air is colder
-    (21 November: 1.7 °C against 13.3 °C, air about -2.5 °C by the model).
-    It should compare with the outside air and warn only on a real failure.
+    brought it back. Since 22 November `sxwheel.py` lets one process at a
+    time use the wheel, so a status waits for a turn to finish. Not yet run
+    on the wheel: at the next setup, check a filter change, and if it hangs
+    again the shared status read was not the cause.
 
 ## In the next clear gap
 

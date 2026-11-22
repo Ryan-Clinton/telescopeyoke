@@ -837,8 +837,10 @@ class AltairCamera:
         lib, handle = self.lib, self.handle
         most = WARM_MOST_S if most is None else most
         began = clock()
+        self.warm_finished, self.warm_from = False, None
         try:
             degrees = self.temperature()
+            self.warm_from = degrees
             if degrees is None or self.ambient is None:
                 say(f"camera: the warm-up cannot tell the sensor's temperature "
                     f"({'now' if degrees is None else 'from before cooling'}); the cooler goes off now")
@@ -851,6 +853,7 @@ class AltairCamera:
                     f"{WARM_STEP_C:g} °C a minute, before the cooler is turned off")
                 for _ in range(WARM_STEPS_MOST):
                     if level >= self.ambient:
+                        self.warm_finished = True   # every step taken: keeper.py tells cold air from a fault
                         break
                     if clock() - began + WARM_EVERY_S > most:
                         say(f"camera: the warm-up has had its {most / 60:g} minutes; the cooler goes off with the "

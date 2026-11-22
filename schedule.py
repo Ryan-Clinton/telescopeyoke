@@ -171,6 +171,8 @@ def view(plan=None, now=None):
         if s.get("status") in ("done", "failed", "skipped"):
             s["start"], s["end"] = s.get("started"), s.get("finished")
             s["progress"] = 1.0 if s["status"] == "done" else None
+            out.append(s)       # over: its past times say nothing about when the next step can start
+            continue            # (21 November 2026: a skipped step put those after it hours early)
         elif s.get("status") == "running":
             s["start"] = s["started"]
             s["end"] = not_before(s["until"], s["started"]) if s.get("until") else max(s["started"] + minutes, now)

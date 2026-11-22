@@ -31,6 +31,7 @@ SHORTER_WAY = 0x80          # added to the filter number: INDI's "bidirectional"
 POLL = 0.25                 # seconds between questions while it turns, as INDI
 TIMEOUT = 20.0              # a whole turn of a 7-position wheel takes a few seconds
 READ_MS = 500
+BUSY_WAIT = TIMEOUT + 5     # how long a command waits for another's turn of the wheel to finish
 
 
 class WheelError(Exception):
@@ -59,9 +60,36 @@ def _hid():
                      "The Python hidapi module is missing: sudo apt-get install python3-hid (./install.sh does it).")
 
 
+def _claim(wait=BUSY_WAIT, sleep=time.sleep, clock=time.monotonic):
+    """One process at a time on the wheel, held until it is closed. On
+    21 November 2026 it stopped answering as it turned to G, just as another
+    process asked its status. A status now waits for the turn to finish. The
+    system lets go by itself if the process holding it dies."""
+    path = config.DATA / "cache" / "sxwheel.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    claim = open(path, "a+b")
+    end = clock() + wait
+    while True:
+        try:
+            if sys.platform == "win32":
+                import msvcrt
+                claim.seek(0)
+                msvcrt.locking(claim.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(claim.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return claim
+        except OSError:
+            if clock() > end:
+                claim.close()
+                raise WheelError(f"another command has been using the filter wheel for over {wait:g} s") from None
+            sleep(POLL)
+
+
 class Wheel:
-    def __init__(self, device):
+    def __init__(self, device, claim=None):
         self.device = device
+        self.claim = claim
 
     @classmethod
     def open(cls, hid=None):
@@ -73,6 +101,16 @@ class Wheel:
             except (Exception, SystemExit) as problem:
                 raise WheelError(f"the Alpaca filter wheel: {getattr(problem, 'message', problem)}") from None
         hid = hid or _hid()
+        claim = _claim()
+        try:
+            return cls(cls._device(hid), claim)
+        except BaseException:
+            claim.close()
+            raise
+
+    @staticmethod
+    def _device(hid):
+        """The wheel's device, opened, with its hub port tried if it has gone."""
         device = hid.device()
         try:
             device.open(VENDOR, PRODUCT)
@@ -84,7 +122,7 @@ class Wheel:
                     "wheel", say=lambda *a, **k: print(*a, file=sys.stderr, **k)).get("wheel") == "recovered":
                 device = hid.device()
                 device.open(VENDOR, PRODUCT)
-                return cls(device)
+                return device
             if hid.enumerate(VENDOR, PRODUCT):
                 raise WheelError("The filter wheel is plugged in but may not be opened: its /dev/hidraw is "
                                  "root's alone. ./install.sh adds the udev rule (/etc/udev/rules.d/99-sxwheel.rules); "
@@ -96,13 +134,16 @@ class Wheel:
             usbguard.remember("wheel")
         except Exception:      # noqa: BLE001 - keeping its place never stops the wheel
             pass
-        return cls(device)
+        return device
 
     def close(self):
         try:
             self.device.close()
         except Exception:
             pass
+        if self.claim:
+            self.claim.close()      # closing it lets the next command have the wheel
+            self.claim = None
 
     def __enter__(self):
         return self
