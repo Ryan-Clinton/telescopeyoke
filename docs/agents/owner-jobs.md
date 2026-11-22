@@ -160,6 +160,17 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
     ([dec-one-way.md](../nights/2026-11-20/dec-one-way.md)): `--dec-stuck
     3` did not stop the jumps. Again only once job 2 is done.
 
+## Training data
+
+39. **Try AstrophotoMarket again on 23 November 2026.** On 22 November the free
+    cart stopped at 10 datasets, for the owner by hand too; whether the limit
+    resets is not known. Still to get, by listing number: 264, 267, 270, 294,
+    316, 326, 332, 337, 360, 363, 405, 422, 467, 510, 572, 583. Their links,
+    authors and licences are in
+    `D:\telescopyokearchive\training-data\astrophotomarket\chosen-26.json`.
+    Open them in the owner's desktop Chrome, signed in; the zips land in
+    `C:\Users\Facepipe\Downloads`. Do not work round the limit.
+
 ## The filter science: built on 21 November, still to prove on the sky
 
 Each result goes in `docs/validation.md` when it has run on real data, and
