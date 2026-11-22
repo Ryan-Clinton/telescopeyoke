@@ -54,7 +54,7 @@ COMMANDS = {
                    {"--plan": "local_write", "--dry-run": "local_write"}),
     "build_catalogue.py": ("local_write", {}, {}),
     "compendium.py": ("local_write", {"status": "read_only"}, {}),   # fetches Gary Imm's workbook into cache/
-    "calibrate.py": ("hardware", {}, {}),
+    "calibrate.py": ("hardware", {"index": "local_write"}, {}),   # index reads the masters' headers only
     "camera_setup.py": ("local_write", {"--check": "read_only"}, {}),
     "cameras.py": ("read_only", {"--go": "local_write"}, {}),   # the profiles; move-183c --go moves the 183C's files
     "camera_probe.py": ("read_only", {}, {}),     # run alone: only the black or white window camera_test.py --timed-light shines

@@ -38,6 +38,7 @@ by train and filter, kept raw, with a flat-dark (a dark at the flat's
 exposure) taken off when used; and a bad-pixel map from the longest dark:
 
     ./calibrate.py badpixels                        from the darks kept; no camera
+    ./calibrate.py index                            what is kept, in calibration/INDEX.md
 
 It takes no bias. Science (difference images, photometry, transits, depth)
 refuses its frames until every master matches (docs/calibration.md).
@@ -164,7 +165,7 @@ LOWEST_BIAS = 10        # a bias reading under this, of 4095, is the black level
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("kind", choices=["dark", "bias", "flat", "badpixels"])
+    ap.add_argument("kind", choices=["dark", "bias", "flat", "badpixels", "index"])
     ap.add_argument("--exposure", type=float, nargs="+", default=[2.0],
                     help="seconds, for darks; a cooled camera takes several in one cold session "
                          "(--exposure 4 16), then warms up gently")
@@ -178,7 +179,84 @@ def main():
                     help="send the outcome to the person's phone when done, kept or failed (the dawn flats)")
     ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
     args = ap.parse_args()
-    return interface.main("calibrate", lambda: told(args) if args.tell else run(args), args.json)
+    if args.kind == "index":
+        return interface.main("calibrate", lambda: write_index(show=not args.json), args.json)
+    return interface.main("calibrate", lambda: indexed(args), args.json)
+
+
+def indexed(args):
+    """Make masters, then bring the index up to date, even after a run that
+    stopped part way with some kept. A failed index never fails the run."""
+    try:
+        return told(args) if args.tell else run(args)
+    finally:
+        try:
+            write_index()
+        except Exception as problem:
+            print(f"calibration index not updated: {problem}")
+
+
+def _kept(folder):
+    """The newest version of each master in a folder: (path, header, versions)."""
+    groups = {}
+    for path in folder.glob("*.fits"):
+        stem, _, tail = path.stem.rpartition("-v")
+        key, number = (stem, int(tail)) if stem and tail.isdigit() else (path.stem, 0)
+        groups.setdefault(key, []).append((number, path))
+    return [(max(found)[1], fits.getheader(max(found)[1]), len(found)) for _, found in sorted(groups.items())]
+
+
+def _day(path):
+    return time.strftime("%d %b %Y", time.gmtime(path.stat().st_mtime))
+
+
+def _index_section(name, folder):
+    kept = _kept(folder)
+    darks = sorted((k for k in kept if k[0].name.startswith("dark")), key=lambda k: float(k[1].get("EXPTIME", 0)))
+    flats = sorted((k for k in kept if k[0].name.startswith("flat")),
+                   key=lambda k: (str(k[1].get("TELESCOP")), str(k[1].get("FILTER"))))
+    lines = [f"## {name}", "", f"{len(darks)} darks and {len(flats)} flats, in `{folder.name}/` of `{folder.parent.name}`.",
+             "", "### Darks", "", "| Exposure | Gain | Offset | Speed | Set temp | Frames | Made | Versions |",
+             "|---:|---:|---:|---:|---:|---:|---|---:|"]
+    for path, h, count in darks:
+        lines.append(f"| {float(h.get('EXPTIME', 0)):g} s | {h.get('GAIN', '?')} | {h.get('OFFSET', '?')} | "
+                     f"{h.get('READSPD', '?')} | {h.get('SET-TEMP', '?')} | {h.get('NFRAMES', '?')} | {_day(path)} | {count} |")
+    lines += ["", "### Flats", "", "| Filter | Light path | Exposure | Frames | Made | Versions | Its flat-dark |",
+              "|---|---|---:|---:|---|---:|---|"]
+    for path, h, count in flats:
+        matched = "SET-TEMP" in h and any(stacking.matches(d[1], h, stacking.DARK_CARDS) for d in darks)
+        lines.append(f"| {h.get('FILTER', 'any')} | {h.get('TELESCOP', '?')} | {float(h.get('EXPTIME', 0)):g} s | "
+                     f"{h.get('NFRAMES', '?')} | {_day(path)} | {count} | "
+                     f"{('yes' if matched else 'MISSING') if 'SET-TEMP' in h else 'not used'} |")
+    bad = [k for k in kept if k[0].name.startswith("badpixels")]
+    if bad:
+        lines += ["", f"Bad-pixel map: {bad[0][1].get('NBAD', '?')} pixels, made {_day(bad[0][0])}."]
+    return lines + [""]
+
+
+def write_index(show=False):
+    """calibration/INDEX.md: every camera's newest masters, to read before
+    asking for more. Reads headers only, and uses no camera."""
+    root = config.DATA / "calibration"
+    root.mkdir(parents=True, exist_ok=True)
+    folders = sorted(p for p in config.DATA.glob("*/calibration") if p.is_dir() and p != root)
+    lines = ["# Darks and flats kept", "", f"Written {time.strftime('%d %b %Y %H:%M', time.gmtime())} UT by "
+             "`./calibrate.py index`, and after every calibration run. The newest version of each is the one used.",
+             "Individual frames are not kept. Each dark's level is in the run's log (`cache/schedule-darks-*.log`).", ""]
+    darks = flats = 0
+    for folder in folders:
+        lines += _index_section(folder.parent.name, folder)
+    if any(root.glob("*.fits")):
+        lines += _index_section("183C (the original calibration folder)", root)
+    for folder in [*folders, root]:
+        for path, _, _ in _kept(folder):
+            darks += path.name.startswith("dark")
+            flats += path.name.startswith("flat")
+    path = root / "INDEX.md"
+    path.write_text("\n".join(lines))
+    if show:
+        print("\n".join(lines))
+    return {"kind": "index", "file": str(path), "darks": darks, "flats": flats}
 
 
 def told(args, send=None):
