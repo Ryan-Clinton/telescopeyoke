@@ -18,6 +18,8 @@ import numpy as np
 from scipy import ndimage
 
 CROP = 256
+HELD_OUT = {"NGC2174": (92.4, 20.5), "IC405": (79.1, 34.3)}   # degrees: never trained on
+HELD_OUT_CLEAR = 2.0     # degrees from a field: its 0.66 half-diagonal plus a survey CCD's 0.21, with margin
 BATCH = 8
 
 
@@ -100,8 +102,19 @@ def survey_tile(path):
     or None if it has none. The limit is from six frames looked at by eye on
     22 November 2026: star fields scored 0.5 to 1.3, IC 443 and the Rosette 2 to 3."""
     from astropy.io import fits
+    from astropy import units as u
+    from astropy.coordinates import SkyCoord
+    from astropy.wcs import WCS
     with fits.open(path) as h:
-        raw = next(x for x in h if x.data is not None).data.astype(np.float32)
+        hdu = next(x for x in h if x.data is not None)
+        raw, header = hdu.data.astype(np.float32), hdu.header
+    try:
+        ra, dec = WCS(header).all_pix2world(raw.shape[1] / 2, raw.shape[0] / 2, 0)
+    except Exception:
+        return None         # where it is cannot be told, so it cannot be shown clear of the test fields
+    here = SkyCoord(float(ra) * u.deg, float(dec) * u.deg)
+    if any(here.separation(SkyCoord(a * u.deg, d * u.deg)).deg < HELD_OUT_CLEAR for a, d in HELD_OUT.values()):
+        return None
     noise = 1.4826 * np.median(np.abs(raw[::2, ::2] - np.median(raw)))
     coarse = ndimage.median_filter(raw[::8, ::8], 25)
     span = float(np.percentile(coarse, 98) - np.percentile(coarse, 2))

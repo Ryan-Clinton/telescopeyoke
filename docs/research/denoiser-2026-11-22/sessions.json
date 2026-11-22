@@ -16,9 +16,16 @@
     "split": 0,
     "kind": "1:3",
     "sensor_correlation": 0.00904,
+    "halves": {
+     "sky_ratio": 1.0034,
+     "ring_ratio": 1.0109,
+     "large_over_noise": 0.0356,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "IC405-20261119-235909",
@@ -37,9 +44,16 @@
     "split": 0,
     "kind": "1:3",
     "sensor_correlation": 0.00022,
+    "halves": {
+     "sky_ratio": 0.9994,
+     "ring_ratio": 0.9912,
+     "large_over_noise": 0.0294,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "IC405-20261120-233305",
@@ -58,9 +72,16 @@
     "split": 0,
     "kind": "1:3",
     "sensor_correlation": 0.00033,
+    "halves": {
+     "sky_ratio": 1.0122,
+     "ring_ratio": 1.0158,
+     "large_over_noise": 0.0376,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "IC405-20261121-203056",
@@ -79,9 +100,16 @@
     "split": 0,
     "kind": "1:3",
     "sensor_correlation": 0.00027,
+    "halves": {
+     "sky_ratio": 0.9772,
+     "ring_ratio": 0.9841,
+     "large_over_noise": 0.0361,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "IC405-20261121-211523",
@@ -100,9 +128,16 @@
     "split": 0,
     "kind": "1:3",
     "sensor_correlation": 0.00047,
+    "halves": {
+     "sky_ratio": 0.9918,
+     "ring_ratio": 1.0072,
+     "large_over_noise": 0.089,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "IC405-20261122-001737",
@@ -121,9 +156,16 @@
     "split": 0,
     "kind": "1:3",
     "sensor_correlation": -0.00025,
+    "halves": {
+     "sky_ratio": 0.9749,
+     "ring_ratio": 0.9766,
+     "large_over_noise": 0.0919,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "M106-20261105-034022",
@@ -142,51 +184,16 @@
     "split": 0,
     "kind": "1:3",
     "sensor_correlation": 0.00066,
+    "halves": {
+     "sky_ratio": 0.9918,
+     "ring_ratio": 1.0051,
+     "large_over_noise": 0.0184,
+     "passed": true
+    },
     "kept": true
    }
-  ]
- },
- {
-  "name": "M31-P4-20261120-200333",
-  "target": "M31-P4",
-  "role": "train",
-  "filter": "L",
-  "seconds": 16.0,
-  "frames": 13,
-  "dither": 45.9,
-  "splits": 4,
-  "parts": [
-   "split0",
-   "split1",
-   "split2",
-   "split3"
   ],
-  "checks": [
-   {
-    "split": 0,
-    "kind": "1:1",
-    "sensor_correlation": -0.00012,
-    "kept": true
-   },
-   {
-    "split": 1,
-    "kind": "1:1",
-    "sensor_correlation": 0.00044,
-    "kept": true
-   },
-   {
-    "split": 2,
-    "kind": "1:3",
-    "sensor_correlation": 0.00022,
-    "kept": true
-   },
-   {
-    "split": 3,
-    "kind": "1:3",
-    "sensor_correlation": 7e-05,
-    "kept": true
-   }
-  ]
+  "frames_refused": []
  },
  {
   "name": "M33-20261105-001232",
@@ -208,27 +215,52 @@
     "split": 0,
     "kind": "1:1",
     "sensor_correlation": -0.0013,
+    "halves": {
+     "sky_ratio": 0.9863,
+     "ring_ratio": 0.9917,
+     "large_over_noise": 0.0362,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 1,
     "kind": "1:1",
     "sensor_correlation": -0.00056,
+    "halves": {
+     "sky_ratio": 0.9854,
+     "ring_ratio": 0.9875,
+     "large_over_noise": 0.0906,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 2,
     "kind": "1:3",
     "sensor_correlation": -0.00078,
+    "halves": {
+     "sky_ratio": 0.9867,
+     "ring_ratio": 0.9971,
+     "large_over_noise": 0.0656,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 3,
     "kind": "1:3",
     "sensor_correlation": -0.00064,
+    "halves": {
+     "sky_ratio": 0.9862,
+     "ring_ratio": 0.9908,
+     "large_over_noise": 0.0458,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "M33-20261105-015832",
@@ -250,27 +282,52 @@
     "split": 0,
     "kind": "1:1",
     "sensor_correlation": -0.00048,
+    "halves": {
+     "sky_ratio": 0.9982,
+     "ring_ratio": 1.0121,
+     "large_over_noise": 0.0546,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 1,
     "kind": "1:1",
     "sensor_correlation": -0.00042,
+    "halves": {
+     "sky_ratio": 0.9965,
+     "ring_ratio": 1.0103,
+     "large_over_noise": 0.0747,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 2,
     "kind": "1:3",
     "sensor_correlation": -0.00034,
+    "halves": {
+     "sky_ratio": 1.0018,
+     "ring_ratio": 0.9979,
+     "large_over_noise": 0.0783,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 3,
     "kind": "1:3",
     "sensor_correlation": -0.00031,
+    "halves": {
+     "sky_ratio": 1.0021,
+     "ring_ratio": 1.0388,
+     "large_over_noise": 0.053,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "M33-20261105-023051",
@@ -292,27 +349,52 @@
     "split": 0,
     "kind": "1:1",
     "sensor_correlation": -0.00016,
+    "halves": {
+     "sky_ratio": 0.9954,
+     "ring_ratio": 0.994,
+     "large_over_noise": 0.0204,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 1,
     "kind": "1:1",
     "sensor_correlation": -5e-05,
+    "halves": {
+     "sky_ratio": 0.9953,
+     "ring_ratio": 0.9818,
+     "large_over_noise": 0.027,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 2,
     "kind": "1:3",
     "sensor_correlation": -3e-05,
+    "halves": {
+     "sky_ratio": 0.9951,
+     "ring_ratio": 0.9894,
+     "large_over_noise": 0.029,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 3,
     "kind": "1:3",
     "sensor_correlation": -0.00034,
+    "halves": {
+     "sky_ratio": 0.9975,
+     "ring_ratio": 0.9935,
+     "large_over_noise": 0.0208,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "M33-20261105-030457",
@@ -334,27 +416,52 @@
     "split": 0,
     "kind": "1:1",
     "sensor_correlation": 0.00162,
+    "halves": {
+     "sky_ratio": 0.9908,
+     "ring_ratio": 0.9933,
+     "large_over_noise": 0.0764,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 1,
     "kind": "1:1",
     "sensor_correlation": -0.00039,
+    "halves": {
+     "sky_ratio": 0.9966,
+     "ring_ratio": 0.9922,
+     "large_over_noise": 0.039,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 2,
     "kind": "1:3",
     "sensor_correlation": 0.00078,
+    "halves": {
+     "sky_ratio": 0.9921,
+     "ring_ratio": 0.9944,
+     "large_over_noise": 0.0349,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 3,
     "kind": "1:3",
     "sensor_correlation": 0.00159,
+    "halves": {
+     "sky_ratio": 0.9919,
+     "ring_ratio": 1.0021,
+     "large_over_noise": 0.0343,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "NGC2174-20261120-014420",
@@ -373,7 +480,23 @@
     "split": 0,
     "kind": "1:3",
     "sensor_correlation": 5e-05,
+    "halves": {
+     "sky_ratio": 1.0068,
+     "ring_ratio": 1.0053,
+     "large_over_noise": 0.0291,
+     "passed": true
+    },
     "kept": true
+   }
+  ],
+  "frames_refused": [
+   {
+    "file": "light-0144.fits",
+    "reason": "0 stars matched"
+   },
+   {
+    "file": "light-0142.fits",
+    "reason": "0 stars matched"
    }
   ]
  },
@@ -394,9 +517,16 @@
     "split": 0,
     "kind": "1:3",
     "sensor_correlation": 0.00033,
+    "halves": {
+     "sky_ratio": 1.0077,
+     "ring_ratio": 1.0171,
+     "large_over_noise": 0.0958,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "NGC2174-20261121-024924",
@@ -415,9 +545,16 @@
     "split": 0,
     "kind": "1:3",
     "sensor_correlation": 0.00023,
+    "halves": {
+     "sky_ratio": 1.0039,
+     "ring_ratio": 1.0041,
+     "large_over_noise": 0.0425,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "NGC2174-20261121-053054",
@@ -436,9 +573,16 @@
     "split": 0,
     "kind": "1:3",
     "sensor_correlation": 0.01288,
+    "halves": {
+     "sky_ratio": 1.005,
+     "ring_ratio": 1.0128,
+     "large_over_noise": 0.0341,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "NGC281-20261104-232332",
@@ -460,27 +604,52 @@
     "split": 0,
     "kind": "1:1",
     "sensor_correlation": 0.00184,
+    "halves": {
+     "sky_ratio": 0.9893,
+     "ring_ratio": 1.0094,
+     "large_over_noise": 0.0917,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 1,
     "kind": "1:1",
     "sensor_correlation": 0.00182,
+    "halves": {
+     "sky_ratio": 0.9896,
+     "ring_ratio": 1.0071,
+     "large_over_noise": 0.095,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 2,
     "kind": "1:3",
     "sensor_correlation": 0.00117,
+    "halves": {
+     "sky_ratio": 0.9903,
+     "ring_ratio": 0.9988,
+     "large_over_noise": 0.0819,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 3,
     "kind": "1:3",
     "sensor_correlation": 0.00117,
+    "halves": {
+     "sky_ratio": 0.9895,
+     "ring_ratio": 1.0059,
+     "large_over_noise": 0.0841,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  },
  {
   "name": "NGC281-20261119-204929",
@@ -502,26 +671,51 @@
     "split": 0,
     "kind": "1:1",
     "sensor_correlation": 0.00015,
+    "halves": {
+     "sky_ratio": 1.0047,
+     "ring_ratio": 1.0071,
+     "large_over_noise": 0.0472,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 1,
     "kind": "1:1",
     "sensor_correlation": 0.00059,
+    "halves": {
+     "sky_ratio": 1.0038,
+     "ring_ratio": 1.0069,
+     "large_over_noise": 0.0173,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 2,
     "kind": "1:3",
     "sensor_correlation": 0.00073,
+    "halves": {
+     "sky_ratio": 1.0053,
+     "ring_ratio": 1.01,
+     "large_over_noise": 0.0295,
+     "passed": true
+    },
     "kept": true
    },
    {
     "split": 3,
     "kind": "1:3",
     "sensor_correlation": 0.0017,
+    "halves": {
+     "sky_ratio": 1.0008,
+     "ring_ratio": 1.0046,
+     "large_over_noise": 0.0341,
+     "passed": true
+    },
     "kept": true
    }
-  ]
+  ],
+  "frames_refused": []
  }
 ]

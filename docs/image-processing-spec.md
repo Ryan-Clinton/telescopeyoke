@@ -271,8 +271,7 @@ one-off measurements, each planted at 1 and 3 times the pixel noise):
   scatters it: carried through each frame's real alignment, it would correlate
   the two aligned halves by at most 0.0006 in six sessions, and by 0.02 in the one
   with a 6-pixel median dither and 12 frames. **Sessions with too little dither stay
-  out of training.** Independently calibrated halves, planted defects and the level
-  jumps are still to do, so stage B has not passed.
+  out of training.** What stage B has and has not shown is in section 5.1.
 
 - *Star reduction* (`--star-reduction`, off by default). Each star keeps its peak
   and loses its wings, with one gain across filters. At 2 on NGC 2174, star width
@@ -424,17 +423,26 @@ sessions are in `docs/research/denoiser-2026-11-22/`.
 held out. The rest had under 10 px of median dither or too few usable frames. So
 OIII and SII were tested with no training target of their own.
 
-**Stage B, passed for the present pairs.** The sensor pattern is at single pixels
-(gone after a 1 px shift, unchanged by removing rows and columns), the kind
-alignment scatters best. `trainset.py` now measures every pair: each half's own
-sensor pattern, moved as that half's frames really were, and how far the two then
-correlate. A pair above 0.02 is refused. All 39 pairs pass: at most 0.002 among
-those trained on, and 0.013 for the test session with a 6 px median dither.
+**Stage B: every kept pair passes its measured checks.** That is evidence of
+independence for what is measured, not proof of it. The sensor pattern is at single
+pixels (gone after a 1 px shift, unchanged by removing rows and columns), the kind
+alignment scatters best. `trainset.py` refuses a frame whose alignment residual is
+over 2 px, and measures every pair twice. First, each half's own sensor pattern,
+moved as that half's frames really were: a correlation beyond 0.02 either way, not a
+number, or under 30% overlap is refused. Second, the real halves: the variance of
+their difference against what their frames' scatter predicts, with limits fixed
+before the first measurement (blank sky 0.85 to 1.15, rings round stars 0.85 to 1.5,
+large-scale difference at most 0.5 of the fine noise). **35 pairs from 17 sessions
+pass** (24 to train, 1 to watch training, 10 to test): sky 0.975 to 1.012, rings 0.977
+to 1.039, large-scale at most 0.096, sensor correlation at most 0.013. M31-P4's
+pairs were refused (sky 0.50, large-scale 1.58), which the sensor check alone had
+passed, and 2 frames were refused for alignment.
 Planted defects, six random patterns each in three sessions, show what would reach
 a pair at 0.02: flat mottling of 0.15 to 0.37 of one frame's noise, rows of 0.29 to
 0.70, columns of 0.23 to 0.52 where detected, single pixels of 1.4 to 2.1 or not at
 all. Each kept session names its frames, masters, code, settings and software, and
-is rebuilt when any of them changes.
+is rebuilt when any of them changes; `trainset.py verify` reads every input and pair
+again against the hashes kept when it was built (1,217 files, none different).
 Removing a faulty missing-pixel test from the half-stacks left the first pair of all
 18 sessions unchanged on a one-in-sixteen pixel sample.
 
@@ -478,7 +486,9 @@ in every row), and sessions with lower error than the blur:
 | NGC 2174 SII | 1 | 80% (74%) | 1 (0) |
 
 These models were trained before the survey noise was rescaled to the noise map and
-before the pair fixes above, and have not been retrained. Next: Ha, OIII and SII
+before the pair checks above, with M31-P4 still in training, and have not been
+retrained. Survey frames within 2 degrees of a held-out field are now refused (the
+nearest used was 2.03 degrees away). Next: Ha, OIII and SII
 from more independent targets, dithered by at least 10 px, before changing the network.
 
 ## 6. Later models
@@ -588,14 +598,17 @@ accepted on it.
 | Our own frames | Ours |
 | Hubble via MAST | Sourced: mostly CC0 with acknowledgement requested; some collections excepted, such as the Digitized Sky Survey (non-commercial) |
 | Legacy Surveys | Sourced: acknowledgement text and a credit line on images; no licence for the data found |
-| IGAPS (IPHAS merged with UVEX) | Read 22 Nov 2026 at <http://www.star.ucl.ac.uk/IGAPS/>, hosted by UCL: 527,736 frames, 3.0 TB. Use this and not `iphas.org`, whose pages now carry unrelated gambling links and whose image paths return 404. No licence for the images found on the pages read; the public-domain note covers the gallery. Private training only until the survey team answers |
-| IPHAS | Read 21 Nov 2026. 1.6 TB of processed images, downloadable by run and CCD. Its pages state **no licence**, and ask for citation and an acknowledgement in papers. The ING's policy says its data enter "the public domain" after one year. Enough for private training; **any release of weights trained on it waits for the providers' written answer** |
+| IGAPS (IPHAS merged with UVEX) | Read 22 Nov 2026 at <http://www.star.ucl.ac.uk/IGAPS/>, hosted by UCL: 527,736 frames, 3.0 TB. Use this and not `iphas.org`, whose pages now carry unrelated gambling links and whose image paths return 404. No formal licence for the images was found; the observatory's policy puts data in the public domain after a year, and the team asks for citation and acknowledgement. Used, with those |
+| Seti Astro public data (Franklin Marek) | <https://www.setiastro.com/publicdata>: "This data is here to be used", including testing tools, credit appreciated. The site does not mention model training, and its footer reserves rights. Used with credit by the owner's decision (22 Nov 2026); its IC 405 set is never used |
+| AstrophotoMarket free datasets | Each listing states CC0, CC BY or CC BY-NC, and forbids redistributing the source FITS. Only those licences are used, the FITS are never shared, and each author is credited |
 | VPHAS+, DECaPS2 | Public releases; **reuse terms not established. Check before downloading** |
 | GraXpert models | Reported CC BY-NC-SA on a third-party mirror, unconfirmed; application GPL-3. Not used |
 | StarNet | Free; licence not established. Not used |
 | AstroBackyard samples | No licence stated. Not used without the author's agreement |
 | RC Astro | Paid; automated use terms not read. Not used |
 
+There is one training set and everything in it must be publishable: the owner will
+not keep a private model on data a public one could not use, and the model stays free.
 Any dataset goes in a manifest with its source, licence, date and acknowledgement
 text. Models trained from it name that manifest.
 

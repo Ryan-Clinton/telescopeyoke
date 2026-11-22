@@ -2,6 +2,7 @@
 """Training pairs for the denoiser (docs/image-processing-spec.md, section 5).
 
     ./trainset.py build --out DIR     every 183M session with 8 or more frames
+    ./trainset.py verify --out DIR    read everything again against the hashes kept
 
 Each session's frames are lined up once and split into independent halves.
 The two sides of a pair share the sky and not the noise, which is what a
@@ -31,6 +32,12 @@ MIN_DITHER = 10.0                   # pixels: below this a sensor pattern surviv
 SPLITS = ("1:1", "1:1", "1:3", "1:3")
 MAX_SHARED = 0.02                   # correlation a sensor pattern may add to a pair; refused above it
 FILES = ("x", "y", "s", "valid")
+# What an independent pair looks like, fixed before these were first measured:
+# the variance of the halves' difference against what their frames' scatter predicts.
+SKY_RATIO = (0.85, 1.15)
+RING_RATIO = (0.85, 1.5)            # seeing changes star edges, so a little more is allowed
+MOST_LARGE = 0.5                    # large-scale difference (cloud, gradient), in units of the fine noise
+MIN_OVERLAP = 0.3
 
 
 def role(target):
@@ -73,6 +80,22 @@ def manifest(session):
                          "max_shared": MAX_SHARED},
             "software": {"python": platform.python_version(), "numpy": np.__version__, "scipy": scipy.__version__,
                          "astropy": astropy.__version__}}
+
+
+def file_hash(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def input_paths(session):
+    lights = session_lights(session)
+    _, header = stacking.load_light(lights[0])
+    masters = getattr(stacking.Calibration(float(header["EXPTIME"]), int(float(header["GAIN"])), header), "masters", {})
+    folder = stacking.library(str(header.get("INSTRUME")))
+    return [*lights, *(folder / name for name in masters.values())]
 
 
 def fingerprint(record):
@@ -159,6 +182,8 @@ def shared_by(sensor, first, second, places, work):
     use = ua & ub
     use[:80] = use[-80:] = False
     use[:, :80] = use[:, -80:] = False
+    if use.mean() < MIN_OVERLAP:
+        return float("nan")
     together = float(np.mean((pa[use] - pa[use].mean()) * (pb[use] - pb[use].mean())))
     grain = float(ga[use].var())
     return together / max(max(together, 0) + grain, 1e-9)
@@ -190,14 +215,21 @@ def register(session, work):
         n = len(chosen)
         done = list(pool.map(stacking.register_file, [f["path"] for f in chosen], [exposure] * n, [gain] * n,
                              [reference] * n, [str(work)] * n, range(n), [shape] * n, [1.0] * n))
-    good = [i for i, (info, _) in enumerate(done) if stacking.lined_up(info["matched"])]
+    good, refused = [], []
+    for i, (info, _) in enumerate(done):
+        if not stacking.lined_up(info["matched"]):
+            refused.append({"file": Path(chosen[i]["path"]).name, "reason": f"{info['matched']} stars matched"})
+        elif info["residual"] is None or info["residual"] > stacking.FLIP_RESIDUAL:
+            refused.append({"file": Path(chosen[i]["path"]).name, "reason": f"alignment residual {info['residual']}"})
+        else:
+            good.append(i)
     if len(good) < 8:
         raise ValueError(f"only {len(good)} frames lined up")
     shifts = np.array([done[i][0]["shift"] for i in good])
     dither = float(np.median(np.hypot(*(shifts - np.median(shifts, axis=0)).T)))
     store = np.memmap(work, dtype=np.float32, mode="r", shape=shape)
     places = [(done[i][0]["rotation"], done[i][0]["shift"], done[i][0]["flipped"]) for i in good]
-    return store, good, [chosen[i]["fwhm"] for i in good], header, dither, places, [chosen[i]["path"] for i in good]
+    return store, good, [chosen[i]["fwhm"] for i in good], header, dither, places, [chosen[i]["path"] for i in good], refused
 
 
 def split(fwhm, kind, rng):
@@ -228,19 +260,47 @@ def mean_of(store, ids, levels):
     return mean, scatter, count
 
 
+def halves_agree(x, y, var_x, var_y, valid):
+    """The real halves: does their difference hold only the noise their own
+    frames predict? Sky common to both cancels in it. Too little means shared
+    noise; too much means cloud, a gradient or a registration error."""
+    middle = (x + y) / 2
+    fine = middle - ndimage.median_filter(middle, size=9)
+    noise = 1.4826 * np.median(np.abs(fine[valid][::3]))
+    star = fine > 5 * noise
+    sky = valid & ~ndimage.binary_dilation(star, iterations=6)
+    ring = valid & ndimage.binary_dilation(star, iterations=9) & ~ndimage.binary_dilation(star, iterations=4)
+    gap = np.nan_to_num(x - y)
+    gap = gap - np.median(gap[valid])
+    detail = gap - ndimage.gaussian_filter(gap, 8)
+    expected = var_x + var_y
+    ratio = lambda mask: float(np.mean(detail[mask] ** 2) / max(np.mean(expected[mask]), 1e-9))
+    large = ndimage.gaussian_filter(gap, 32)[valid]
+    out = {"sky_ratio": round(ratio(sky), 4), "ring_ratio": round(ratio(ring), 4),
+           "large_over_noise": round(float(np.std(large) / max(np.mean(expected[sky]) ** .5, 1e-9)), 4)}
+    out["passed"] = bool(SKY_RATIO[0] <= out["sky_ratio"] <= SKY_RATIO[1]
+                         and RING_RATIO[0] <= out["ring_ratio"] <= RING_RATIO[1]
+                         and out["large_over_noise"] <= MOST_LARGE)
+    return out
+
+
 def pair(store, frames, fwhm, kind, seed, levels, sensor, places, work):
     rng = np.random.default_rng(seed)
     first, second = split(fwhm, kind, rng)
     shared = shared_by(sensor, first, second, places, work)
-    if shared > MAX_SHARED:
-        return None, shared
+    if not np.isfinite(shared) or abs(shared) > MAX_SHARED:
+        return None, shared, None
     ids_x, ids_y = [frames[i] for i in first], [frames[i] for i in second]
     x, scatter, nx = mean_of(store, ids_x, levels)
-    y, _, ny = mean_of(store, ids_y, levels)
+    y, scatter_y, ny = mean_of(store, ids_y, levels)
     valid = (nx >= max(1, 0.6 * len(ids_x))) & (ny >= max(1, 0.6 * len(ids_y)))
     valid = ndimage.binary_erosion(valid, iterations=8, border_value=0)
     if valid.mean() < 0.3:
         raise ValueError("too little of the field is shared")
+    agree = halves_agree(x, y, np.nan_to_num(scatter ** 2 / np.maximum(nx - 1, 1)),
+                         np.nan_to_num(scatter_y ** 2 / np.maximum(ny - 1, 1)), valid)
+    if not agree["passed"]:
+        return None, shared, agree
     x, y = x - np.nanmedian(x[valid]), y - np.nanmedian(y[valid])
     x, y = np.nan_to_num(x), np.nan_to_num(y)
     fine = (x - ndimage.gaussian_filter(x, 2))[valid][::3]
@@ -249,7 +309,7 @@ def pair(store, frames, fwhm, kind, seed, levels, sensor, places, work):
         s = ndimage.median_filter(np.nan_to_num(scatter) / np.sqrt(np.maximum(nx, 1)), size=5) / unit
     else:
         s = np.ones_like(x)
-    return (x / unit, y / unit, np.maximum(s, 0.5).astype(np.float32), valid, unit, len(ids_x), len(ids_y)), shared
+    return (x / unit, y / unit, np.maximum(s, 0.5).astype(np.float32), valid, unit, len(ids_x), len(ids_y)), shared, agree
 
 
 def build(out, say=print):
@@ -274,7 +334,7 @@ def build(out, say=print):
         work = out / "registering.dat"
         sensor_file = out / "sensor.dat"
         try:
-            store, frames, fwhm, header, dither, places, paths = register(session, work)
+            store, frames, fwhm, header, dither, places, paths, refused = register(session, work)
             if role(session.parent.name) == "train" and dither < MIN_DITHER:
                 raise ValueError(f"median dither {dither:.0f} px is too small")
             sample = store[frames, ::4, ::4, 0]
@@ -290,9 +350,9 @@ def build(out, say=print):
             kinds = SPLITS if role(session.parent.name) == "train" else ("1:3",)
             parts, measured = [], []
             for k, kind in enumerate(kinds):
-                made_pair, shared = pair(store, frames, fwhm, kind, 1000 + k, levels, sensor, places, work)
+                made_pair, shared, agree = pair(store, frames, fwhm, kind, 1000 + k, levels, sensor, places, work)
                 measured.append({"split": k, "kind": kind, "sensor_correlation": round(shared, 5),
-                                 "kept": made_pair is not None})
+                                 "halves": agree, "kept": made_pair is not None})
                 if made_pair is None:
                     continue
                 x, y, s, valid, unit, nx, ny = made_pair
@@ -301,33 +361,59 @@ def build(out, say=print):
                 for label, data in zip(FILES, (x, y, s, valid)):
                     np.save(part / f"{label}.npy", data)
                 (part / "meta.json").write_text(json.dumps({"kind": kind, "unit": unit, "input": nx, "target": ny,
-                                                            "sensor_correlation": shared}))
+                                                            "sensor_correlation": shared, "halves": agree}))
                 parts.append(part.name)
             if not parts:
-                raise ValueError(f"every pair shares a sensor pattern ({measured[0]['sensor_correlation']:.3f} or more)")
+                raise ValueError(f"no pair passed: {json.dumps(measured)}")
             record = {"name": name, "target": session.parent.name, "role": role(session.parent.name),
                       "filter": str(header.get("FILTER")), "seconds": float(header["EXPTIME"]),
                       "frames": len(frames), "dither": round(dither, 1), "splits": len(parts), "parts": parts,
-                      "checks": measured, "fingerprint": wanted, "manifest": inputs}
+                      "checks": measured, "frames_refused": refused, "fingerprint": wanted, "manifest": inputs,
+                      "hashes": {**{os.path.relpath(p, config.DATA): file_hash(p) for p in input_paths(session)},
+                                 **{f"{name}/{part}/{k}.npy": file_hash(folder / part / f"{k}.npy")
+                                    for part in parts for k in FILES}}}
             (folder / "done.json").write_text(json.dumps(record))
             made.append(record)
-            say(json.dumps({k: v for k, v in record.items() if k not in ("manifest", "fingerprint")}))
+            say(json.dumps({k: v for k, v in record.items() if k not in ("manifest", "fingerprint", "hashes")}))
         except Exception as problem:
             shutil.rmtree(folder, ignore_errors=True)
             say(f"{name} left out: {problem}")
         finally:
             work.unlink(missing_ok=True)
             sensor_file.unlink(missing_ok=True)
-    summary = [{k: v for k, v in r.items() if k != "manifest"} for r in made]
+    summary = [{k: v for k, v in r.items() if k not in ("manifest", "hashes")} for r in made]
     (out / "index.json").write_text(json.dumps(summary, indent=1))
     say(f"{len(made)} sessions in {out}")
 
 
+def verify(out, say=print):
+    """Read every input and pair again and compare with the hashes kept when
+    they were built. Slow, so it is its own command; a build compares names,
+    sizes, times and the code."""
+    out, wrong, checked = Path(out), [], 0
+    for done in sorted(out.glob("*/done.json")):
+        hashes = json.loads(done.read_text()).get("hashes")
+        if not hashes:
+            wrong.append(f"{done.parent.name}: no hashes kept")
+            continue
+        for name, value in hashes.items():
+            path = out / name if name.startswith(done.parent.name + "/") else config.DATA / name
+            checked += 1
+            if not path.exists() or file_hash(path) != value:
+                wrong.append(name)
+    say(f"{checked} files checked, {len(wrong)} different or missing")
+    for name in wrong:
+        say(f"  {name}")
+    return not wrong
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("what", choices=["build"])
+    ap.add_argument("what", choices=["build", "verify"])
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
+    if args.what == "verify":
+        raise SystemExit(0 if verify(args.out) else 1)
     build(args.out)
 
 

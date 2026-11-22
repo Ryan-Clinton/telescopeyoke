@@ -105,9 +105,9 @@ frames, one with IGAPS Ha nebulae added, judged on 10 sessions of two targets ne
 trained on (NGC 2174, IC 405). At equal grain they keep 70 to 88% of a faint planted
 filament where a blur keeps 92 to 98%, and their error is about 1% lower against the
 10% required. With stars protected, star width still moves 6 to 7% in the worst
-session. ✅ All 39 training and test pairs pass the sensor-pattern check (under 0.02).
+session. ✅ 35 pairs from 17 sessions pass the measured sensor-pattern and half-stack checks; one session was refused by them.
 ✅ The camera's level jumps, seen with the cap on, did not change four normal stacks.
-Not yet retrained since the survey noise and pair fixes. Two targets are too few to
+Not yet retrained since the survey noise fix and those checks. Two targets are too few to
 say how it generalises. Details: `docs/image-processing-spec.md`, section 5.1.
 
 ### Narrowband pictures, 21 November 2026
