@@ -44,6 +44,7 @@ import process
 import stacking
 
 ROOT = Path(__file__).parent
+SHORT_STACK = (5, 40)   # frames: a stack this short is clipped about its median
 COMBINED = "combined"   # folder under frames/NAME/ for a picture made from several sessions
 MIN_MATCHED = stacking.LINED_UP   # stars a frame must share with the reference to count as lined up
 
@@ -210,7 +211,9 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
                 # Now that the average and its spread are known, leave out
                 # whatever strays too far from them.
                 final = stacking.Stack(plane)
-                final.reference = (first.mean(), first.spread())
+                used = [bool(w) for w in weights]
+                final.reference = (stacking.robust_reference(registered, n, used)
+                                   if SHORT_STACK[0] <= sum(used) <= SHORT_STACK[1] else (first.mean(), first.spread()))
                 for i in range(n):
                     if weights[i]:
                         final.add(registered[i].astype(np.float32), weights[i])

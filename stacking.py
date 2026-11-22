@@ -1045,6 +1045,23 @@ def register(rgb, lum, stars, reference):
 TRIM_SHARE = 0.9   # an edge row or column reached by fewer of the frames than this is trimmed off
 TRIM_MOST = 0.15   # but never more than this share of a side
 
+def robust_reference(frames, n, used):
+    """The median of the frames used and a spread from their median deviation,
+    for a short stack. With the mean and spread of all the frames, a lone
+    outlier inflates its own spread: its distance can never pass sqrt(N - 1)
+    spreads, so at 4 spreads up to 17 frames kept every satellite trail
+    (22 November 2026). The factor is the usual small-sample correction."""
+    rows = np.flatnonzero(used)
+    shape = frames[0].shape
+    middle, spread = np.empty(shape, np.float32), np.empty(shape, np.float32)
+    for start in range(0, shape[0], 128):
+        block = np.stack([np.asarray(frames[i][start:start + 128], np.float32) for i in rows])
+        centre = np.nanmedian(block, axis=0)
+        middle[start:start + 128] = centre
+        spread[start:start + 128] = 1.4826 * (1 + 5 / (len(rows) - 1)) * np.nanmedian(np.abs(block - centre), axis=0)
+    return np.nan_to_num(middle), np.nan_to_num(spread)
+
+
 class Stack:
     """A running average that leaves out anything that does not belong: a
     satellite or aircraft trail, a cosmic ray, the empty edge of a shifted

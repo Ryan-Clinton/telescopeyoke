@@ -400,7 +400,7 @@ def contrast_gain(nebula, where):
 
 
 def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=False, contrast=True,
-                      star_power=1.0, sharpen=0):
+                      star_power=1.0, sharpen=0, ghs=False):
     """The narrowband picture made in the light's own units: sky off, star
     widths matched, the palette mixed, and one stretch at the very end.
     Nebula and stars are balanced apart: the nebula on its own strength, so
@@ -492,20 +492,21 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
     colour, light, noise = colour.astype(np.float32), light.astype(np.float32), np.float32(noise)
     white_shown = np.float32(np.percentile(ndimage.gaussian_filter(light / noise, 0.8), 99.995)
                              if white_level is None else white_level / noise)
-    picture = process.display(colour / noise, saturation=saturation, whole=False, light=light / noise, white=white_shown)
+    picture = process.display(colour / noise, saturation=saturation, whole=False, light=light / noise, white=white_shown,
+                              ghs=ghs)
     plain = np.mean([sharp_nebula[b] / scale[b] for b in channels], axis=0) / noise
     gain = contrast_gain(plain, bright_part).astype(np.float32) if contrast else None
     if gain is not None:
         picture = picture * gain[..., None]
     if grain:
         say("  grain in the clear sky: " + ", ".join(f"{b} x{v:.2f}" for b, v in grain.items()))
-    done = {"method": "linear", "picture_version": PICTURE_VERSION, "local_contrast": contrast, "star_power": star_power, "sharpen_steps": sharpen, "clear_sky_share": round(open_sky, 3),
+    done = {"method": "linear", "picture_version": PICTURE_VERSION, "local_contrast": contrast, "star_power": star_power, "sharpen_steps": sharpen, "ghs": ghs, "clear_sky_share": round(open_sky, 3),
             "sky_map": open_sky >= MIN_CLEAR, "sky_guide": guide, "grain_kept": grain, "nebula_scale": {b: round(v, 2) for b, v in scale.items()},
             "star_flux": {b: round(v, 2) for b, v in flux.items()},
             "star_width_px": {b: round(v, 2) for b, v in before.items() if v},
             "star_width_matched_px": {b: round(v, 2) for b, v in after.items() if v}}
     return picture, {"colour": colour, "light": light, "gain": gain, "noise": float(noise), "white": float(white_shown),
-                     "saturation": float(saturation)}, done
+                     "saturation": float(saturation), "ghs": ghs}, done
 
 
 def narrowband(rgb, channels, saturation, background=2):
@@ -535,7 +536,8 @@ def narrowband(rgb, channels, saturation, background=2):
 
 
 def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette="LRGB", background=2,
-            stretched=False, quiet=False, contrast=True, linear_background=None, star_power=1.0, sharpen=0):
+            stretched=False, quiet=False, contrast=True, linear_background=None, star_power=1.0, sharpen=0,
+            ghs=False):
     """The colour picture (8-bit RGB array) and what went into it."""
     channels, base, detail_band = PALETTES[palette]
     needed = tuple(dict.fromkeys(channels))
@@ -586,7 +588,7 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
     else:
         colour, linear, done = linear_narrowband(rgb, channels, saturation,
                                                  background if linear_background is None else linear_background,
-                                                 say, quiet, contrast, star_power, sharpen)
+                                                 say, quiet, contrast, star_power, sharpen, ghs)
         used.update(done)
     if detail_band in images:
         grey = np.where(valid, images[detail_band], 0)
@@ -648,6 +650,8 @@ def main():
     ap.add_argument("--no-contrast", action="store_true", help="narrowband: leave out local contrast, for comparison")
     ap.add_argument("--star-reduction", type=bounded(float, 1.0, 3.0), default=1.0, metavar="POWER",
                     help="narrowband: smaller stars, keeping their peaks and colours (1 is none, 2 is about 25%% narrower, 3 the most)")
+    ap.add_argument("--ghs", action="store_true",
+                    help="narrowband: a generalised hyperbolic stretch, contrast aimed at the faint nebula")
     ap.add_argument("--sharpen", type=bounded(int, 0, 5), default=0, metavar="STEPS",
                     help="narrowband: Richardson-Lucy steps on the nebula's brightness (0 is none, 5 the most; 3 was safe on NGC 2174)")
     ap.add_argument("--any-coverage", action="store_true",
@@ -705,6 +709,7 @@ def write_linear(path, linear, palette):
     head["NOISE"] = (linear["noise"], "sky noise the picture is scaled by")
     head["WHITE"] = (linear["white"], "level shown white, in units of NOISE")
     head["SATUR"] = (linear["saturation"], "colour strength")
+    head["GHS"] = (bool(linear.get("ghs")), "generalised hyperbolic stretch")
     for key, value in zip(("CROPTOP", "CROPBOT", "CROPLEFT", "CROPRITE"), linear["crop"]):
         head[key] = value
     parts = [fits.PrimaryHDU(np.moveaxis(linear["colour"].astype(np.float32), 2, 0), head),
@@ -726,7 +731,8 @@ def picture_from(path):
         gain = hdus["GAIN"].data.astype(np.float32) if "GAIN" in hdus else None
     # Single precision, as they were when the picture was made.
     noise, white = np.float32(head["NOISE"]), np.float32(head["WHITE"])
-    picture = process.display(colour / noise, saturation=head["SATUR"], whole=False, light=light / noise, white=white)
+    picture = process.display(colour / noise, saturation=head["SATUR"], whole=False, light=light / noise, white=white,
+                              ghs=bool(head.get("GHS")))
     if gain is not None:
         picture = picture * gain[..., None]
     picture[~valid] = 0
@@ -759,7 +765,7 @@ def run(args):
                             palette=args.palette, background=background,
                             stretched=args.stretched, quiet=args.noise_reduction,
                             contrast=not args.no_contrast, linear_background=process.sky_for(args.name),
-                            star_power=args.star_reduction, sharpen=args.sharpen)
+                            star_power=args.star_reduction, sharpen=args.sharpen, ghs=args.ghs)
     suffix = "colour" if args.palette == "LRGB" else args.palette
     # A comparison keeps its own files, so it never replaces the picture.
     if args.stretched:
@@ -772,6 +778,8 @@ def run(args):
         suffix += f"-stars{args.star_reduction:g}"
     if args.sharpen:
         suffix += f"-sharp{args.sharpen}"
+    if args.ghs:
+        suffix += "-ghs"
     if args.saturation:
         suffix += f"-sat{args.saturation:g}"
     # A picture of part of the data, or of filters barely overlapping, is not
@@ -786,7 +794,7 @@ def run(args):
     Image.fromarray(picture).save(out, quality=93)
     print(f"saved {out}")
     settings = {"saturation": saturation, "background": background, "stretched": args.stretched,
-                "noise_reduction": args.noise_reduction, "local_contrast": not args.no_contrast, "star_power": args.star_reduction, "sharpen_steps": args.sharpen, "night": args.night,
+                "noise_reduction": args.noise_reduction, "local_contrast": not args.no_contrast, "star_power": args.star_reduction, "ghs": args.ghs, "sharpen_steps": args.sharpen, "night": args.night,
                 "any_coverage": args.any_coverage}
     if linear_mix:
         settings.update(green_kept=GREEN_KEPT, linear_oiii=LINEAR_OIII, star_tint=STAR_TINT, edge_trim=EDGE_TRIM,

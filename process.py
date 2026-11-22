@@ -53,7 +53,34 @@ def remove_sky(rgb, background=2):
     return rgb
 
 
-def display(rgb, detail=0.8, colour=5.0, stretch=None, saturation=1.25, whole=True, light=None, white=None):
+FAINT = 6.0          # a glow this many times the sky's grain above the sky...
+FAINT_SHOWN = 0.22   # ...is shown at this share of full brightness
+
+
+GHS_FOCUS = 3.0      # times the sky's grain: where the hyperbolic stretch puts its contrast
+GHS_SHOWN = 0.18     # ...and how bright that level comes out (IC 405, 22 November 2026)
+
+
+def hyperbolic(faint, shown=GHS_SHOWN, spread=1.0, top=0.9):
+    """A generalised hyperbolic curve as (x, y) points on 0 to 1: its slope is
+    highest at `faint`, falls away hyperbolically either side, and is constant
+    above `top`, so contrast goes to the faint nebula and stars keep their
+    shape. How sharp the peak is, is found so that `faint` comes out at
+    `shown`. Payne and Cranfield's form, integrated numerically."""
+    x = np.concatenate(([0.0], np.geomspace(1e-7, 1.0, 20001)))
+    def curve(strength):
+        slope = (1 + strength * spread * np.abs(np.minimum(x, top) - faint)) ** (-(1 + spread) / spread)
+        y = np.concatenate(([0.0], np.cumsum((slope[1:] + slope[:-1]) / 2 * np.diff(x))))
+        return y / y[-1]
+    low, high = 1.0, 1e8
+    for _ in range(50):
+        middle = (low * high) ** 0.5
+        low, high = (middle, high) if np.interp(faint, x, curve(middle)) < shown else (low, middle)
+    return x, curve(low)
+
+
+def display(rgb, detail=0.8, colour=5.0, stretch=None, saturation=1.25, whole=True, light=None, white=None,
+            ghs=False):
     """A linear picture in units of the sky noise, stretched for the eye: 8-bit
     RGB, or with `whole` false the same scale unrounded. `light`, when given,
     is the brightness to use in place of the colour's own, and `white`, when
@@ -72,9 +99,12 @@ def display(rgb, detail=0.8, colour=5.0, stretch=None, saturation=1.25, whole=Tr
     black = -2.0 * softness
     white = np.percentile(brightness, 99.995) if white is None else white
     scaled = np.clip((rgb - black) / (white - black), 0, 1)
-    if stretch is None:
-        stretch = auto_stretch((FAINT - black) / (white - black))
-    out = np.arcsinh(stretch * scaled) / np.arcsinh(stretch)
+    if ghs:
+        out = np.interp(scaled, *hyperbolic((GHS_FOCUS - black) / (white - black))).astype(np.float32)
+    else:
+        if stretch is None:
+            stretch = auto_stretch((FAINT - black) / (white - black))
+        out = np.arcsinh(stretch * scaled) / np.arcsinh(stretch)
     # A little more colour, pushed out from each pixel's own grey level.
     grey = out.mean(axis=2, keepdims=True)
     out = grey + saturation * (out - grey)
@@ -204,8 +234,6 @@ def mark(image, rgb, name, say=print):
 
 
 FILLS = 0.6          # of the view's height: an object wider than this leaves no sky to fit
-FAINT = 6.0          # a glow this many times the sky's grain above the sky...
-FAINT_SHOWN = 0.22   # ...is shown at this share of full brightness
 
 
 def auto_stretch(faint, shown=FAINT_SHOWN, lowest=10.0, highest=3000.0):

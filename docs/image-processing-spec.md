@@ -223,6 +223,23 @@ one-off measurements, each planted at 1 and 3 times the pixel noise):
   5.08 px. Siril's wFWHM weighting was sharper (4.90 px) but shallower (912 stars).
   **No meaningful difference**, so stacking is not where the next gain is. Only
   registration and stacking were compared, on one target.
+- *NL-Bayes noise reduction* (Siril's, with its DA3D, VST and SOS variants). On planted
+  filaments on NGC 2174 it beat a blur at equal grain, keeping 71 to 87% of a filament
+  at 1 times the noise against 56 to 72%. Against an independent stack of other nights
+  of IC 405 in Ha, its overall error equalled the best blur (76.7% of the input's
+  against 76.8%), with about 6% less residual at middle scales. Below the 10% this
+  spec asks for, so not added.
+- *Rejection in short stacks.* Clipping at 4 spreads about the mean of all frames can
+  never remove a lone outlier from 17 frames or fewer, as it inflates its own spread:
+  planted trails stayed at full strength. Stacks of 5 to 40 frames now clip about the
+  median, with a spread from the median deviation. Planted trails 15 times the noise
+  went, and the noise stayed within 1% of ideal at 5 to 30 frames (at 5 frames a trail
+  of 15 times the noise still leaves about a third). On 12 real IC 405 frames, 177
+  pixels changed by over 5 counts and the grain did not change. Longer stacks are as before.
+- *Generalised hyperbolic stretch* (`--ghs`, off by default). Contrast is aimed at 3
+  times the sky's grain, and a constant slope above 90% of white keeps the stars' shape.
+  On IC 405 it shows more of the outer nebula than the arcsinh stretch. It also lifts
+  whatever gradient is left, so a corner glow shows more.
 - *Level jumps between frames.* Fitting each frame against the session's median
   and the flat separates sky (which follows the flat) from a fixed offset. In the
   NGC 2174 Ha session, seven frames have offsets of +5 to +34 counts that do not
