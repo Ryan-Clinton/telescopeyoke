@@ -642,6 +642,25 @@ def camera_of(header):
     return camera, (round(float(focal)) if focal else None)
 
 
+def one_setting(paths, say=print):
+    """The frames of a session at one set of settings, those holding the most
+    light, the others named. A stack calibrates every frame by the first
+    one's header: M34's session of 19 October 2026 changed gain part way."""
+    groups = {}
+    for path in paths:
+        head = fits.getheader(path, 1)
+        key = (str(head.get("FILTER") or ""), float(head.get("EXPTIME") or 0), head.get("GAIN"), head.get("OFFSET"),
+               head.get("XBINNING")) + camera_of(head)
+        groups.setdefault(key, []).append(path)
+    if len(groups) < 2:
+        return list(paths)
+    best = max(groups, key=lambda k: (k[1] * len(groups[k]), len(groups[k])))
+    left = sum(len(v) for k, v in groups.items() if k != best)
+    say(f"  settings changed during this session: using {len(groups[best])} frames ({best[0] or 'no filter'}, "
+        f"{best[1]:g} s, gain {best[2]}, offset {best[3]}), leaving out {left} at other settings")
+    return groups[best]
+
+
 def on_target(paths, say=print):
     """Science leaves out frames taken while a cooled camera's sensor was
     more than 0.5 °C off its target (TY_ONTGT false, altair.py), saying how
@@ -1247,8 +1266,9 @@ def save_only(mosaic, header, folder, index):
 
 
 def write_stack(path, rgb, header):
-    fits.PrimaryHDU(np.moveaxis(rgb, 2, 0).astype(np.float32), fits.Header(header)).writeto(
-        path, overwrite=True)
+    # A (value, comment) card: a Header made straight from a dict refuses it.
+    cards = fits.Header([(k, *v) if isinstance(v, tuple) else (k, v) for k, v in header.items()])
+    fits.PrimaryHDU(np.moveaxis(rgb, 2, 0).astype(np.float32), cards).writeto(path, overwrite=True)
 
 
 def append_log(session, entry):

@@ -8,13 +8,14 @@ written here. HOST is a name from ~/.ssh/config (which says the address,
 port and user). The SSH login there must be a Unix-like shell with rsync:
 on the Windows desktop it is Ubuntu under WSL, reached through a port
 forwarded from Windows. It needs Python with the project's packages: its
-~/telescopeyoke/.venv, or python3.
+~/telescopeyoke-laptop/venv, ~/telescopeyoke/.venv, or python3.
 
 Everything goes under ~/telescopeyoke-laptop/remote on HOST, apart from any
 checkout of the project there, so nothing being worked on is touched. Raw
 frames already sent are not sent again (rsync), so a second stack of the
 same sessions starts at once.
 """
+import json
 import shlex
 import subprocess
 import sys
@@ -27,7 +28,7 @@ import stacking
 
 ROOT = Path(__file__).parent
 PLACE = "telescopeyoke-laptop/remote"     # under HOST's home folder
-PYTHONS = ("telescopeyoke/.venv/bin/python", "python3")
+PYTHONS = ("telescopeyoke-laptop/venv/bin/python", "telescopeyoke/.venv/bin/python", "python3")
 BACK = ("final.fits", "final.jpg", "restack.json")
 
 
@@ -54,7 +55,28 @@ def python_on(host):
         if found.returncode == 0 and found.stdout.strip():
             return found.stdout.strip()
     raise interface.Refusal("REMOTE_FAILED", f"{host} has no Python with astropy, scipy, numpy and Pillow: "
-                            "make ~/telescopeyoke/.venv there, or install them for python3.")
+                            "make ~/telescopeyoke-laptop/venv there, or install them for python3.")
+
+
+def equipment():
+    """This rig's camera and light-path settings as TOML, and nothing else: no
+    site, no keys, no serial numbers. Without them the copy there took the
+    183M for a camera with scaled darks, used no dark, and still labelled the
+    stack calibrated (22 November 2026)."""
+    given = config._read(config.FILE) if config.FILE.exists() else {}
+    lines = []
+
+    def table(name, values):
+        lines.append(f"[{name}]")
+        lines.extend(f"{k} = {json.dumps(v)}" for k, v in values.items() if not isinstance(v, dict) and k != "serial"
+                     and v is not None)
+        for k, v in values.items():
+            if isinstance(v, dict):
+                table(f"{name}.{k}", v)
+    for section in ("scope", "camera", "cameras", "trains"):
+        if section in given:
+            table(section, given[section])
+    return "\n".join(lines) + "\n"
 
 
 def restack(host, sessions, options, say=print):
@@ -81,21 +103,31 @@ def restack(host, sessions, options, say=print):
     for s in sessions:
         rsync([f"{s}/"], f"{host}:{there(s)}/", "--include=light-*.fits", "--include=*.json",
               "--include=*.jsonl", "--exclude=*")
+    ssh(host, f"cat > {PLACE}/code/config.toml", input=equipment(), text=True, check=True)
+    camera = config.camera_name()
     if stacking.CALIBRATION.is_dir():
-        rsync([f"{stacking.CALIBRATION}/"], f"{host}:{PLACE}/data/calibration/")
+        masters = "calibration" if stacking.CALIBRATION.parent == config.DATA else f"{camera}/calibration"
+        ssh(host, f"mkdir -p {PLACE}/data/{masters}", check=True)
+        rsync([f"{stacking.CALIBRATION}/"], f"{host}:{PLACE}/data/{masters}/")
     runner = python if python == "python3" else f"~/{python}"
     # The copy there has no git history: say which commit it is, so its
     # records' provenance names the code that really ran.
     sha, changed = records.commit()
     code = f"TY_CODE_COMMIT={sha}{'+changed' if changed else ''} " if sha else ""
-    command = (f"cd ~/{PLACE}/code && TY_DATA=~/{PLACE}/data TY_NO_WATCH=1 {code}{runner} restack.py "
+    command = (f"cd ~/{PLACE}/code && TY_DATA=~/{PLACE}/data TY_CAMERA={shlex.quote(camera)} TY_NO_WATCH=1 {code}{runner} restack.py "
                + " ".join(shlex.quote(f"../{there(s)[len(PLACE) + 1:]}") for s in sessions)
                + "".join(f" {shlex.quote(o)}" for o in options))
     say(f"stacking on {host}")
     ran = ssh(host, command)
     if ran.returncode:
         raise interface.Refusal("REMOTE_FAILED", f"restack.py failed on {host} (exit {ran.returncode}).")
-    folder = sessions[0].parent / "combined" if len(sessions) > 1 else sessions[0]
+    folder = sessions[0]
+    if len(sessions) > 1:     # the folder restack.py chose there: one filter's goes to combined-FILTER
+        heads = [stacking.load_light(stacking.one_setting(stacking.on_target(sorted(s.glob("light-*.fits")),
+                                                                             lambda *_: None),
+                                                          lambda *_: None)[0])[1] for s in sessions]
+        bands = {str(h.get("FILTER")) for h in heads if h.get("FILTER")}
+        folder = sessions[0].parent / ("combined" + (f"-{bands.pop()}" if len(bands) == 1 else ""))
     folder.mkdir(exist_ok=True)
     rsync([f"{host}:{there(folder)}/{name}" for name in BACK], f"{folder}/", "--ignore-missing-args")
     web = config.DATA / "web"
