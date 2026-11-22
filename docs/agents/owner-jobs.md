@@ -101,6 +101,10 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
       43.78°, Dec axis 40.42°, east of the meridian. So not only near 309°.
       Garbled answers to read-only questions are now asked again, so a
       repeat no longer ends a run: note how often they come.
+    - 20:00 UT, the likelier cause: the laptop's Wi-Fi (2.4 GHz, -71 dBm,
+      29 Mb/s) was carrying the live stream's 8 Mb/s upload, and pings to
+      the router took up to 1.7 s (2 ms at 17:44). The mount's commands share
+      that radio. Test by day with the stream on and off as well as by place.
 
     By day, with nothing else asking the mount anything: GoTos into and
     through RA axis 300-318°, at Dec axis 105° and 134° and between, from
