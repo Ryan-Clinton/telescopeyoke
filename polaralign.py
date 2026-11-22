@@ -114,14 +114,16 @@ SHOWS_PX = 2.0
 FRAME_S = 16.0           # the patrol's frames; --exposure for longer ones
 LEARN_WITHIN = 2 * 3600     # seconds: turns are matched to a measurement no older than this
 # How the two bolts of each pair are told apart, and what a positive number
-# of turns means. Both are named as seen standing behind the mount, on its
-# south side, facing north; "in" is clockwise, as a screw tightens.
+# of turns means. Left and right are as seen by the person at the bolts, in
+# front of the mount on its north side, facing south (the owner's turns kept
+# in the bolt history were made and named that way); the rear altitude bolt
+# is the south one, the front the north one. "In" is clockwise.
 PAIRS = {"azimuth": ("left", "right"), "altitude": ("rear", "front")}
-VIEW = "standing behind the mount, on its south side, facing north"
+VIEW = "standing in front of the mount at the bolts, facing south"
 # The same azimuth bolts named by the side of the mount they are on, for
-# words read by people not standing there (the live stream): seen from
-# behind the mount facing north, the left one is on the west side.
-SIDES = {"left": "west-side", "right": "east-side", "rear": "rear", "front": "front"}
+# words read by people not standing there (the live stream): facing south,
+# the left one is on the east side.
+SIDES = {"left": "east-side", "right": "west-side", "rear": "rear", "front": "front"}
 # Where a polar alignment has got, for the live stream
 # (streamlook.polar_stream_state): which picture is being taken, each
 # round's error tonight, the newest advice and the drift it causes, or why
@@ -806,7 +808,7 @@ def run(args):
                 f" (Small: it drifts a {exposure:g} s frame about {pixels:g} px, under a star's own size "
                 f"({SHOWS_PX:g}); longer frames show it more.)")
         print("  " + result["guidance"][axis]["words"])
-    print(f"  (Left and right, rear and front: {VIEW}.)")
+    print(f"  (Left and right: {VIEW}. Rear is the south bolt, front the north one.)")
     broadcast(result, exposure)
     kept = dict(result)
     kept.pop("guidance")

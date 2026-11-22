@@ -91,9 +91,9 @@ alignment screen with a drawing of each bolt as a clock face, says:
   marks moved the axis 2.8°.
 - **Otherwise: which bolt to turn in, which to ease out first, and about how
   many turns**, once this mount's bolts have been learned. The two bolts of
-  each pair are called left and right (azimuth) and rear and front
-  (altitude), as seen standing behind the mount, on its south side, facing
-  north. In is clockwise.
+  each pair are called left and right (azimuth), as seen standing in front
+  of the mount at the bolts, on its north side, facing south, and rear
+  (south) and front (north) (altitude). In is clockwise.
 - **Nothing is assumed about the bolts.** Which one moves the axis which
   way, and how far a turn moves it, differ between mounts, so until it has
   been seen on this one the advice is to turn the left (or rear) bolt in a
