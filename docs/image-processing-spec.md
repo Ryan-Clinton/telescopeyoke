@@ -259,6 +259,18 @@ one-off measurements, each planted at 1 and 3 times the pixel noise):
   darks were not kept. Stage B needs a run of capped darks with each frame's level
   logged, and should level each frame before pairing frames for training.
 
+- *Pattern fixed to the sensor (stage B pilot, 22 November 2026).* In calibrated
+  frames held in sensor coordinates, two independent halves of a session share a
+  single-pixel pattern (correlation 0.19 to 0.46 in the seven sessions measured,
+  gone after a 1-pixel shift), about 0.5 to 0.9 of one frame's noise. Rows, columns,
+  outliers and the flat do not explain it; the master dark tracks it weakly with
+  the opposite sign (-0.10 to -0.23), and its cause is not established. Dithering
+  scatters it: carried through each frame's real alignment, it would correlate
+  the two aligned halves by at most 0.0006 in six sessions, and by 0.02 in the one
+  with a 6-pixel median dither and 12 frames. **Sessions with too little dither stay
+  out of training.** Independently calibrated halves, planted defects and the level
+  jumps are still to do, so stage B has not passed.
+
 - *Star reduction* (`--star-reduction`, off by default). Each star keeps its peak
   and loses its wings, with one gain across filters. At 2 on NGC 2174, star width
   went from 7.1 to 5.3 px and all 1042 measured stars stayed. Measured before the
@@ -504,6 +516,7 @@ accepted on it.
 | Our own frames | Ours |
 | Hubble via MAST | Sourced: mostly CC0 with acknowledgement requested; some collections excepted, such as the Digitized Sky Survey (non-commercial) |
 | Legacy Surveys | Sourced: acknowledgement text and a credit line on images; no licence for the data found |
+| IGAPS (IPHAS merged with UVEX) | Read 22 Nov 2026 at <http://www.star.ucl.ac.uk/IGAPS/>, hosted by UCL: 527,736 frames, 3.0 TB. Use this and not `iphas.org`, whose pages now carry unrelated gambling links and whose image paths return 404. No licence for the images found on the pages read; the public-domain note covers the gallery. Private training only until the survey team answers |
 | IPHAS | Read 21 Nov 2026. 1.6 TB of processed images, downloadable by run and CCD. Its pages state **no licence**, and ask for citation and an acknowledgement in papers. The ING's policy says its data enter "the public domain" after one year. Enough for private training; **any release of weights trained on it waits for the providers' written answer** |
 | VPHAS+, DECaPS2 | Public releases; **reuse terms not established. Check before downloading** |
 | GraXpert models | Reported CC BY-NC-SA on a third-party mirror, unconfirmed; application GPL-3. Not used |
