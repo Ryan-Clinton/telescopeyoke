@@ -156,9 +156,12 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
   - **`./mount.py dectest`** measures the Dec drive on the main camera:
     the drift, then 12 pulses each way with a plate solve after each
     (moves at most 2', needs a clear sky: 20 of 24 solves or more).
-  - **truehome waits**: findhome turned down its own answer twice on
-    20 November (the two runs 0.4-0.5° apart, home out by about 1-1.6° in
-    RA and 1.9-2.3° in Dec); the Dec sticking is the likely cause.
+  - **True home set 22 November 2026** (it had been 8.0° out in Dec, 1.04°
+    in RA). The findhome answers turned down before it came from about 0.3°
+    of RA slack: the same places read that far apart by the way they were
+    reached. findhome now reaches every place moving west, and agreed with
+    itself to 0.04° over 12 places. The joints are still to be marked at
+    home, or the next switch-on by eye brings the error back.
   The jobs owed are [owner-jobs.md](owner-jobs.md).
 - **Latitude bolts**: the rear bolt in lowers the axis, the front bolt in
   raises it (13 October 2026); the old rear bolt rises then jerks lower.
