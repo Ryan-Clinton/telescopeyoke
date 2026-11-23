@@ -6,6 +6,7 @@ filaments, then were scored at equal grain against a blur and an independent sta
 
 - `prep.py` makes the inputs, `run.py` and `siril.py` run the tools, `score.py` scores them.
 - `sites.py` makes copies of the real stacks for `colour.py` to turn into comparison pictures.
+- `background.py` compares background removal; `background-scores.json` holds its results.
 - `scores.json` holds every measurement; `sites.json` holds the strength that gave half the grain.
 
 `prep.py` and `score.py` read the held-out pairs under `~/telescopeyoke-laptop/training/pairs3`

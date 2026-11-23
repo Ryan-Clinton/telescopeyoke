@@ -32,8 +32,27 @@ blur's error at that grain; lower is better.
   only, never for photometry, depth or discovery.**
 - On the GTX 1080 a 4.5-megapixel stack took about 50 s in GraXpert and 9 s in Cosmic Clarity.
 
-These are ten stacks from one rig, with each tool's model as released. Background removal,
-stretching, star removal, sharpening and colour calibration have not been compared yet.
+These are ten stacks from one rig, with each tool's model as released. Stretching, star
+removal, sharpening and colour calibration have not been compared yet.
+
+### Background removal
+
+Known gradients (a tilt, a bowl, a corner glow) and four faint glows were added to copies of
+five aligned IC 405 and NGC 2174 stacks. "Left" is how much of the gradient stayed, so lower
+is better; "glow kept" should be near 1. Medians of the five, with the worst stack in brackets.
+
+| Method | Tilt left | Bowl left | Corner left | Glow kept |
+|---|---|---|---|---|
+| **Our sky model** | **0.11 (0.23)** | **0.17 (0.31)** | 0.19 (0.27) | **0.88 (0.85)** |
+| GraXpert AI, smoothing 0.5 | 0.13 (0.26) | 0.18 (0.28) | **0.10 (0.26)** | 0.86 (0.56) |
+| GraXpert AI, smoothing 0.1 | 0.14 (0.28) | 0.19 (0.28) | 0.11 (0.26) | 0.85 (0.42) |
+| Siril polynomial, degree 2 | 0.09 (0.62) | 0.30 (0.72) | 0.62 (0.67) | 0.90 (0.88) |
+| Siril RBF, defaults | 0.30 (0.38) | 0.41 (0.64) | 0.44 (1.03) | 0.57 (0.43) |
+
+**Our sky model stays.** GraXpert is about twice as good on a corner glow, but on IC 405's
+SII it took off 44 to 58% of a faint glow where ours took 15%, and losing nebula is the worse
+fault. Our model is also told where the nebula is from the Ha stack, which the tools are not.
+Siril ran with automatic samples; placing them by hand might do better but is not automation.
 
 ## What each stage becomes
 
@@ -42,7 +61,7 @@ stretching, star removal, sharpening and colour calibration have not been compar
 | Calibration, alignment, science stack | `stacking.py` | **Keep.** Photometry and discovery depend on its checks and records | Stays |
 | Star-core clipping fault | Open | Fix in `stacking.py`, comparing with Siril's rejection | To do |
 | Noise reduction | Optional in pictures | **GraXpert**, on each filter's linear stack | Built |
-| Background and gradients | Our sky model | GraXpert AI, then Siril, against ours | To test |
+| Background and gradients | Our sky model | **Keep ours**: no tool did as well overall | Tested |
 | Star removal | Plain code | Cosmic Clarity Dark Star; StarNet if its terms allow | To test |
 | Sharpening and deconvolution | Our steps | GraXpert and Cosmic Clarity, with star and nebula checks | To test |
 | Stretch | Ours, with a GHS option | Siril GHS | To test |
