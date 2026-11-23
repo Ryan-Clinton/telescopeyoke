@@ -339,7 +339,8 @@ def feed(torch, pairs, survey, repeats, workers):
                        json.dumps(survey.drawn if survey else {}))
 
     return iter(DataLoader(Stream(), batch_size=None, num_workers=workers, pin_memory=True,
-                           persistent_workers=workers > 0, prefetch_factor=4 if workers else None))
+                           persistent_workers=workers > 0, prefetch_factor=4 if workers else None,
+                           multiprocessing_context="fork" if workers else None))
 
 
 def loss_of(net, x, y, s, mask):
