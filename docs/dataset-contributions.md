@@ -25,8 +25,9 @@ Keep the meaning; adjust the wording to the site's voice only if every promise s
 >
 > I'm building a noise-reduction model as part of TelescopeYoke, a free, open-source
 > project for ordinary telescopes. It is an experiment and is not finished: so far it
-> does not beat a plain blur at keeping the faintest detail, and it won't be released
-> until it does. It is judged on real data, on not inventing detail and not losing it.
+> does not beat a plain blur at keeping the faintest detail. It will only be released if
+> it keeps faint detail at least as well as a plain blur on data it has never seen, and
+> it may never get there.
 >
 > To learn what real noise looks like, it needs real unstacked frames from different
 > cameras, skies and targets. If you'd be happy for yours to help, this form tells me
@@ -35,8 +36,9 @@ Keep the meaning; adjust the wording to the site's voice only if every promise s
 > **What I'd use your data for:** training and testing the model, and publishing the
 > trained model for anyone to use for free.
 >
-> **What I won't do:** reshare your files, publish your pictures, sell your data, or
-> charge for the model.
+> **What I won't do:** reshare your files, sell your data, charge for the model, or publish
+> your pictures. The one exception is small example crops, and only if you tick the box
+> allowing them.
 >
 > **Credit:** you'll be named in the model's credits, under the name you choose. You
 > can ask to be left out of the credits instead.
@@ -44,25 +46,31 @@ Keep the meaning; adjust the wording to the site's voice only if every promise s
 > **You keep your data.** You still own it, and this permission doesn't stop you doing
 > anything with it.
 >
-> **Changing your mind:** you can withdraw at any time using your reference number. I
-> will delete my copy and leave your data out of every future version. A version already
-> released can't have your data taken back out of it, so please only offer it if you're
-> comfortable with that.
+> **Changing your mind:** you can withdraw at any time using your reference number. I will
+> stop using your data straight away, delete your raw files, processed frames and training
+> pairs, never release an unreleased model that was trained on them, and train future
+> versions without them. A version already released can't have your data taken back out of
+> it, so please only offer it if you're comfortable with that.
 >
 > **Most useful:** raw subs (Ha, OIII or SII from a mono camera are ideal), taken over two
 > or more nights and dithered by at least 10 pixels, with matching darks and flats or
 > masters. Around 40 frames per target and filter is a good minimum, and whole datasets
 > are very welcome. Other data is still welcome too; I'll tell you if I can't use it.
 >
-> **How it gets here:** directly from your computer to mine with
-> [Syncthing](https://syncthing.net/), a free, open-source file transfer tool. There's no
-> cloud storage or size limit, it's encrypted, and if your connection drops it carries on
-> where it stopped. Put the data in its own folder and share only that folder as "Send
-> Only", so my computer can't change anything on yours. Once it has arrived I'll tell you,
-> and you can remove the share.
+> **How it gets here:** with [Syncthing](https://syncthing.net/), a free, open-source file
+> transfer tool. There's no cloud storage, transfers are encrypted, and if your connection
+> drops it carries on where it stopped. We'll agree the size first so it fits on my disk.
+> Put the data in its own folder and share only that folder as "Send Only", so my computer
+> can't change anything on yours. Once it has arrived I'll tell you, and you can remove the
+> share.
 >
-> **Please don't offer** data you rented, bought or were given by someone else, or
-> anything from a remote service whose terms don't allow this.
+> Connections are normally direct, so our two computers can see each other's IP address.
+> If that isn't possible, an encrypted relay may carry the transfer: it can't read your
+> files, but it can see your IP address, Syncthing Device ID and how much is sent.
+> Syncthing's discovery servers can also link your Device ID to your IP address.
+>
+> **Please only offer data you took yourself.** Don't offer data you rented, bought or were
+> given by someone else.
 
 ## Form fields
 
@@ -84,6 +92,7 @@ Keep the meaning; adjust the wording to the site's voice only if every promise s
 | Dithered | yes | yes / no / not sure |
 | Calibration included | yes | darks, flats, bias or dark-flats, none (multiple choice) |
 | Anything else | no | text |
+| You may show small example crops from my data, with credit | no | tick box, off by default |
 
 A Device ID can be left blank and sent later. Never ask for a password to the data.
 
@@ -91,8 +100,7 @@ A Device ID can be left blank and sent later. Never ask for a password to the da
 
 Neither may be ticked in advance, and the form cannot be sent without both:
 
-1. "This is my own data. I took it, or I have the right to give this permission, and it
-   isn't rented or licensed from someone else on terms that forbid this."
+1. "I took this data myself, and nobody else's terms stop me giving this permission."
 2. "I agree to it being used to train and test a free, published noise-reduction model,
    as described on this page. I understand I can withdraw from future versions, but not
    from a version already released."
@@ -109,9 +117,14 @@ a while to be looked at.
   each version kept unchanged, so what someone agreed to can always be shown.
 - `status`: `new`, `checked`, `accepted`, `refused` or `withdrawn`.
 
-Keep submissions outside the web root, on the server, append-only or with a change
-history. No public page or API may list them. The owner's sessions fetch them over SSH.
-Do not keep IP addresses longer than rate limiting needs.
+Keep submissions outside the web root, on the server. No public page or API may list them.
+The owner's sessions fetch them over SSH. Do not keep IP addresses longer than rate
+limiting needs.
+
+Keep personal details (credit name if left out of the credits, contact, Device ID) **apart
+from the permission record**, joined only by the reference number, so they can be deleted
+while the record stays. The permission record may be append-only; the personal details
+must not be.
 
 ## Sending the data
 
@@ -132,6 +145,12 @@ A small form taking the reference number and the contact given. Matching request
 `withdrawn` with the date. Don't reveal whether a reference exists; always show the same
 "received" message. If a contact doesn't match, the owner handles it by hand.
 
+On withdrawal the data is blocked from new training at once. Raw files, calibrated and
+aligned frames, caches and training pairs are deleted. Every unreleased model or checkpoint
+that used it is marked never to be released, and later versions are trained without it.
+Contact details and the Device ID are deleted within 30 days, leaving only the reference,
+dates, terms version and the fact of withdrawal.
+
 ## Security and spam
 
 - Validate on the server: lengths, Device ID format, https links only, no scripts stored
@@ -142,12 +161,26 @@ A small form taking the reference number and the contact given. Matching request
 - The form never fetches, previews or follows the submitted link.
 - HTTPS only, with CSRF protection if the site's setup needs it.
 
-## Privacy page
+## Privacy notice
 
-Update `privacy.md` in the same change: what is collected, why (permission and credit),
-that contact details are never published, how long they are kept (while the data is in
-use, and removed on request after withdrawal, keeping only the minimum record that
-permission was given and withdrawn), and how to ask for deletion.
+The site has no privacy page, so this goes on the form's page, in place of "What's kept".
+UK GDPR may or may not reach a hobby project like this; the page follows it either way.
+
+> **Your details.** Ryan Clinton is responsible for the personal details collected here and
+> can be reached at the site's contact address. I collect your name or handle, your contact,
+> your Syncthing Device ID if you give one, and what you tell me about your data, to arrange
+> the transfer, credit you and keep a record of your permission. The lawful basis is your
+> consent. They're stored on my own server and computer and aren't sold or given to anyone,
+> apart from what Syncthing's relays and discovery servers can see, as explained above. Your
+> credit name is published unless you opt out; your contact and Device ID never are.
+>
+> I keep your contact and Device ID while your data is in use. If your offer is refused or
+> you withdraw, I delete them within 30 days and keep only your reference number, the dates,
+> the wording you agreed to and the outcome, as a record of what permission was given.
+>
+> You can ask to see, correct or delete your details, restrict or object to their use, or get
+> a copy, and you can withdraw consent at any time. You can complain to the Information
+> Commissioner's Office at [ico.org.uk](https://ico.org.uk/make-a-complaint/).
 
 ## After it is built
 
@@ -156,3 +189,13 @@ publicly linked. Fetching and checking the data is separate work on the telescop
 side: each set goes in its own folder on the desktop's D: drive, only FITS or XISF files
 are kept, nothing from a submission is ever run, and fields within 5° of the held-out
 test targets stay out of training.
+
+Further rules for files from strangers:
+
+- Open them only in the training environment on the desktop, never on the telescope's
+  laptop, with limits on memory, file size and unpacked size, and a size limit for each
+  contributor.
+- Check headers against the pixels, and plate-solve at least one frame. The 5° rule uses
+  each field's solved footprint, not its target name.
+- Every raw file, derived file and model manifest carries the contributor's reference.
+- Keep raw frames until the pair method has settled, unless the person withdraws.

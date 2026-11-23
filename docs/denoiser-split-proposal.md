@@ -1,8 +1,9 @@
 # Proposal: the denoiser as its own project, and its data request page
 
-Status: **a proposal for independent review. Nothing has been moved.** Written 23 November
-2026 against commit `6b9633a`. The request page below is live but unlisted, and no offer
-has been submitted through it.
+Status: **reviewed once; nothing has been moved.** Written 23 November 2026 against commit
+`6b9633a`. The request page below is the version live and unlisted, and no offer has been
+submitted through it. Its corrected wording is in `docs/dataset-contributions.md` and is
+not live yet.
 
 Reviewers: please judge each decision below against the repository and the page, and say
 what is wrong, missing or risky. The project has no tests and no CI by the owner's choice
@@ -116,6 +117,43 @@ trained model and data credits need different licence terms.
 15. How should we check a claim like "my own data" beyond the permission box?
 16. Raw frames may be deleted once pairs are built, keeping the permission record, file list
     and checksums. Is that compatible with reproducibility and with the promises above?
+
+## Outcome of the first review
+
+**The split.** The shape stands: the files listed above move, `stacking.py` stays, and the
+new project pins TelescopeYoke. It would not start until the owner names it and says go.
+
+- **Boundary.** The new project may use only `stacking`'s calibration, star, alignment and
+  worker functions, and `restack.select`. `trainset.py` reads `config.DATA` for the owner's
+  frames, which becomes an explicit input folder. `desktopqueue.py` gets its own small
+  atomic JSON writer in place of `records`.
+- **Traceability.** Each pair set and model records the denoiser and TelescopeYoke commits,
+  dataset identifiers and hashes, calibration source, permissions, training settings, source
+  weights, seeds, software versions, evaluation data and original checkpoint.
+- **Running jobs.** The desktop's queue keeps its current paths. New experiments move across
+  only once their commands, inputs and environment work from the new repository.
+
+**Release eligibility.** No model is released from the sources as they stand.
+
+| Source | Rule for a released model |
+|---|---|
+| CC0, CC BY | Eligible, with credit |
+| CC BY-NC | Only in a model released on non-commercial terms; kept out of any other |
+| Seti Astro masters | With credit, after the author has been asked |
+| MDW (rights statement unclear) | Excluded until its team confirms. No model has used it |
+| Contributed data | Only under the permission on the form |
+
+The `plus-market` and `all` models used AstrophotoMarket stacks, some of them CC BY-NC, so
+they fall under the non-commercial rule. Creative Commons' own guidance on this is
+deliberately cautious, and the law on training and model weights is unsettled.
+
+**Page.** The brief now covers withdrawal through derived files and unreleased models,
+a full privacy notice, personal details stored so they can be deleted, accurate Syncthing
+wording, a single ownership rule, optional example crops, a defined release condition, and
+stricter handling of untrusted files.
+
+**Still the owner's decision.** Whether contributed frames may ever be published as part of
+the training set. Until then the page keeps its promise not to reshare them.
 
 ## Not yet done or verified
 
