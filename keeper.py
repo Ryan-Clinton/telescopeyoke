@@ -120,6 +120,7 @@ def serve(cam, say=print):
     import altair
     calls = threading.Lock()        # one camera call at a time, from any borrower
     stopping = threading.Event()
+    streaming = threading.Event()   # a video holds `calls`; plain values may still be read
     status = {"ready": False, "sensor_c": None, "target_c": getattr(cam, "target", None)}
 
     def stream(link, gain, seconds, count, roi, timeout):
@@ -133,6 +134,7 @@ def serve(cam, say=print):
             cam.gain = gain
             frames = cam.video(seconds, count, roi=roi, timeout=timeout)
             checked = time.monotonic()
+            streaming.set()
             try:
                 for frame in frames:
                     link.send((True, frame))
@@ -142,6 +144,7 @@ def serve(cam, say=print):
                         status.update(sensor_c=cam.temperature(), level_c=getattr(cam, "level", None))
                         write_state(**status, pid=os.getpid())
             finally:
+                streaming.clear()
                 frames.close()      # puts the camera back in its single-frame mode
 
     def handle(link):
@@ -160,6 +163,10 @@ def serve(cam, say=print):
                     elif kind == "stop":
                         stopping.set()
                         answer = "stopping"
+                    elif kind == "get" and streaming.is_set():
+                        # The video's borrower asks the camera's name while
+                        # the video holds `calls`: waiting would stop both.
+                        answer = getattr(cam, request[1])
                     elif kind == "get":
                         with calls:
                             answer = getattr(cam, request[1])

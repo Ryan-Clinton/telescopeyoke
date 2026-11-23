@@ -198,9 +198,13 @@ its job comes off this list.
 34. **Mono Moon video.** `./ty moon` and `./ty lucky` failed under the keeper
     on 22 November (`TypeError: cannot pickle 'generator' object`). From
     23 November the keeper streams the frames one at a time, its cooler checks
-    going on between them. **Not yet run on the camera**: cap on, keeper
-    started, a short `./ty lucky capture`, watching the sensor hold -5 °C and
-    a normal frame working afterwards. Record it in `docs/validation.md`.
+    going on between them. 23 November, cap on, through the SV241 at USB 3:
+    120 and 300 frames (512 x 512, 10 ms, 50 a second) came through the
+    keeper, and a normal frame worked after. **Longer videos stall**: "no video
+    frame within 5 s" after 1 to 284 frames in all six 600-frame runs with the
+    keeper stopped, and once through it, with no USB error in the kernel log.
+    So not the keeper. Next: the same run with the camera's lead straight
+    into the laptop, to tell the hub from the camera. Not yet held at -5 °C.
     **`./ty moon`'s centring** also lost the Moon that night, probably on the
     test moves in Dec (job 2): the disc had to be centred by `--aim-off`.
 35. **Mineral Moon from B, G and R** (`./ty lucky capture --filter`, stack
