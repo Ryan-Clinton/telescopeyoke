@@ -8,7 +8,7 @@ goes live. Nothing is posted to any community until then.
 ## What it must do
 
 - Explain plainly what the data is for, before anyone offers anything.
-- Collect **permission and a link**, never the files. Contributors keep their data on
+- Collect **permission and a link or a way to arrange transfer**, never the files. Contributors keep their data on
   their own Drive, Dropbox, Mega or similar.
 - Keep a record of exactly what each person agreed to, and when.
 - Let someone withdraw without needing an account.
@@ -48,9 +48,13 @@ Keep the meaning; adjust the wording to the site's voice only if every promise s
 > released can't have your data taken back out of it, so please only offer it if you're
 > comfortable with that.
 >
-> **Most useful:** raw subs of one target from two or more nights, dithered by at least
-> 10 pixels, in Ha, OIII or SII from a mono camera, with matching darks and flats. Around
-> 40 or more frames is ideal. Other data is still welcome; I'll tell you if I can't use it.
+> **You don't need to upload everything.** The most useful thing is one small pack, usually
+> about 2 to 5 GB: around 40 to 80 raw subs of one target in one filter (Ha, OIII or SII,
+> from a mono camera), taken over two or more nights and dithered by at least 10 pixels,
+> plus the matching master dark and master flat. Zipping them usually makes them smaller.
+> If you have more and would like to share it, say so in the form and we'll sort out an easy
+> way that doesn't need cloud storage. Other data is still welcome; I'll tell you if I
+> can't use it.
 >
 > **Please don't offer** data you rented, bought or were given by someone else, or
 > anything from a remote service whose terms don't allow this.
@@ -62,7 +66,8 @@ Keep the meaning; adjust the wording to the site's voice only if every promise s
 | Name or handle for the credit | yes | text |
 | Leave me out of the credits | no | tick box |
 | Contact (email or Discord handle) | yes | text, kept private |
-| Link to the data | yes | https URL |
+| Link to the data | no | https URL; a small pack fits in a free Drive or Dropbox-style share |
+| I have more, or can't upload it: contact me about another way | no | tick box |
 | Target(s) | yes | text |
 | Camera | yes | text |
 | Telescope and focal length | yes | text |
@@ -74,6 +79,7 @@ Keep the meaning; adjust the wording to the site's voice only if every promise s
 | Calibration included | yes | darks, flats, bias or dark-flats, none (multiple choice) |
 | Anything else | no | text |
 
+The form needs either a link or the "another way" box ticked.
 Never ask for a password to the data: tell people to use a share link instead.
 
 ### Required permission tick boxes
