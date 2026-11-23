@@ -66,6 +66,7 @@ COMMANDS = {
     "corners.py": ("hardware", {"--file": "read_only"}, {}),   # the camera only; with --file nothing
     "compare.py": ("local_write", {}, {}),
     "console.py": ("hardware", {}, {}),             # its server runs the other scripts on request
+    "darktest.py": ("hardware", {}, {"--plan": "read_only"}),   # the camera and its cooler; keeps no frames
     "desktopqueue.py": ("local_write", {"status": "read_only", "report": "read_only"}, {}),   # runs only the jobs added to it, on the desktop
     "depth.py": ("local_write", {}, {}),
     "difference.py": ("local_write", {}, {}),
