@@ -6,6 +6,10 @@ not accepted and no picture uses it.** Stages D and E are not built. It covers t
 TelescopeYoke does not, and how to train our own small neural networks for
 the parts where training helps.
 
+**Direction changed on 23 November 2026.** TelescopeYoke now automates the best
+freely available tools instead of training its own models (`docs/free-tools-plan.md`).
+Section 1 is current. The sections on training models are a record of what was tried.
+
 How far to trust each statement:
 
 - **Measured**: read from this repository, its data or the computers, on the date above.
@@ -14,9 +18,9 @@ How far to trust each statement:
 
 ## 1. Goal and limits
 
-**Goal.** From a night's calibrated stacks, make a finished colour picture of
-a nebula automatically, as close as we can to what a skilled person gets from
-the paid tools, without buying them.
+**Goal.** From a night's calibrated stacks, make the best finished colour picture
+we can automatically, by driving freely available tools. Anyone who wants
+TelescopeYoke to handle their image processing downloads those tools themselves.
 
 **Limits, which no stage may relax:**
 
@@ -28,14 +32,14 @@ the paid tools, without buying them.
 2. **Labelled.** Every picture records which steps and which model version
    made it, in its JSON beside the JPEG, through `records.write` with its
    schema and stamp. A picture using a trained model says so.
-3. **Fail back.** A missing model, GPU or desktop gives today's picture and
-   says why. An imaging night never waits on any of this.
-4. **The night is not touched.** Training and inference run on the desktop,
-   never on the laptop while the camera or mount is in use.
-5. **No test suite.** A model is accepted by measuring it on real held-out
-   frames (section 7), as a result recorded in `docs/validation.md`.
-6. **No other tool's weights.** We train our own. GraXpert's models are
-   reported as CC BY-NC-SA and StarNet's terms were not established (section 9).
+3. **Fail back.** A missing tool, GPU or desktop gives today's picture and
+   says which tool to download and why. An imaging night never waits on any of this.
+4. **The night is not touched.** Heavy processing never runs on the laptop while
+   the camera or mount is in use.
+5. **No test suite.** A tool is accepted for a stage by measuring it on real
+   held-out stacks, as a result recorded in `docs/validation.md`.
+6. **The tools stay the user's own.** TelescopeYoke calls them as separate programs
+   and never bundles them or their models. GraXpert's denoise model is CC BY-NC-SA 4.0.
 
 ## 2. Where we are (measured)
 

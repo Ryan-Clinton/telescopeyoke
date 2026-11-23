@@ -3,9 +3,10 @@
 Status: **a plan, measured for noise reduction only. Nothing in the pipeline has changed.**
 Written 23 November 2026. `final.fits` and every other kept stack were only read.
 
-The goal stays the one in `docs/image-processing-spec.md`: a finished colour picture close
-to what a skilled person gets from the paid tools, without buying them. Training our own
-network is no longer part of the way there.
+**The aim:** TelescopeYoke does the best possible job of automating the freely available
+tools. Anyone who wants it to handle their image processing downloads those tools
+themselves; everything else in TelescopeYoke works without them. Training our own network
+is no longer part of the way there.
 
 ## What was measured
 
