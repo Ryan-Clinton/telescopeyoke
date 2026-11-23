@@ -66,7 +66,7 @@ Keep the meaning; adjust the wording to the site's voice only if every promise s
 | Name or handle for the credit | yes | text |
 | Leave me out of the credits | no | tick box |
 | Contact (email or Discord handle) | yes | text, kept private |
-| Link to the data | no | https URL; a small pack fits in a free Drive or Dropbox-style share |
+| Link to the data | no | https URL; a small pack fits in a free Google Drive (15 GB) |
 | I have more, or can't upload it: contact me about another way | no | tick box |
 | Target(s) | yes | text |
 | Camera | yes | text |
