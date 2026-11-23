@@ -70,6 +70,7 @@ COMMANDS = {
     "depth.py": ("local_write", {}, {}),
     "difference.py": ("local_write", {}, {}),
     "doctor.py": ("read_only", {}, {}),
+    "externalpairs.py": ("local_write", {}, {}),   # training pairs from another observer's subs; uses no camera
     "focus.py": ("hardware", {}, DRY),
     "focuser.py": ("hardware", {}, {}),
     "forced.py": ("local_write", {}, {}),

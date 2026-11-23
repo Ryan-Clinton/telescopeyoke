@@ -2,6 +2,7 @@
 """Train and judge our own denoiser, on the desktop's GPU (spec, section 5).
 
     ./denoiser.py train --data DIR --out MODEL.pt [--steps N] [--survey DIR]
+        [--masters DIR ...] [--repeats DIR]
     ./denoiser.py judge --data DIR --model MODEL.pt
 
 Pictures only: nothing here touches a raw frame, a stack or a measurement.
@@ -11,6 +12,8 @@ import argparse
 import hashlib
 import inspect
 import json
+import re
+import struct
 import time
 from pathlib import Path
 
@@ -92,8 +95,8 @@ class Pairs:
             out = [np.rot90(a, turn) for a in [*out, mask]]
             return [(a[:, ::-1] if flip else a).copy() for a in out]
 
-    def batch(self, torch, device):
-        rows = [self.crop() for _ in range(BATCH)]
+    def batch(self, torch, device, count=BATCH):
+        rows = [self.crop() for _ in range(count)]
         return [torch.from_numpy(np.stack([r[k] for r in rows])[:, None]).to(device) for k in range(4)]
 
 
@@ -124,32 +127,146 @@ def survey_tile(path):
     return ((d - np.median(d)) / span).astype(np.float32)
 
 
+def read_image(path):
+    """One plane of a linear master, FITS or uncompressed XISF: (image, filter card)."""
+    path = Path(path)
+    if path.suffix.lower() != ".xisf":
+        from astropy.io import fits
+        with fits.open(path, memmap=False) as h:
+            hdu = next(x for x in h if x.data is not None)
+            if hdu.data.ndim != 2:
+                return None, None
+            return hdu.data.astype(np.float32), str(hdu.header.get("FILTER", ""))
+    with open(path, "rb") as f:
+        if f.read(8) != b"XISF0100":
+            return None, None
+        size = struct.unpack("<I", f.read(4))[0]
+        f.read(4)
+        head = f.read(size).decode("utf8", "ignore")
+        image = re.search(r"<Image\b[^>]*>", head).group(0)
+        field = lambda k: (re.search(rf'{k}="([^"]*)"', image) or [0, ""])[1]
+        where = field("location").split(":")
+        width, height, planes = map(int, field("geometry").split(":"))
+        if planes != 1 or field("sampleFormat") != "Float32" or field("compression") or where[0] != "attachment":
+            return None, None
+        f.seek(int(where[1]))
+        data = np.frombuffer(f.read(width * height * 4), "<f4").reshape(height, width).copy()
+    card = re.search(r'FITSKeyword name="FILTER" value="([^"]*)"', head)
+    return data, card.group(1).strip("' ") if card else ""
+
+
+def band_of(path, card):
+    """Ha, OIII or SII from the filter card, or the file's name when the card says nothing."""
+    names = {"h": "Ha", "ha": "Ha", "o": "OIII", "oiii": "OIII", "s": "SII", "sii": "SII"}
+    if card.strip().lower() in names:
+        return names[card.strip().lower()]
+    if card.strip().lower() not in ("", "nofilter"):
+        return None
+    found = re.findall(r"(?<![a-z])(ha|oiii|sii)(?![a-z])", Path(path).stem.lower())
+    return names[found[-1]] if len(set(found)) == 1 else None
+
+
+def master_tile(path):
+    """A narrowband master with its stars brought to about our width in pixels
+    (4), as (tile with its nebula spanning 1, band, key), or None."""
+    import stacking
+    data, card = read_image(path)
+    band = band_of(path, card or "")
+    if data is None or band is None:
+        return None
+    data = np.nan_to_num(data)[64:-64, 64:-64]
+    data = data - np.median(data)
+    spread = 1.4826 * np.median(np.abs(data[::4, ::4]))
+    stars = stacking.find_stars(data / max(spread, 1e-9) + 10, 200)
+    stars = stars[stars[:, 4] > 0.6] if len(stars) else stars
+    if len(stars) < 20:
+        return None
+    width = float(np.median(stars[:, 3]))
+    if width > 4:
+        data = ndimage.zoom(ndimage.gaussian_filter(data, 0.4 * width / 4), 4 / width, order=1)
+    else:
+        data = ndimage.gaussian_filter(data, np.sqrt(16 - width ** 2) / 2.355)
+    data = data - np.median(data)
+    noise = 1.4826 * np.median(np.abs((data - ndimage.gaussian_filter(data, 2))[::2, ::2]))
+    coarse = ndimage.median_filter(data[::8, ::8], 25)
+    span = float(np.percentile(coarse, 98) - np.percentile(coarse, 2))
+    if span / max(noise, 1e-9) < 1.8 or min(data.shape) < 2 * CROP:
+        return None
+    return (data / span).astype(np.float32), band, str(Path(path).parent.name) + "/" + band, round(width, 2)
+
+
 class Survey:
     """IGAPS Ha nebulae at our scale and sharpness, with our own real noise:
     the difference of a kept pair. The clean picture is the target."""
 
-    def __init__(self, folder, data, seed=1):
+    def __init__(self, folder, data, seed=1, masters=()):
         import multiprocessing
         from concurrent.futures import ProcessPoolExecutor
         self.rng = np.random.default_rng(seed)
-        paths = sorted(map(str, Path(folder).glob("*.fits.fz")))
+        self.drawn = {}
+        paths = sorted(map(str, Path(folder).glob("*.fits.fz"))) if folder else []
         # The cache is named by the frames and the code that made it: a kept
         # one from an older filter was silently reused on 22 November 2026.
         key = hashlib.sha256(json.dumps([[Path(p).name, Path(p).stat().st_size] for p in paths]).encode()
                              + inspect.getsource(survey_tile).encode()).hexdigest()[:16]
-        cache = Path(folder).parent / f"survey-tiles-{key}.npy"
-        if cache.exists():
+        cache = Path(folder or data).parent / f"survey-tiles-{key}.npy"
+        if not paths:
+            self.tiles = []
+        elif cache.exists():
             self.tiles = list(np.load(cache))
         else:
             with ProcessPoolExecutor(12, mp_context=multiprocessing.get_context("spawn")) as pool:
                 self.tiles = [t for t in pool.map(survey_tile, paths, chunksize=8) if t is not None]
             np.save(cache, np.stack(self.tiles))
         self.noise = Pairs(data, ("train",), seed)
+        self.masters, self.used = {}, []
+        files = sorted({str(f) for m in masters for f in Path(m).rglob("*")
+                        if f.suffix.lower() in (".fit", ".fits", ".xisf")
+                        and "Lights" not in f.parts and "Flats" not in f.parts and "MasterDarks" not in f.parts
+                        and "ngc660" not in f.name.lower()})
+        if files:
+            key = hashlib.sha256(json.dumps([[Path(f).name, Path(f).stat().st_size] for f in files]).encode()
+                                 + inspect.getsource(master_tile).encode()).hexdigest()[:16]
+            kept = Path(folder or data).parent / f"master-tiles-{key}.npz"
+            if kept.exists():
+                with np.load(kept, allow_pickle=False) as z:
+                    found = [(z[f"t{i}"], str(z["bands"][i]), str(z["keys"][i]), float(z["widths"][i]))
+                             for i in range(len(z["bands"]))]
+            else:
+                with ProcessPoolExecutor(6, mp_context=multiprocessing.get_context("spawn")) as pool:
+                    found = [t for t in pool.map(master_tile, files) if t is not None]
+                seen = {}
+                for t in found:      # a set kept as both FITS and XISF counts once
+                    seen.setdefault(t[2], t)
+                found = list(seen.values())
+                np.savez(kept, bands=np.array([t[1] for t in found]), keys=np.array([t[2] for t in found]),
+                         widths=np.array([t[3] for t in found]),
+                         **{f"t{i}": t[0] for i, t in enumerate(found)})
+            self.used = [{"master": key, "band": band, "star_width_px": width, "size": list(tile.shape)}
+                         for tile, band, key, width in found]
+            for tile, band, _, _ in found:
+                self.masters.setdefault(band, []).append(tile)
 
     def crop(self):
-        tile = self.tiles[self.rng.integers(len(self.tiles))]
+        if self.masters and (not self.tiles or self.rng.random() < 0.5):   # each band equally, so OIII and SII are not swamped
+            bands = sorted(self.masters)
+            band = bands[self.rng.integers(len(bands))]
+            group = self.masters[band]
+            tile = group[self.rng.integers(len(group))]
+            source = f"master {band}"
+        else:
+            tile = self.tiles[self.rng.integers(len(self.tiles))]
+            source = "survey Ha"
+        self.drawn[source] = self.drawn.get(source, 0) + 1
         r, c = self.rng.integers(tile.shape[0] - CROP), self.rng.integers(tile.shape[1] - CROP)
-        clean = tile[r:r + CROP, c:c + CROP] * float(self.rng.uniform(1, 12))   # the nebula, in our noise
+        clean = np.rot90(tile[r:r + CROP, c:c + CROP], self.rng.integers(4)).copy()
+        if self.rng.integers(2):
+            clean = clean[:, ::-1].copy()
+        # A master keeps some noise of its own, which would be in input and target
+        # alike: its brightness is capped so that stays under a quarter of what we add.
+        own = 1.4826 * float(np.median(np.abs(clean - ndimage.gaussian_filter(clean, 2))))
+        top = min(12.0, 0.25 / max(own, 1e-6))
+        clean = clean * float(self.rng.uniform(min(1.0, top), top))   # the nebula, in our noise
         x, y, s, _ = self.noise.crop()
         grain = x - y
         grain = grain - ndimage.gaussian_filter(grain, 8)
@@ -178,9 +295,13 @@ def train(args):
     torch.manual_seed(7)
     net = network().to(device)
     pairs, check = Pairs(args.data, ("train",)), Pairs(args.data, ("check",), seed=5)
-    survey = Survey(args.survey, args.data) if args.survey else None
+    survey = Survey(args.survey, args.data, masters=args.masters or ()) if args.survey or args.masters else None
+    repeats = Pairs(args.repeats, ("train",), seed=9) if args.repeats else None
     if survey:
-        print(f"survey: {len(survey.tiles)} frames with nebula", flush=True)
+        print(f"survey: {len(survey.tiles)} frames with nebula; masters "
+              f"{ {k: len(v) for k, v in survey.masters.items()} }", flush=True)
+    if repeats:
+        print(f"repeated survey exposures: {len(repeats.parts)} real pairs", flush=True)
     fixed = [check.batch(torch, device) for _ in range(12)]
     opt = torch.optim.AdamW(net.parameters(), 2e-4, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, 6e-4, total_steps=args.steps, pct_start=0.1)
@@ -188,9 +309,13 @@ def train(args):
     for step in range(1, args.steps + 1):
         x, y, s, mask = pairs.batch(torch, device)
         loss = loss_of(net, x, y, s, mask)
+        extras = []
         if survey:
-            a, b, c, d = survey.batch(torch, device, 4)
-            loss = 0.5 * loss + 0.5 * loss_of(net, a, b, c, d)
+            extras.append(loss_of(net, *survey.batch(torch, device, 4)))
+        if repeats:
+            extras.append(loss_of(net, *repeats.batch(torch, device, 2)))
+        if extras:
+            loss = 0.5 * loss + 0.5 * sum(extras) / len(extras)
         opt.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(net.parameters(), 2.0)
@@ -204,7 +329,16 @@ def train(args):
             print(f"step {step}: checking loss {score:.4f}; {step / (time.time() - began):.1f} steps/s", flush=True)
             if best is None or score < best:
                 best = score
-                torch.save({"state": net.state_dict(), "step": step, "score": score, "survey": bool(survey)}, args.out)
+                torch.save({"state": net.state_dict(), "step": step, "score": score, "survey": bool(survey),
+                            "masters": list(args.masters or ()), "repeats": args.repeats}, args.out)
+                # What this model learned from, how each master was resampled, and the crops each gave.
+                Path(args.out).with_suffix(".sources.json").write_text(json.dumps({
+                    "own_pairs": len(pairs.parts), "survey": args.survey, "survey_frames": len(survey.tiles) if survey else 0,
+                    "masters": survey.used if survey else [], "crops_drawn": survey.drawn if survey else {},
+                    "real_pairs": args.repeats, "real_pair_count": len(repeats.parts) if repeats else 0,
+                    "loss_shares": {"own": 0.5 if survey or repeats else 1.0,
+                                    "each_extra": 0.5 / ((1 if survey else 0) + (1 if repeats else 0))
+                                    if survey or repeats else 0}, "step": step}, indent=1))
     print(f"kept {args.out}: checking loss {best:.4f}", flush=True)
 
 
@@ -366,6 +500,8 @@ def main():
     ap.add_argument("--model")
     ap.add_argument("--steps", type=int, default=12000)
     ap.add_argument("--survey")
+    ap.add_argument("--masters", nargs="*", help="folders of narrowband masters")
+    ap.add_argument("--repeats", help="pairs from trainset.py repeats")
     ap.add_argument("--save")
     args = ap.parse_args()
     (train if args.what == "train" else judge)(args)

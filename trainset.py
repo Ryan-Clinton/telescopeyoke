@@ -3,6 +3,7 @@
 
     ./trainset.py build --out DIR     every 183M session with 8 or more frames
     ./trainset.py verify --out DIR    read everything again against the hashes kept
+    ./trainset.py repeats --list F --folders D... --out DIR   real pairs from a survey's repeats
 
 Each session's frames are lined up once and split into independent halves.
 The two sides of a pair share the sky and not the noise, which is what a
@@ -386,6 +387,93 @@ def build(out, say=print):
     say(f"{len(made)} sessions in {out}")
 
 
+def repeat_pair(job):
+    """Worker: one sky position the survey exposed twice, as a real pair on the
+    second frame's own noise, or the reason it was left out."""
+    from astropy.io import fits
+    from astropy.wcs import WCS
+    first, second, out = job
+    name = f"IGAPS-{first['run']}-{second['run']}-{first['ccd']}"
+    if first["seeing"] / second["seeing"] > 1.25 or second["seeing"] / first["seeing"] > 1.25:
+        return name, "seeing differs"
+    images = []
+    for o in (first, second):
+        with fits.open(o["path"]) as h:
+            hdu = next(x for x in h if x.data is not None)
+            images.append((hdu.data.astype(np.float32), WCS(hdu.header)))
+    (a, wa), (b, wb) = images
+    r0, c0, size = a.shape[0] // 2 - 512, a.shape[1] // 2 - 512, 1024
+    grid_r, grid_c = np.mgrid[r0:r0 + size + 1:65j, c0:c0 + size + 1:65j]
+    ra, dec = wa.all_pix2world(grid_c, grid_r, 0)
+    px, py = wb.all_world2pix(ra, dec, 0)
+    shift = float(np.median(np.hypot(px - grid_c, py - grid_r)))
+    if shift < MIN_DITHER:
+        return name, f"moved only {shift:.0f} px"
+    # The WCS on a coarse grid, read at each pixel: 64 px apart, exactly on the crop.
+    at = np.mgrid[0:size, 0:size].astype(np.float32) * (64 / (size + 1))
+    rows = ndimage.map_coordinates(py, at, order=3, mode="nearest")
+    cols = ndimage.map_coordinates(px, at, order=3, mode="nearest")
+    x = np.array(a[r0:r0 + size, c0:c0 + size], np.float32)
+    y = ndimage.map_coordinates(b, [rows, cols], order=3, mode="constant", cval=np.nan).astype(np.float32)
+    valid = ndimage.binary_erosion(np.isfinite(y), iterations=8, border_value=0)
+    if valid.mean() < 0.9:
+        return name, "too little overlap"
+    sky = float(np.median(x[valid]))
+    x, y = x - sky, y - np.nanmedian(y[valid])
+    y = np.nan_to_num(y)
+    bright = valid & (x > 8 * 1.4826 * np.median(np.abs(x[valid])))
+    if bright.sum() < 100:
+        return name, "too few bright pixels"
+    gain = np.nanmedian(x[bright] / np.where(y[bright] > 0, y[bright], np.nan))
+    y = y * float(gain)
+    detail = lambda v: v - ndimage.gaussian_filter(v, 8)
+    level = lambda v: (1.4826 * float(np.median(np.abs(detail(v)[valid])))) ** 2
+    var_x, var_y = level(x), level(y)
+    coarse = ndimage.median_filter(x[::4, ::4], 25)
+    if (np.percentile(coarse, 98) - np.percentile(coarse, 2)) / var_x ** .5 < 0.6:
+        return name, "no nebula"
+    agree = halves_agree(x, y, np.full(x.shape, var_x), np.full(x.shape, var_y), valid)
+    if not agree["passed"]:
+        return name, f"halves disagree {agree}"
+    unit = var_x ** .5
+    s = np.sqrt(1 + np.maximum(ndimage.median_filter(x, size=3), 0) / max(sky, 1.0)).astype(np.float32)
+    part = Path(out) / name / "split0"
+    part.mkdir(parents=True, exist_ok=True)
+    for label, data in zip(FILES, (x / unit, y / unit, s, valid)):
+        np.save(part / f"{label}.npy", data)
+    (part / "meta.json").write_text(json.dumps({"kind": "repeat", "unit": unit, "input": 1, "target": 1, "halves": agree}))
+    record = {"name": name, "target": "IGAPS", "role": "train", "filter": "Ha", "frames": 2, "shift": round(shift, 1),
+              "splits": 1, "parts": ["split0"], "halves": agree,
+              "source": [Path(first["path"]).name, Path(second["path"]).name]}
+    (Path(out) / name / "done.json").write_text(json.dumps(record))
+    return name, record
+
+
+def repeats(listing, folders, out, most=400, say=print):
+    """Real pairs from the survey's repeated Ha exposures."""
+    Path(out).mkdir(parents=True, exist_ok=True)
+    groups = {}
+    for o in json.loads(Path(listing).read_text()):
+        name = Path(o["url"]).name
+        found = next((Path(d) / name for d in folders if (Path(d) / name).exists()), None)
+        if found:
+            groups.setdefault(o["pair"], {})[o["side"]] = dict(o, path=str(found))
+    jobs = [(g["a"], g["b"], str(out)) for _, g in sorted(groups.items()) if len(g) == 2]
+    made, why = [], {}
+    with stacking.worker_pool(10) as pool:
+        for name, answer in pool.map(repeat_pair, jobs):
+            if isinstance(answer, dict):
+                made.append(answer)
+                if len(made) % 25 == 0:
+                    say(f"{len(made)} pairs kept of {sum(why.values()) + len(made)}")
+            else:
+                key = answer.split(" {")[0].split(" only")[0]
+                why[key] = why.get(key, 0) + 1
+    made = made[:most]
+    (Path(out) / "index.json").write_text(json.dumps(made, indent=1))
+    say(f"{len(made)} real pairs from {len(jobs)} positions; left out: {why}")
+
+
 def verify(out, say=print):
     """Read every input and pair again and compare with the hashes kept when
     they were built. Slow, so it is its own command; a build compares names,
@@ -409,11 +497,15 @@ def verify(out, say=print):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("what", choices=["build", "verify"])
+    ap.add_argument("what", choices=["build", "verify", "repeats"])
     ap.add_argument("--out", required=True)
+    ap.add_argument("--list", help="repeats: the survey's chosen exposures")
+    ap.add_argument("--folders", nargs="*", help="repeats: where those frames are")
     args = ap.parse_args()
     if args.what == "verify":
         raise SystemExit(0 if verify(args.out) else 1)
+    if args.what == "repeats":
+        return repeats(args.list, args.folders, args.out)
     build(args.out)
 
 

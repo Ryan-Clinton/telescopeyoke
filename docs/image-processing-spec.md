@@ -491,6 +491,26 @@ retrained. Survey frames within 2 degrees of a held-out field are now refused (t
 nearest used was 2.03 degrees away). Next: Ha, OIII and SII
 from more independent targets, dithered by at least 10 px, before changing the network.
 
+### 5.2 The rest of this experiment (planned 22-23 November 2026)
+
+Models are compared with the same pairs, steps and tests. **Model A** is our frames
+alone. **Model B** adds IGAPS, the masters and the survey's real repeated pairs, and
+can only show that the mixture helped. So each source is then added to A by itself:
+IGAPS, Seti Astro's masters, AstrophotoMarket's masters and Seti Astro's real OIII
+pair. Each model keeps a `.sources.json`: its sources, how each master was resampled,
+and the crops each gave.
+
+Seti Astro's 101 raw OIII subs of SNR G082.2+05.3 go through `externalpairs.py`, with
+that camera's own darks and flats, in a folder apart from the active pairs. 95 subs
+were used, and **1 of 4 pairs passed** the same checks; the others failed on the
+sensor pattern (0.022) or on star rings (1.70 and 1.71). Those subs were at -8 to -1
+degrees and their dark at -15, which may contribute. It is one field, so it does not
+stand in for independent OIII targets.
+
+**NGC 2174 and IC 405 now report results but cannot accept a model alone.** After
+this many comparisons they have become part of development. Acceptance needs a field
+that no model or choice has yet seen, under the unchanged limits of section 7.
+
 ## 6. Later models
 
 ### 6.1 Star removal (stage D)
