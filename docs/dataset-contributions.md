@@ -8,8 +8,9 @@ goes live. Nothing is posted to any community until then.
 ## What it must do
 
 - Explain plainly what the data is for, before anyone offers anything.
-- Collect **permission and a link or a way to arrange transfer**, never the files. Contributors keep their data on
-  their own Drive, Dropbox, Mega or similar.
+- Collect **permission and the details to arrange a transfer**, never the files. The
+  website and its server take no uploads: data goes directly from the contributor's
+  computer to the owner's desktop with Syncthing (see "Sending the data").
 - Keep a record of exactly what each person agreed to, and when.
 - Let someone withdraw without needing an account.
 
@@ -48,13 +49,17 @@ Keep the meaning; adjust the wording to the site's voice only if every promise s
 > released can't have your data taken back out of it, so please only offer it if you're
 > comfortable with that.
 >
-> **You don't need to upload everything.** The most useful thing is one small pack, usually
-> about 2 to 5 GB: around 40 to 80 raw subs of one target in one filter (Ha, OIII or SII,
-> from a mono camera), taken over two or more nights and dithered by at least 10 pixels,
-> plus the matching master dark and master flat. Zipping them usually makes them smaller.
-> If you have more and would like to share it, say so in the form and we'll sort out an easy
-> way that doesn't need cloud storage. Other data is still welcome; I'll tell you if I
-> can't use it.
+> **Most useful:** raw subs (Ha, OIII or SII from a mono camera are ideal), taken over two
+> or more nights and dithered by at least 10 pixels, with matching darks and flats or
+> masters. Around 40 frames per target and filter is a good minimum, and whole datasets
+> are very welcome. Other data is still welcome too; I'll tell you if I can't use it.
+>
+> **How it gets here:** directly from your computer to mine with
+> [Syncthing](https://syncthing.net/), a free, open-source file transfer tool. There's no
+> cloud storage or size limit, it's encrypted, and if your connection drops it carries on
+> where it stopped. Put the data in its own folder and share only that folder as "Send
+> Only", so my computer can't change anything on yours. Once it has arrived I'll tell you,
+> and you can remove the share.
 >
 > **Please don't offer** data you rented, bought or were given by someone else, or
 > anything from a remote service whose terms don't allow this.
@@ -66,8 +71,9 @@ Keep the meaning; adjust the wording to the site's voice only if every promise s
 | Name or handle for the credit | yes | text |
 | Leave me out of the credits | no | tick box |
 | Contact (email or Discord handle) | yes | text, kept private |
-| Link to the data | no | https URL; a small pack fits in a free Google Drive (15 GB) |
-| I have more, or can't upload it: contact me about another way | no | tick box |
+| Syncthing Device ID | no | eight groups of seven letters and digits, joined by hyphens |
+| Roughly how much data (GB) | yes | number |
+| Link, if it is already shared somewhere | no | https URL |
 | Target(s) | yes | text |
 | Camera | yes | text |
 | Telescope and focal length | yes | text |
@@ -79,8 +85,7 @@ Keep the meaning; adjust the wording to the site's voice only if every promise s
 | Calibration included | yes | darks, flats, bias or dark-flats, none (multiple choice) |
 | Anything else | no | text |
 
-The form needs either a link or the "another way" box ticked.
-Never ask for a password to the data: tell people to use a share link instead.
+A Device ID can be left blank and sent later. Never ask for a password to the data.
 
 ### Required permission tick boxes
 
@@ -108,6 +113,19 @@ Keep submissions outside the web root, on the server, append-only or with a chan
 history. No public page or API may list them. The owner's sessions fetch them over SSH.
 Do not keep IP addresses longer than rate limiting needs.
 
+## Sending the data
+
+This part is set up on the owner's desktop, not on the website.
+
+- The owner approves a submission first. Only then is that person's Device ID added and
+  the desktop's own ID sent to them privately. Never publish the desktop's ID on the page
+  and never auto-accept devices or folders.
+- Each contributor gets their own **Receive Only** folder on D:, with a minimum-free-space
+  limit so a transfer can't fill the drive.
+- Both computers must be on at the same time. Syncthing connects directly where it can and
+  falls back to its encrypted relays where it can't.
+- Once a set has arrived and been checked, remove that person's device and folder share.
+
 ## Withdrawal
 
 A small form taking the reference number and the contact given. Matching requests set
@@ -116,7 +134,8 @@ A small form taking the reference number and the contact given. Matching request
 
 ## Security and spam
 
-- Validate on the server: lengths, https links only, no scripts stored or rendered.
+- Validate on the server: lengths, Device ID format, https links only, no scripts stored
+  or rendered. No file upload field anywhere.
 - Escape every submitted value wherever it is shown.
 - Honeypot field and rate limit by address. No third-party tracking or captcha without
   the owner agreeing.
