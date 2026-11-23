@@ -511,6 +511,17 @@ stand in for independent OIII targets.
 this many comparisons they have become part of development. Acceptance needs a field
 that no model or choice has yet seen, under the unchanged limits of section 7.
 
+### 5.3 Masters dropped from the first source comparison (found 23 November 2026)
+
+Masters were identified by their folder and filter. Seti Astro keeps different targets
+in folders all named `master`, so **9 different masters of the 61 files were dropped**
+from every model trained with them, and the Seti Astro and mixed results in 5.2 did not
+use that source in full. Each file now has its own identity, and only the same pixels
+in two formats count as a duplicate: of 61 files, 37 decode as narrowband masters, 1 is
+a duplicate and 36 are sampled. Each model's `.sources.json` gives every master's chance
+of being drawn, its crops, and why each unused file was not used. Those models are to be
+trained again before their source comparison is relied on.
+
 ## 6. Later models
 
 ### 6.1 Star removal (stage D)

@@ -176,7 +176,9 @@ Reporting a dip is a person's.
 
 `corners.py` (or `--file FRAME`, which uses no camera): star width, roundness and stretch direction in the four corners against the middle, at full resolution on the 183M, and which fault the pattern points to: the corrector's 55 mm spacing (all corners alike), tilt (corners unlike) or collimation (the middle too).
 
-`trainset.py build --out DIR` makes training pairs from saved 183M frames, `trainset.py verify --out DIR` reads them and their inputs again against the hashes kept, and `denoiser.py train|judge` trains and judges a denoiser on the desktop's GPU; neither uses a camera or changes a frame, stack or picture. The first model was not accepted (`docs/image-processing-spec.md`, 5.1).
+`trainset.py build --out DIR` makes training pairs from saved 183M frames, `trainset.py verify --out DIR` reads them and their inputs again against the hashes kept, and `denoiser.py train|judge` trains and judges a denoiser on the desktop's GPU; neither uses a camera or changes a frame, stack or picture. The first model was not accepted (`docs/image-processing-spec.md`, 5.1). `denoiser.py prepare` fills its tile caches on the CPU ahead of training.
+
+`desktopqueue.py add NAME --lane cpu|gpu --cores N --ram GB [--after NAME ...] -- COMMAND` queues a long job on the desktop, `run` works through the queue, and `status` and `report` only read. It runs only what was added to it.
 
 `calibrate.py index` uses no camera: it writes `calibration/INDEX.md`, every camera's newest darks and flats with their settings, frames, dates and whether each flat has its flat-dark. Every calibration run refreshes it; read it before asking for more.
 

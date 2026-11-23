@@ -104,6 +104,7 @@ them and every file kept under `demo/`.
 | `sxwheel.py` | The Starlight Xpress USB filter wheel (HID): `status`, `move` a name or number; names from `[filterwheel] filters` (none until someone has looked); frames through a train with the wheel carry the position it confirmed (`FILTPOS`, `FILTER`) |
 | `shoot.py`, `stacking.py`, `restack.py`, `process.py`, `calibrate.py` | Imaging pipeline |
 | `trainset.py`, `denoiser.py` | Our own denoiser, on the desktop's GPU: independent half-stack pairs from saved frames, then training and judging against plain methods. Not accepted, and no picture uses it (`docs/image-processing-spec.md`, 5.1) |
+| `desktopqueue.py` | The desktop's long jobs: a CPU lane and a one-at-a-time GPU lane, restartable, a failed job stopping only what waits on it, with CPU, GPU, disk and memory use logged. No camera, no mount |
 | `depth.py` | How faint a stack reaches, measured: zero point against Gaia, 5-sigma limit, planted stars found again (`docs/discovery.md`, phase 0) |
 | `remote.py` | `restack.py --on HOST`: sends the frames, calibration and code to another computer by SSH and rsync, stacks there under `~/telescopeyoke-laptop/remote`, and brings the picture back |
 | `planet.py` | A planet: thousands of a second per frame, a square round it kept from each, the sharpest stacked. Uses the camera only |
