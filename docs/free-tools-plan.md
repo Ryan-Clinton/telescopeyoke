@@ -32,8 +32,8 @@ blur's error at that grain; lower is better.
   only, never for photometry, depth or discovery.**
 - On the GTX 1080 a 4.5-megapixel stack took about 50 s in GraXpert and 9 s in Cosmic Clarity.
 
-These are ten stacks from one rig, with each tool's model as released. Stretching, star
-removal, sharpening and colour calibration have not been compared yet.
+These are ten stacks from one rig, with each tool's model as released. Stretching,
+sharpening and colour calibration have not been compared yet.
 
 ### Background removal
 
@@ -54,6 +54,23 @@ SII it took off 44 to 58% of a faint glow where ours took 15%, and losing nebula
 fault. Our model is also told where the nebula is from the Ha stack, which the tools are not.
 Siril ran with automatic samples; placing them by hand might do better but is not automation.
 
+### Star removal
+
+Seti Astro Suite Pro 1.24.8's Dark Star (AI4 mono model) against our plain code on five
+stacks, in stretched brightness. "Blend" uses Dark Star only where it took off something
+compact and keeps the original elsewhere. Medians; a planted glow should stay at 1.00.
+
+| Method | Star left | Brightest 20 left | Faint glow | Thin faint line kept (worst) |
+|---|---|---|---|---|
+| Our code | 0.016 | 0.032 | 1.003 | **0.47 (0.17)** |
+| Dark Star | 0.003 | 0.010 | 1.097 | 0.34 (0.12) |
+| **Dark Star, blended** | **-0.004** | **0.006** | 1.011 | 0.33 (0.20) |
+
+Dark Star removes stars far better, and by eye ours leaves ghosts and a bright star's core.
+The blend takes out Dark Star's brightening of faint glow, but **neither keeps thin faint
+lines as well as ours on most stacks**, and a very bright star leaves a faint ring and
+spikes. So it is not wired in yet: the blend's mask must first stop costing thin filaments.
+
 ## What each stage becomes
 
 | Stage | Today | Plan | State |
@@ -62,7 +79,7 @@ Siril ran with automatic samples; placing them by hand might do better but is no
 | Star-core clipping fault | Open | Fix in `stacking.py`, comparing with Siril's rejection | To do |
 | Noise reduction | Optional in pictures | **GraXpert**, on each filter's linear stack | Built |
 | Background and gradients | Our sky model | **Keep ours**: no tool did as well overall | Tested |
-| Star removal | Plain code | Seti Astro Suite Pro's Dark Star; StarNet if its terms allow | To test, once the owner accepts the model licence |
+| Star removal | Plain code | Seti Astro Suite Pro's Dark Star; StarNet if its terms allow | Tested: better on stars, loses thin lines; mask to fix |
 | Sharpening and deconvolution | Our steps | GraXpert and Cosmic Clarity, with star and nebula checks | To test |
 | Stretch | Ours, with a GHS option | Siril GHS | To test |
 | Colour calibration, broadband | Star average | Siril SPCC | To test |
@@ -86,7 +103,8 @@ Cosmic Clarity's own repository (MIT) was archived in 2026 and its work continue
 Suite Pro (GPL-3), which has a command line. **The suite's current AI models are not open
 source:** their licence allows personal, non-commercial use within the suite only, and forbids
 redistribution and use outside it. TelescopeYoke may only call the suite's own command, on a
-copy the user installed, with models the user downloaded and accepted themselves.
+copy the user installed, with models the user downloaded and accepted themselves. The owner
+accepted those terms for this rig on 23 November 2026.
 
 ## What happens to the denoiser
 

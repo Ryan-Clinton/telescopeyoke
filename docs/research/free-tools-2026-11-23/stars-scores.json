@@ -1,0 +1,132 @@
+{
+ "IC405-Ha": {
+  "ours": {
+   "stars": 268,
+   "star_left": 0.015,
+   "brightest_20_left": 0.025,
+   "worst_tenth_left": 0.032,
+   "glow_kept": 1.002,
+   "line_kept": 0.178
+  },
+  "darkstar": {
+   "stars": 268,
+   "star_left": -0.001,
+   "brightest_20_left": 0.015,
+   "worst_tenth_left": 0.04,
+   "glow_kept": 1.077,
+   "line_kept": 0.118
+  },
+  "darkstar-blend": {
+   "stars": 268,
+   "star_left": -0.004,
+   "brightest_20_left": 0.015,
+   "worst_tenth_left": 0.043,
+   "glow_kept": 1.011,
+   "line_kept": 0.302
+  }
+ },
+ "IC405-SII": {
+  "ours": {
+   "stars": 284,
+   "star_left": 0.011,
+   "brightest_20_left": 0.018,
+   "worst_tenth_left": 0.022,
+   "glow_kept": 1.002,
+   "line_kept": 0.166
+  },
+  "darkstar": {
+   "stars": 284,
+   "star_left": 0.004,
+   "brightest_20_left": 0.002,
+   "worst_tenth_left": 0.02,
+   "glow_kept": 1.097,
+   "line_kept": 0.337
+  },
+  "darkstar-blend": {
+   "stars": 284,
+   "star_left": 0.002,
+   "brightest_20_left": 0.002,
+   "worst_tenth_left": 0.019,
+   "glow_kept": 1.011,
+   "line_kept": 0.325
+  }
+ },
+ "NGC2174-Ha": {
+  "ours": {
+   "stars": 279,
+   "star_left": 0.017,
+   "brightest_20_left": 0.032,
+   "worst_tenth_left": 0.033,
+   "glow_kept": 1.003,
+   "line_kept": 0.466
+  },
+  "darkstar": {
+   "stars": 279,
+   "star_left": 0.003,
+   "brightest_20_left": 0.003,
+   "worst_tenth_left": 0.035,
+   "glow_kept": 1.104,
+   "line_kept": 0.209
+  },
+  "darkstar-blend": {
+   "stars": 279,
+   "star_left": 0.0,
+   "brightest_20_left": 0.003,
+   "worst_tenth_left": 0.033,
+   "glow_kept": 1.011,
+   "line_kept": 0.196
+  }
+ },
+ "NGC2174-OIII": {
+  "ours": {
+   "stars": 287,
+   "star_left": 0.016,
+   "brightest_20_left": 0.037,
+   "worst_tenth_left": 0.03,
+   "glow_kept": 1.005,
+   "line_kept": 0.849
+  },
+  "darkstar": {
+   "stars": 287,
+   "star_left": 0.001,
+   "brightest_20_left": 0.01,
+   "worst_tenth_left": 0.012,
+   "glow_kept": 1.128,
+   "line_kept": 0.402
+  },
+  "darkstar-blend": {
+   "stars": 287,
+   "star_left": -0.004,
+   "brightest_20_left": 0.006,
+   "worst_tenth_left": 0.008,
+   "glow_kept": 1.017,
+   "line_kept": 0.374
+  }
+ },
+ "NGC2174-SII": {
+  "ours": {
+   "stars": 286,
+   "star_left": 0.023,
+   "brightest_20_left": 0.051,
+   "worst_tenth_left": 0.043,
+   "glow_kept": 1.005,
+   "line_kept": 0.937
+  },
+  "darkstar": {
+   "stars": 286,
+   "star_left": 0.003,
+   "brightest_20_left": 0.013,
+   "worst_tenth_left": 0.016,
+   "glow_kept": 1.068,
+   "line_kept": 0.368
+  },
+  "darkstar-blend": {
+   "stars": 286,
+   "star_left": -0.005,
+   "brightest_20_left": 0.006,
+   "worst_tenth_left": 0.008,
+   "glow_kept": 1.014,
+   "line_kept": 0.363
+  }
+ }
+}
