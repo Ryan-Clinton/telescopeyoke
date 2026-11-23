@@ -195,12 +195,12 @@ its job comes off this list.
     `./precision.py SESSION --planet NAME` and `--compare FIELD`. One shared
     night is provisional, two wins are firm. `precision.py`'s mono path has
     not yet run on a real 183M transit.
-34. **Mono Moon video.** `./ty moon` and `./ty lucky` write and stack the
-    183M's video as mono, but cannot run while the keeper holds the camera:
-    `cam.video` is a generator, which cannot cross to the keeper (22 November:
-    `TypeError: cannot pickle 'generator' object`). The keeper needs to stream
-    frames one at a time, its cooler checks going on between them, and a
-    restart to load it, so make the change on a day the camera is warm.
+34. **Mono Moon video.** `./ty moon` and `./ty lucky` failed under the keeper
+    on 22 November (`TypeError: cannot pickle 'generator' object`). From
+    23 November the keeper streams the frames one at a time, its cooler checks
+    going on between them. **Not yet run on the camera**: cap on, keeper
+    started, a short `./ty lucky capture`, watching the sensor hold -5 °C and
+    a normal frame working afterwards. Record it in `docs/validation.md`.
     **`./ty moon`'s centring** also lost the Moon that night, probably on the
     test moves in Dec (job 2): the disc had to be centred by `--aim-off`.
 35. **Mineral Moon from B, G and R** (`./ty lucky capture --filter`, stack

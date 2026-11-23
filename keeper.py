@@ -26,6 +26,8 @@ import argparse
 import os
 import secrets
 import signal
+import socket
+import struct
 import sys
 import threading
 import time
@@ -37,6 +39,7 @@ KEY = config.DATA / "cache" / "camera.key"
 STATE = config.DATA / "cache" / "keeper.json"
 POLL_S = 5          # seconds between the cooler's ramp steps and temperature checks
 SAY_EVERY_S = 60
+SEND_WAIT_S = 30    # a video frame a borrower has not taken after this long ends the video
 
 
 def key():
@@ -69,6 +72,26 @@ def ask(request, quiet=False):
     return answer
 
 
+def video(gain, seconds, count, roi=None, timeout=5.0):
+    """A video from the kept camera, one frame at a time, as AltairCamera.video
+    yields them. A generator cannot cross to the keeper, so the keeper runs it
+    and sends each frame down this connection. Leaving the loop early closes
+    the connection, which ends the video there."""
+    from multiprocessing.connection import Client
+    with Client(address(), family="AF_UNIX", authkey=key()) as link:
+        link.send(("video", gain, seconds, count, roi, timeout))
+        while True:
+            try:
+                ok, answer = link.recv()
+            except (EOFError, OSError):
+                raise failure("CameraError", "the camera keeper stopped answering during the video") from None
+            if not ok:
+                raise failure(*answer)
+            if answer is None:
+                return
+            yield answer
+
+
 def failure(kind, message, code=None):
     """The keeper's error, raised again in the borrower as what it was."""
     if code:
@@ -99,6 +122,28 @@ def serve(cam, say=print):
     stopping = threading.Event()
     status = {"ready": False, "sensor_c": None, "target_c": getattr(cam, "target", None)}
 
+    def stream(link, gain, seconds, count, roi, timeout):
+        """Frames to one borrower. The video holds the camera, so the main
+        loop cannot look after the cooler: its ramp and checks run here,
+        between frames. A borrower that stops reading for SEND_WAIT_S ends
+        the video rather than leaving the cooler unwatched."""
+        with socket.socket(fileno=os.dup(link.fileno())) as raw:
+            raw.setsockopt(socket.SOL_SOCKET, socket.SO_SNDTIMEO, struct.pack("ll", SEND_WAIT_S, 0))
+        with calls:
+            cam.gain = gain
+            frames = cam.video(seconds, count, roi=roi, timeout=timeout)
+            checked = time.monotonic()
+            try:
+                for frame in frames:
+                    link.send((True, frame))
+                    if time.monotonic() - checked >= POLL_S:
+                        checked = time.monotonic()
+                        cam.ramp()
+                        status.update(sensor_c=cam.temperature(), level_c=getattr(cam, "level", None))
+                        write_state(**status, pid=os.getpid())
+            finally:
+                frames.close()      # puts the camera back in its single-frame mode
+
     def handle(link):
         with link:
             while True:
@@ -123,6 +168,9 @@ def serve(cam, say=print):
                         with calls:
                             cam.gain = gain
                             answer = getattr(cam, name)(*args, **kwargs)
+                    elif kind == "video":
+                        stream(link, *request[1:])
+                        answer = None       # the end of the video
                     else:
                         raise ValueError(f"the keeper does not know {kind!r}")
                     link.send((True, answer))

@@ -164,6 +164,12 @@ class Kept:
                 said = time.monotonic()
             sleep(5)
 
+    def video(self, seconds, count, roi=None, timeout=5.0):
+        """The camera's video, each frame sent across by the keeper, which
+        goes on looking after the cooler between them."""
+        import keeper
+        yield from keeper.video(self.gain, seconds, count, roi, timeout)
+
     def __getattr__(self, name):
         import keeper
         if name.startswith("__"):
