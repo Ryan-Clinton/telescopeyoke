@@ -1,6 +1,6 @@
 # Plan: use free tools for the picture pipeline
 
-Status: **a plan, measured for noise reduction only. Nothing in the pipeline has changed.**
+Status: **noise reduction is built (`colour.py --denoise graxpert`); the other stages are still to test.**
 Written 23 November 2026. `final.fits` and every other kept stack were only read.
 
 **The aim:** TelescopeYoke does the best possible job of automating the freely available
@@ -41,7 +41,7 @@ stretching, star removal, sharpening and colour calibration have not been compar
 |---|---|---|---|
 | Calibration, alignment, science stack | `stacking.py` | **Keep.** Photometry and discovery depend on its checks and records | Stays |
 | Star-core clipping fault | Open | Fix in `stacking.py`, comparing with Siril's rejection | To do |
-| Noise reduction | None in pictures | **GraXpert**, on each filter's linear stack | Measured |
+| Noise reduction | Optional in pictures | **GraXpert**, on each filter's linear stack | Built |
 | Background and gradients | Our sky model | GraXpert AI, then Siril, against ours | To test |
 | Star removal | Plain code | Cosmic Clarity Dark Star; StarNet if its terms allow | To test |
 | Sharpening and deconvolution | Our steps | GraXpert and Cosmic Clarity, with star and nebula checks | To test |
@@ -65,9 +65,7 @@ Clarity's repository is MIT, and Siril is GPL-3. Each is called as a separate pr
 
 ## What happens to the denoiser
 
-Retire it, with no separate repository and no public request for data:
-
-- Remove `denoiser.py`, `trainset.py`, `externalpairs.py` and the request page.
-- Keep one small scoring script from this comparison, since it is what chose the tool.
-- Record in `docs/validation.md` what was found and why it stopped.
-- Delete the training data and models once the owner has confirmed.
+Retired on 23 November 2026, with no separate repository and no public request for data.
+Its code is in git history, the comparison's scripts are in
+`docs/research/free-tools-2026-11-23/`, and `docs/validation.md` records the result. The
+training data is deleted only once the owner confirms, keeping the held-out test pairs.

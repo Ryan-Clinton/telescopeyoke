@@ -66,15 +66,14 @@ COMMANDS = {
     "corners.py": ("hardware", {"--file": "read_only"}, {}),   # the camera only; with --file nothing
     "compare.py": ("local_write", {}, {}),
     "console.py": ("hardware", {}, {}),             # its server runs the other scripts on request
-    "denoiser.py": ("local_write", {}, {}),       # trains and judges on the desktop; touches no frame or stack
     "desktopqueue.py": ("local_write", {"status": "read_only", "report": "read_only"}, {}),   # runs only the jobs added to it, on the desktop
     "depth.py": ("local_write", {}, {}),
     "difference.py": ("local_write", {}, {}),
     "doctor.py": ("read_only", {}, {}),
-    "externalpairs.py": ("local_write", {}, {}),   # training pairs from another observer's subs; uses no camera
     "focus.py": ("hardware", {}, DRY),
     "focuser.py": ("hardware", {}, {}),
     "forced.py": ("local_write", {}, {}),
+    "freetools.py": ("local_write", {"status": "read_only"}, {}),   # runs free image tools on temporary copies
     "history.py": ("read_only", {}, {}),          # what observing costs, from the sessions' records
     "nightreplay.py": ("read_only", {}, {}),      # a kept night replayed under a policy; moves nothing
     "outcome.py": ("read_only", {}, {}),          # what each session got, from its records
@@ -137,7 +136,6 @@ COMMANDS = {
     "sxwheel.py": ("hardware", {"status": "read_only"}, {}),   # the filter wheel: status only asks
     "tonight.py": ("read_only", {}, {}),
     "tour.py": ("local_write", {}, {}),
-    "trainset.py": ("local_write", {}, {}),       # training pairs from saved frames; uses no camera
     "transits.py": ("local_write", {}, {}),
     "variables.py": ("local_write", {}, {}),
     "vet.py": ("local_write", {}, {}),

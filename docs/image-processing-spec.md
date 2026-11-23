@@ -8,7 +8,8 @@ the parts where training helps.
 
 **Direction changed on 23 November 2026.** TelescopeYoke now automates the best
 freely available tools instead of training its own models (`docs/free-tools-plan.md`).
-Section 1 is current. The sections on training models are a record of what was tried.
+Section 1 is current. The sections on training models are a record of what was tried;
+their code (`denoiser.py`, `trainset.py`, `externalpairs.py`) was removed that day and is in git history.
 
 How far to trust each statement:
 

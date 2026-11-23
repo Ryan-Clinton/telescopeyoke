@@ -176,7 +176,7 @@ Reporting a dip is a person's.
 
 `corners.py` (or `--file FRAME`, which uses no camera): star width, roundness and stretch direction in the four corners against the middle, at full resolution on the 183M, and which fault the pattern points to: the corrector's 55 mm spacing (all corners alike), tilt (corners unlike) or collimation (the middle too).
 
-`trainset.py build --out DIR` makes training pairs from saved 183M frames, `trainset.py verify --out DIR` reads them and their inputs again against the hashes kept, and `denoiser.py train|judge` trains and judges a denoiser on the desktop's GPU; neither uses a camera or changes a frame, stack or picture. The first model was not accepted (`docs/image-processing-spec.md`, 5.1). `denoiser.py prepare` fills its tile caches on the CPU ahead of training.
+`freetools.py status` only reads: which free image tools are installed and where to get the rest. `freetools.py denoise IN OUT [--strength S]` writes a new file through GraXpert. `colour.py NAME --denoise graxpert [--denoise-strength S]` denoises temporary copies of each filter's stack for the picture, records the tool and version, and carries on without it if it is missing. None of these changes a stack, and their output is never used for a measurement.
 
 `desktopqueue.py add NAME --lane cpu|gpu --cores N --ram GB [--after NAME ...] -- COMMAND` queues a long job on the desktop, `run` works through the queue, and `status` and `report` only read. It runs only what was added to it.
 

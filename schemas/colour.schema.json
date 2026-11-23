@@ -21,7 +21,12 @@
         "local_contrast": {"type": "boolean"},
         "star_power": {"type": "number"},
         "sharpen_steps": {"type": "integer"},
-        "ghs": {"type": "boolean"}
+        "ghs": {"type": "boolean"},
+        "denoise": {
+          "type": "object",
+          "required": ["tool", "strength"],
+          "properties": {"tool": {"type": "string"}, "version": {"type": ["string", "null"]}, "strength": {"type": "number"}}
+        }
       }
     },
     "filters": {

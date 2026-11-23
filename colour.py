@@ -45,6 +45,7 @@ from PIL import Image
 from scipy import ndimage, signal
 
 import config
+import freetools
 import interface
 import process
 import records
@@ -537,7 +538,7 @@ def narrowband(rgb, channels, saturation, background=2):
 
 def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette="LRGB", background=2,
             stretched=False, quiet=False, contrast=True, linear_background=None, star_power=1.0, sharpen=0,
-            ghs=False):
+            ghs=False, denoise=None, denoise_strength=freetools.STRENGTH):
     """The colour picture (8-bit RGB array) and what went into it."""
     channels, base, detail_band = PALETTES[palette]
     needed = tuple(dict.fromkeys(channels))
@@ -550,13 +551,25 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
     if base not in stacks:
         base = channels[0]
     images = {b: brightness(stacks[b]) for b in have}
+    tool_used = None
+    if denoise:
+        # Each filter on its own while still linear and unmoved: a resampled stack's
+        # grain is no longer what these tools were trained on (23 November 2026).
+        try:
+            for band in have:
+                say(f"  GraXpert on {band} (strength {denoise_strength:g})")
+                images[band] = freetools.denoise(images[band], denoise_strength)
+            tool_used = {"tool": denoise, "version": freetools.version(denoise), "strength": denoise_strength}
+        except freetools.ToolUnavailable as e:
+            say(f"  NOT denoised: {e}. Making the picture without it.")
+            images = {b: brightness(stacks[b]) for b in have}
     rows = min(i.shape[0] for i in images.values())
     cols = min(i.shape[1] for i in images.values())
     images = {b: i[:rows, :cols] for b, i in images.items()}
     ref_image = np.nan_to_num(images[base])
     reference = {"square": stacking.centre_square(ref_image), "stars": stacking.find_stars(ref_image)}
     images[base] = np.where(covered(images[base]), images[base], np.nan)
-    used = {"palette": palette, base: {"stack": str(stacks[base]), "matched": None}}
+    used = {"palette": palette, "denoise": tool_used, base: {"stack": str(stacks[base]), "matched": None}}
     # A stack labelled uncalibrated is allowed, as a preview, and called one.
     raw = [b for b in have if fits.getheader(stacks[b]).get("TY_CALIB") is not True]
     used["calibrated"] = not raw
@@ -647,6 +660,10 @@ def main():
     ap.add_argument("--noise-reduction", action="store_true",
                     help="narrowband: wavelet noise reduction (off by default: on NGC 2174 and NGC 281 it kept no more "
                          "faint detail than a plain blur)")
+    ap.add_argument("--denoise", choices=("graxpert",), help="noise reduction by a free tool you have installed "
+                    "(./freetools.py status), for the picture only; the stacks are not touched")
+    ap.add_argument("--denoise-strength", type=bounded(float, 0.1, 1.0), default=freetools.STRENGTH, metavar="S",
+                    help=f"how much of the tool's result to use (default {freetools.STRENGTH:g})")
     ap.add_argument("--no-contrast", action="store_true", help="narrowband: leave out local contrast, for comparison")
     ap.add_argument("--star-reduction", type=bounded(float, 1.0, 3.0), default=1.0, metavar="POWER",
                     help="narrowband: smaller stars, keeping their peaks and colours (1 is none, 2 is about 25%% narrower, 3 the most)")
@@ -765,13 +782,16 @@ def run(args):
                             palette=args.palette, background=background,
                             stretched=args.stretched, quiet=args.noise_reduction,
                             contrast=not args.no_contrast, linear_background=process.sky_for(args.name),
-                            star_power=args.star_reduction, sharpen=args.sharpen, ghs=args.ghs)
+                            star_power=args.star_reduction, sharpen=args.sharpen, ghs=args.ghs,
+                            denoise=args.denoise, denoise_strength=args.denoise_strength)
     suffix = "colour" if args.palette == "LRGB" else args.palette
     # A comparison keeps its own files, so it never replaces the picture.
     if args.stretched:
         suffix += "-stretched"
     if args.noise_reduction:
         suffix += "-quiet"
+    if used.get("denoise"):
+        suffix += f"-{args.denoise}{args.denoise_strength:g}"
     if args.no_contrast:
         suffix += "-nocontrast"
     if args.star_reduction != 1:
@@ -796,6 +816,8 @@ def run(args):
     settings = {"saturation": saturation, "background": background, "stretched": args.stretched,
                 "noise_reduction": args.noise_reduction, "local_contrast": not args.no_contrast, "star_power": args.star_reduction, "ghs": args.ghs, "sharpen_steps": args.sharpen, "night": args.night,
                 "any_coverage": args.any_coverage}
+    if used.get("denoise"):
+        settings["denoise"] = used["denoise"]
     if linear_mix:
         settings.update(green_kept=GREEN_KEPT, linear_oiii=LINEAR_OIII, star_tint=STAR_TINT, edge_trim=EDGE_TRIM,
                         sky_cells=SKY_CELLS, min_clear=MIN_CLEAR, contrast=CONTRAST, quiet=list(QUIET))

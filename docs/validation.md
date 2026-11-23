@@ -119,7 +119,19 @@ The account of everything tried so far, feature by feature, is at the end:
 - ⚠️ **Focus during a run** triggered once and cloud ended it, so it is unproven
   (job 36).
 
-### Our own denoiser, 22 November 2026
+### Free noise-reduction tools, 23 November 2026
+
+✅ **GraXpert 3.0.2 chosen for pictures.** On ten held-out stacks of NGC 2174 and IC 405 at
+equal grain it kept 93.0, 88.5 and 84.0% of a faint planted filament (our best model 90.3,
+84.1 and 78.0; Cosmic Clarity 91.5, 85.9 and 80.2; Siril NL-Bayes 85.3, 76.0 and 66.9; a blur
+98.2, 96.4 and 92.0), and its error against an independent stack was 1.1 to 6.8% below a
+blur's. The faintest 5% of measured stars read up to about 21% low in the worst stack, so it
+is for pictures only. `colour.py --denoise graxpert` made an SHO picture of NGC 2174 with the
+stacks unchanged, and without the tool it made the usual picture and said why. One rig, two
+targets. Details: `docs/free-tools-plan.md`, `docs/research/free-tools-2026-11-23/`.
+
+### Our own denoiser, 22 November 2026, retired 23 November 2026
+
 
 ❌ **Not accepted; no picture uses it.** Two small networks trained on this rig's
 frames, one with IGAPS Ha nebulae added, judged on 10 sessions of two targets never

@@ -1,0 +1,67 @@
+{
+ "IC405-Ha": {
+  "grain": 0.5346,
+  "original": 0.0,
+  "original_grain": 1.0,
+  "blur": 0.643,
+  "blur_grain": 0.5,
+  "siril": 0.544,
+  "siril_grain": 0.5,
+  "cc": 0.565,
+  "cc_grain": 0.5,
+  "graxpert": 0.619,
+  "graxpert_grain": 0.5
+ },
+ "IC405-SII": {
+  "grain": 1.1176,
+  "original": 0.0,
+  "original_grain": 1.0,
+  "blur": 0.632,
+  "blur_grain": 0.5,
+  "siril": 0.533,
+  "siril_grain": 0.5,
+  "cc": 0.523,
+  "cc_grain": 0.5,
+  "graxpert": 0.603,
+  "graxpert_grain": 0.5
+ },
+ "NGC2174-Ha": {
+  "grain": 0.9733,
+  "original": 0.0,
+  "original_grain": 1.0,
+  "blur": 0.64,
+  "blur_grain": 0.5,
+  "siril": 0.547,
+  "siril_grain": 0.5,
+  "cc": 0.523,
+  "cc_grain": 0.5,
+  "graxpert": 0.605,
+  "graxpert_grain": 0.5
+ },
+ "NGC2174-OIII": {
+  "grain": 0.7759,
+  "original": 0.0,
+  "original_grain": 1.0,
+  "blur": 0.633,
+  "blur_grain": 0.5,
+  "siril": 0.528,
+  "siril_grain": 0.5,
+  "cc": 0.517,
+  "cc_grain": 0.5,
+  "graxpert": 0.579,
+  "graxpert_grain": 0.5
+ },
+ "NGC2174-SII": {
+  "grain": 0.7604,
+  "original": 0.0,
+  "original_grain": 1.0,
+  "blur": 0.64,
+  "blur_grain": 0.5,
+  "siril": 0.533,
+  "siril_grain": 0.5,
+  "cc": 0.514,
+  "cc_grain": 0.5,
+  "graxpert": 0.569,
+  "graxpert_grain": 0.5
+ }
+}
