@@ -160,7 +160,7 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
 
 ## Training data
 
-39. **Try AstrophotoMarket again on 23 November 2026.** On 22 November the free
+39. **Try AstrophotoMarket again after 23:10 on 23 November 2026,** a full 24 hours after the last download. On 22 November the free
     cart stopped at 10 datasets, for the owner by hand too; whether the limit
     resets is not known. Still to get, by listing number: 264, 267, 270, 294,
     316, 326, 332, 337, 360, 363, 405, 422, 467, 510, 572, 583. Their links,
