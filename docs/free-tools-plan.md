@@ -62,7 +62,7 @@ Siril ran with automatic samples; placing them by hand might do better but is no
 | Star-core clipping fault | Open | Fix in `stacking.py`, comparing with Siril's rejection | To do |
 | Noise reduction | Optional in pictures | **GraXpert**, on each filter's linear stack | Built |
 | Background and gradients | Our sky model | **Keep ours**: no tool did as well overall | Tested |
-| Star removal | Plain code | Cosmic Clarity Dark Star; StarNet if its terms allow | To test |
+| Star removal | Plain code | Seti Astro Suite Pro's Dark Star; StarNet if its terms allow | To test, once the owner accepts the model licence |
 | Sharpening and deconvolution | Our steps | GraXpert and Cosmic Clarity, with star and nebula checks | To test |
 | Stretch | Ours, with a GHS option | Siril GHS | To test |
 | Colour calibration, broadband | Star average | Siril SPCC | To test |
@@ -79,8 +79,14 @@ command line in turn, and record the tool, version and settings beside the pictu
 missing tool is reported plainly. Tools are installed by the user and never bundled.
 
 **Licences.** GraXpert's program is GPL-3 and its denoise model is CC BY-NC-SA 4.0. Using
-them for non-commercial pictures fits that; TelescopeYoke must not ship the model. Cosmic
-Clarity's repository is MIT, and Siril is GPL-3. Each is called as a separate program.
+them for non-commercial pictures fits that; TelescopeYoke must not ship the model. Siril is
+GPL-3. Each is called as a separate program.
+
+Cosmic Clarity's own repository (MIT) was archived in 2026 and its work continues in Seti Astro
+Suite Pro (GPL-3), which has a command line. **The suite's current AI models are not open
+source:** their licence allows personal, non-commercial use within the suite only, and forbids
+redistribution and use outside it. TelescopeYoke may only call the suite's own command, on a
+copy the user installed, with models the user downloaded and accepted themselves.
 
 ## What happens to the denoiser
 
