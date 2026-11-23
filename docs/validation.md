@@ -98,6 +98,27 @@ The account of everything tried so far, feature by feature, is at the end:
 | 16 | Does the handset take its clock from the computer? | `./mount.py settime` with the handset at its main menu, then read its date on its own screen. | Yes, once: 7 October 2026, at the main menu, it read back the computer's time to the second and its sidereal clock came to 0.01° from true. The date on its own screen was not looked at. |
 | 17 | Can it predict what a turn of a bolt does? | During polar alignment: measure; turn the left azimuth bolt in exactly half a turn; measure again saying so (`--turned 0.5 0`, or the screen); then another half turn the same way and measure again. | Partly, 17 October 2026, not in exact half turns: a quarter turn moved the axis about 0.2° east (the program learnt 0.72° a turn from it), and the next adjustment, told nothing, moved it 2.9°, about 1.7° a turn if it was the advised one and three quarters. The learnt figure was too small: the advice in turns is not yet to be believed. |
 
+### The night of 22 November 2026
+
+- ✅ **True home on the Wi-Fi link.** With every place reached moving west,
+  `findhome` kept 12 of 12 places, 0.05° from its fit, and `truehome` was
+  accepted; `findhome --check` then read +0.01° in RA. An earlier run the same
+  evening showed why it had refused before: about 0.3° of RA slack.
+- ✅ **Narrowband focus offsets.** Third night: Ha +4 and SII +16 half-steps
+  from L, both usable by scheduled runs.
+- ✅ **The filter wheel, one process at a time.** It changed filter all night
+  without the hang of 21 November, when a status read from another process
+  coincided with it stopping.
+- ✅ **Tabby's star**, second 183M night in L, B, R and G, each within 2 sigma of
+  the first ([job 26](agents/owner-jobs.md)).
+- ❌ **A Moon video on the 183M** cannot run while the keeper holds the camera
+  (job 34). `./ty moon`'s centring also lost the disc.
+- ⚠️ **Garbled motor board answers**, three in the evening, one of which erased
+  home and the Dec direction. Fixed in code, not yet seen working on a real
+  fault; the cause is not settled (job 40).
+- ⚠️ **Focus during a run** triggered once and cloud ended it, so it is unproven
+  (job 36).
+
 ### Our own denoiser, 22 November 2026
 
 ❌ **Not accepted; no picture uses it.** Two small networks trained on this rig's

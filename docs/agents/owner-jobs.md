@@ -86,9 +86,9 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
     480 x 240 at speed 4 against speed 0 (`docs/nights/2026-11-19/guide-camera-window.md`).
 12. **Python on the desktop** for `./restack.py --on desktop` (astropy,
     scipy, numpy, Pillow, in `~/telescopeyoke/.venv` there).
-39. **Slew in and around the place the motor board garbled its answers**,
-    to see whether it repeats there. Both faults of 22 November 2026 were
-    west of the meridian with the RA axis at about 309°:
+40. **Slew in and around the place the motor board garbled its answers**,
+    to see whether it repeats there. The first two faults of 22 November 2026
+    were west of the meridian with the RA axis at about 309°:
     - 17:43 UT, `'03'`, in findhome, leaving +1 h for the east side: the
       mount stopped at RA axis 308.63°, Dec axis 105.59° (RA 18.83 h,
       Dec +74.41°). Read on the old home, which was 1.04° out in RA and
@@ -102,15 +102,21 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
       Garbled answers to read-only questions are now asked again, so a
       repeat no longer ends a run: note how often they come.
     - 20:00 UT, the likelier cause: the laptop's Wi-Fi (2.4 GHz, -71 dBm,
-      29 Mb/s) was carrying the live stream's 8 Mb/s upload, and pings to
-      the router took up to 1.7 s (2 ms at 17:44). The mount's commands share
-      that radio. Test by day with the stream on and off as well as by place.
+      29 Mb/s) was carrying about 8 Mb/s of upload, and pings to the router
+      took up to 1.7 s (2 ms at 17:44). The mount's commands share that radio.
+      Of the upload the stream was 3.7 Mb/s (already 720p) and remote desktop
+      0.9; the other 4 or so is not identified. Moving the router at 20:21
+      gave -63 dBm, channel 1 and about 10 ms. Test by day with the stream on
+      and off as well as by place.
 
     By day, with nothing else asking the mount anything: GoTos into and
     through RA axis 300-318°, at Dec axis 105° and 134° and between, from
-    both directions, and the same number elsewhere to compare. Two faults
-    do not yet show that the place is the cause. Until job 13 is done, a
-    repeat can erase home again, so keep home's counts first.
+    both directions, and the same number elsewhere to compare. Three faults
+    do not show that the place is the cause.
+41. **The guide camera at switch-on.** On 20, 21 and 22 November it timed out
+    on laptop port 1-4 (error -110) until replugged; twice it failed as the
+    hub came up with it, and it worked with the hub up first. Try it last in
+    the plugging order, then on the SV241.
 
 ## In code, no hands needed
 
@@ -120,8 +126,9 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
     The demo needs a pretend focuser, or to refuse the real one; until
     then, never run the demo's focus while the focuser is in use.
 
-13. **Automatic recovery from mount faults**: one garbled motor-board answer
-    asked again before giving up; a command that leaves the mount stopped
+13. **Automatic recovery from mount faults**: (done 22 November, not yet seen
+    working on a real fault: a garbled answer to a read-only question is asked
+    again, and one cannot erase home.) Still owed: a command that leaves the mount stopped
     mid-job restarts tracking or says so; trailed stars all the same way
     reported as "not tracking", never "cloud"; a run that loses the mount
     resumes. In the demo first (`TY_DEMO_BOARD`).
@@ -138,15 +145,6 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
 
 22. **The real/bogus model is stale** (trained on uncommitted code):
     `./realbogus.py train`, minutes of computing, not while imaging.
-
-23. **The filter wheel hang.** On 21 November at 19:58 it stopped taking
-    commands as it turned to G, just as `./sxwheel.py status` was run from
-    another process; whether that caused it is not known. Switching its hub
-    port off and on made it drop off USB (error -71), and only a replug
-    brought it back. Since 22 November `sxwheel.py` lets one process at a
-    time use the wheel, so a status waits for a turn to finish. Not yet run
-    on the wheel: at the next setup, check a filter change, and if it hangs
-    again the shared status read was not the cause.
 
 ## In the next clear gap
 
@@ -204,15 +202,22 @@ its job comes off this list.
     `./precision.py SESSION --planet NAME` and `--compare FIELD`. One shared
     night is provisional, two wins are firm. `precision.py`'s mono path has
     not yet run on a real 183M transit.
-34. **Mono Moon video.** `./ty moon` and `./ty lucky` now write and stack the
-    183M's video as mono; not yet run on a real video.
+34. **Mono Moon video.** `./ty moon` and `./ty lucky` write and stack the
+    183M's video as mono, but cannot run while the keeper holds the camera:
+    `cam.video` is a generator, which cannot cross to the keeper (22 November:
+    `TypeError: cannot pickle 'generator' object`). The keeper needs to stream
+    frames one at a time, its cooler checks going on between them, and a
+    restart to load it, so make the change on a day the camera is warm.
+    **`./ty moon`'s centring** also lost the Moon that night, probably on the
+    test moves in Dec (job 2): the disc had to be centred by `--aim-off`.
 35. **Mineral Moon from B, G and R** (`./ty lucky capture --filter`, stack
     each, `./ty lucky mineral --mono B G R`), and **a supernova's colour**
     (`./patrol.py TARGET --colour-at RA,DEC`): both built, neither run on
     the sky. The owner chose not to run them on 21 November.
-36. **Focus during a run** (`refocus.py`, `docs/focus.md`): built 21 November,
-    not yet run on the sky. The next ordinary imaging run with the keeper
-    will use it: read its `focusing again` and `focus:` lines, check the stars
+36. **Focus during a run** (`refocus.py`, `docs/focus.md`): built 21 November.
+    First triggered on 22 November at 20:40 (the focuser 1 °C cooler), when
+    cloud took the stars part way and it went back where it started, so it
+    has not yet been seen to improve focus. The next clear run will: read its `focusing again` and `focus:` lines, check the stars
     after it, and record the result in `docs/validation.md`. Its 1.25 width
     and 1 °C triggers are first estimates.
 37. **The Moon's filter advice** (`filters.for_moon`): it changes where the

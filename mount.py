@@ -1153,9 +1153,10 @@ class Mount:
         with self.watching():
             turn(step)
             try:
-                said = ask("The tube has tipped 5° away from the pole. Stand behind the mount facing "
-                           "north, the way the tube was pointing. Did the front of the tube tip to "
-                           "your RIGHT (east) or your LEFT (west)? [e/w] ").strip().lower()[:1]
+                # By compass, wherever the person stands: "right" and "clockwise"
+                # saved this backwards on 22 November 2026.
+                said = ask("The tube has tipped 5° away from the pole. Which side of the mount has its "
+                           "open end gone to: EAST or WEST? [e/w] ").strip().lower()[:1]
             finally:
                 turn(-step)     # back to home, whatever was answered
         if said not in ("e", "w"):
