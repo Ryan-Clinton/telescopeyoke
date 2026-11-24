@@ -3,7 +3,10 @@
 temperatures, from warm to the -5 °C it runs at, measured and compared.
 
     ./darktest.py --plan             what it would take, and how long; opens nothing
-    ./darktest.py                    +5, 0, -2.5 and -5 °C, cap on
+    ./darktest.py                    +5, 0, -2.5 and -5 °C, cap on, then stays cold
+    ./darktest.py --more -5          the held run measures these next, without warming
+    ./darktest.py --finish           the held run warms up slowly and ends
+    ./darktest.py --warm-after       warm up by itself after the last temperature
 
 The camera's previous owner found -5 °C enough on this sensor (altair.py's
 TEC_LOWEST). The curve down to it shows whether the benefit is flattening
@@ -15,6 +18,7 @@ The results go in cache/darktest/, and no frame or master is kept: nothing
 here can reach calibration/ or be used to calibrate a picture.
 """
 import argparse
+import json
 import time
 
 import numpy as np
@@ -25,6 +29,7 @@ import interface
 import keeper
 import records
 import testmode
+from altair import TEC_LOWEST
 from camera import WHITE, Camera
 
 TEMPERATURES = (5.0, 0.0, -2.5, -5.0)   # warm to cold: one slow way down
@@ -35,6 +40,8 @@ GAIN = 1500
 START_MARGIN_C = 1.0    # a temperature this close to the room's, or above it, cannot be held by a cooler
 FLAT_BELOW = 0.02       # a last step that lowers the noise by less than this share: flattening
 CORNER = 300            # pixels: the box in each corner where amp glow shows
+HOLD_MOST_S = 4 * 3600  # held cold after the last temperature, with nobody asking for more
+NEXT = config.DATA / "cache" / "darktest" / "next.json"     # the order a held run is waiting for
 
 
 def robust(values):
@@ -80,6 +87,57 @@ def plan(args):
           "with the cooling and warm-up. No frames kept.")
 
 
+def take(cam, args, target, start, rows, path):
+    """Cool to one temperature, measure it and keep the figures."""
+    if target > start - START_MARGIN_C:
+        print(f"{target:g} °C left out: the sensor started at {start:.1f} °C", flush=True)
+        return
+    cam.cool(target)
+    cam.settle(say=print)
+    until = time.monotonic() + HOLD_S
+    while time.monotonic() < until:
+        cam.ramp()
+        time.sleep(5)
+    shorts = [cam.frame(args.short)[0] for _ in range(args.frames)]
+    if np.median(shorts[0][::8, ::8]) > 0.2 * WHITE:
+        raise SystemExit("Those frames are bright. This needs the cap on.")
+    longs = []
+    for n in range(args.frames):
+        longs.append(cam.frame(args.long)[0])
+        print(f"  {target:g} °C: {args.long:g} s dark {n + 1} of {args.frames}", flush=True)
+    row = {"target_c": target, "sensor_c": cam.temperature(), **measure(longs, shorts, args.long, args.short)}
+    rows.append(row)
+    print(f"{row['sensor_c']:.1f} °C: dark {row['dark_adu_per_s']:.4f} ADU/s, noise {row['noise_adu']:.2f} "
+          f"ADU, {row['hot_pixels']} hot pixels, amp glow {row['amp_glow_adu']:.1f} ADU", flush=True)
+    records.write(path, {"gain": args.gain, "long_s": args.long, "short_s": args.short,
+                         "frames": args.frames, "start_c": start, "rows": rows}, stamp=True)
+
+
+def hold(cam, args, start, rows, path):
+    """Stay cold after the last temperature, so another can follow without a
+    warm-up and a second cool-down. A plain kill ends it through run()'s
+    slow warm-up; so does HOLD_MOST_S with nobody asking for more."""
+    print(f"holding the sensor cold, up to {HOLD_MOST_S / 3600:g} h: ./darktest.py --more TEMPS for further "
+          "temperatures, ./darktest.py --finish to warm up slowly", flush=True)
+    until = time.monotonic() + HOLD_MOST_S
+    while time.monotonic() < until:
+        cam.ramp()
+        if NEXT.exists():
+            asked = json.loads(NEXT.read_text())["temperatures"]
+            NEXT.unlink()
+            if not asked:
+                print("finishing: the slow warm-up", flush=True)
+                return
+            for target in asked:
+                if target < TEC_LOWEST:     # refused here: the cooler's own refusal would end the hold and warm it
+                    print(f"{target:g} °C not taken: below the {TEC_LOWEST:g} °C limit", flush=True)
+                    break
+                take(cam, args, target, start, rows, path)
+            until = time.monotonic() + HOLD_MOST_S
+            print("holding the sensor cold again", flush=True)
+        time.sleep(5)
+
+
 def run(args):
     if keeper.running():
         raise interface.Refusal("CAMERA_BUSY", "The camera keeper holds the sensor at its target: ./keeper.py stop "
@@ -93,29 +151,11 @@ def run(args):
             if start is None:
                 raise SystemExit("The sensor will not say its temperature: no comparison can be made.")
             print(f"sensor at {start:.1f} °C", flush=True)
+            NEXT.unlink(missing_ok=True)    # an order left from an earlier run is not for this one
             for target in args.temperatures:
-                if target > start - START_MARGIN_C:
-                    print(f"{target:g} °C left out: the sensor started at {start:.1f} °C", flush=True)
-                    continue
-                cam.cool(target)
-                cam.settle(say=print)
-                until = time.monotonic() + HOLD_S
-                while time.monotonic() < until:
-                    cam.ramp()
-                    time.sleep(5)
-                shorts = [cam.frame(args.short)[0] for _ in range(args.frames)]
-                if np.median(shorts[0][::8, ::8]) > 0.2 * WHITE:
-                    raise SystemExit("Those frames are bright. This needs the cap on.")
-                longs = []
-                for n in range(args.frames):
-                    longs.append(cam.frame(args.long)[0])
-                    print(f"  {target:g} °C: {args.long:g} s dark {n + 1} of {args.frames}", flush=True)
-                row = {"target_c": target, "sensor_c": cam.temperature(), **measure(longs, shorts, args.long, args.short)}
-                rows.append(row)
-                print(f"{row['sensor_c']:.1f} °C: dark {row['dark_adu_per_s']:.4f} ADU/s, noise {row['noise_adu']:.2f} "
-                      f"ADU, {row['hot_pixels']} hot pixels, amp glow {row['amp_glow_adu']:.1f} ADU", flush=True)
-                records.write(path, {"gain": args.gain, "long_s": args.long, "short_s": args.short,
-                                     "frames": args.frames, "start_c": start, "rows": rows}, stamp=True)
+                take(cam, args, target, start, rows, path)
+            if not args.warm_after:
+                hold(cam, args, start, rows, path)
         finally:
             cam.warm_up(say=print)
     said = verdict(rows)
@@ -134,7 +174,14 @@ def main():
     ap.add_argument("--long", type=float, default=LONG_S, help=f"seconds (default {LONG_S:g})")
     ap.add_argument("--short", type=float, default=SHORT_S, help=f"seconds, for the zero level (default {SHORT_S:g})")
     ap.add_argument("--gain", type=int, default=GAIN)
+    ap.add_argument("--more", type=float, nargs="+", metavar="C", help="further temperatures for the run holding cold")
+    ap.add_argument("--finish", action="store_true", help="tell the run holding cold to warm up slowly and end")
+    ap.add_argument("--warm-after", action="store_true", help="warm up after the last temperature instead of holding")
     args = ap.parse_args()
+    if args.more or args.finish:
+        records.write(NEXT, {"temperatures": sorted(args.more or [], reverse=True)})
+        print("Left for the run holding the sensor cold; it reads it within 5 s (see its log).")
+        return
     if args.frames < 2 or args.long <= args.short:
         ap.error("needs at least 2 frames, and --long longer than --short")
     args.temperatures = sorted(args.temperatures, reverse=True)
