@@ -1,6 +1,6 @@
 # Spec: one way for every long job to report
 
-Status: draft for review, 24 November 2026. Nothing here is built yet.
+Status: draft, revised after a first review, 24 November 2026. Nothing here is built yet.
 
 Reviewers (ChatGPT included): this project has no tests and no CI by the
 owner's choice (`AGENTS.md`, "No testing, and why"). Do not suggest tests,
@@ -161,195 +161,317 @@ darktest, but not the next script.
 5. **Works for scripts not yet changed.** It must at least stop output being
    held back, keep the log, and report the exit and any silence, for every
    project command, from the first day.
-6. **Moves nothing.** It reads and writes records only. No new network
-   listener. The read-only rules for the web server and the MCP server stand.
-   The camera's cooling, the mount's limits and every fail-closed check are
-   not touched.
+6. **The next job starts by itself.** When a job finishes, or lets go of
+   what the next one needs, the next planned job starts without waiting for
+   the agent to notice. On 24 November, knowing the darks had finished
+   would not have been enough: the Moon video had to start too. Reporting
+   alone only turns "I didn't know it had finished" into "I knew, but
+   didn't start the next one".
+7. **Never idle when asked to keep busy.** When the owner has asked for
+   work until a given time, the agent is woken whenever nothing is running
+   or queued before that time (23 November: "why is the cpu idle have i not
+   been clear?").
+8. **Safety unchanged.** No new network listener. The read-only rules for
+   the web server and the MCP server stand. The queue starts only work that
+   was asked for, through the project's own commands, so their protections
+   apply as they do now: the camera's cooling, `Mount.may_move` and its
+   limits, and every fail-closed check.
 
 ## The design
 
-### 1. The job record, built on `activity.py`
+### 1. The job and who writes what
 
-A job is one command, started by the agent, the console, a timer or another
-job. Each one gets a folder of its own, `cache/jobs/ID/` (ID =
-`YYYYMMDD-HHMMSS-name`), holding:
+A job is one run of a command. It is started by the agent, the console, a
+timer, the queue or another job. Each job gets its own folder,
+`cache/jobs/ID/`. The ID is `YYYYMMDD-HHMMSS-name-xxxxxx`, where `xxxxxx`
+is six random hex characters, so two jobs with the same name started in
+the same second still differ.
 
-- `state.json`, written with `records.write` and checked against a new
-  schema:
-  - what it is: name, command line, process ID, the parent job's ID;
-  - when: started, last heartbeat;
-  - its phase: running, waiting, done or failed;
-  - progress: step k of n, the text of the current step, the last line
-    printed and when;
-  - when it expects to end, if known;
-  - when waiting: why, and what would end the wait (for example,
-    `./darktest.py --more` or `--finish`);
-  - at the end: the exit code and a one-line result.
-- `log.txt`: everything it prints, a line at a time as it happens.
+The record is split into files, and each file has exactly one writer. A
+file is either replaced whole (`records.write`) or added to a line at a
+time by that one writer, so no update is ever lost to two writers changing
+the same file:
 
-There is also one shared `cache/jobs/events.jsonl`, with one line per event
-that matters: `started`, `step`, `milestone`, `waiting`, `resumed`, `done`,
-`failed`, `stalled` and `vanished`. Each line has the job's ID, the time, a
-level (`log`, or `wake` for the events in requirement 2) and the words.
+| File | Written only by | Holds |
+|---|---|---|
+| `process.json` | The launcher (`ty bg`) | What started it and why (the queue item, the person's ask). Command line, redacted with `agentlog.redact`. Host, process ID, the process's start time, the boot ID. Kind (below). Phase (queued, running, exited). The exit code and when. |
+| `progress.json` | The job itself, from its main thread | Step k of n and its text. The current operation and how long it may take. Waiting, and what ends the wait. The result line. |
+| `heartbeat` | The job's heartbeat thread | Nothing. Only the file's modified time changes, every 30 s. The thread never calls the camera, the mount or anything else. |
+| `events.jsonl` | The job itself (the launcher writes its own `started` and `exited`) | One line per event that matters, each with its own ID. |
+| `log.txt` | The process's stdout and stderr, through the launcher | Every line printed, written as it happens. |
+| `acks.jsonl` | The agent, through `ty jobs --ack` | What was done about each event that woke it. |
 
-The API is in `activity.py`, so the console sees the same thing:
+**The ending is decided once, by the reader:**
+- **Done:** exit code 0 and no `failed` event.
+- **Failed:** a non-zero exit code, a `failed` event, or a process that
+  printed a result and then exited with an error.
+- **Vanished:** the process is gone, by its process ID and start time,
+  which together are never reused, and no exit was recorded. This happens
+  when it was killed, crashed or ran out of memory, or the computer
+  restarted.
+
+A command run without the launcher still writes `progress.json`,
+`heartbeat` and `events.jsonl`. Its `atexit` and `excepthook` handlers then
+write `process.json` once, at the end.
+
+**Kinds:**
+- **Finite:** a restack, the dark test, an imaging block. It has steps and
+  an expected end.
+- **Service:** the keeper, the stream, the status page. It has no end and
+  no percentage. It reports its state (for example, the camera at -5 °C),
+  and it fails only by stopping or by its own fault events.
+- **Remote:** any job whose work runs on another computer (section 6).
+
+Waiting is a phase any job can be in, not a kind of job.
+
+`activity.py` keeps its calls and the console keeps its view.
+`activity.doing` and `activity.imaging` also write the current operation
+into the job's `progress.json`. `cache/activity.json` becomes a view built
+from the job records, so there is one place the state is kept.
+
+### 2. Alive is not the same as making progress
+
+The reader keeps four times apart:
+- `heartbeat`: the process is alive.
+- `last_output`: the last line printed.
+- `last_progress`: the last step, milestone or reading. A reading is an
+  observation, such as the sensor's temperature, and counts as progress
+  only when it changes.
+- `phase_deadline`: how long the current operation may take, given by the
+  job (`job.expect(150, "120 s dark")`).
+
+The job has stalled when it has gone longer than its deadline plus a margin
+with no progress, however often it prints or beats. A healthy 300 s
+exposure is not a stall. A camera library that hangs while the heartbeat
+goes on is. A command not yet changed, which sets no deadlines, is stalled
+after 10 minutes with no output.
+
+### 3. The calls a job makes
 
 ```python
 with activity.job("darktest", steps=["-5", "-7.5", "-10"], expect_s=3 * 1500) as job:
-    job.say("camera: cooling, sensor at -6.2 °C ...")   # log only
-    job.step(2, "-7.5 °C: 120 s dark 4 of 6")           # progress, log only
+    job.expect(150, "-7.5 °C: 120 s dark 4 of 6")       # the operation now, and its deadline
+    job.say("cooling: -6.2 °C, target -7.5")            # log only
+    job.step(2, "-7.5 °C")                              # progress
     job.milestone("last temperature done: -9.9 °C")     # wakes the agent
-    job.waiting("holding cold up to 4 h", ask="./darktest.py --more TEMPS | --finish")
+    job.waiting("holding cold up to 30 min", ask="./darktest.py --more TEMPS | --finish",
+                holds=["camera"])
     job.resumed("taking -12 °C")
-# leaving the block: done, with the result line; an exception: failed, with the traceback's last line
 ```
 
-When a job is entered:
-- stdout and stderr print a line at a time;
-- an `excepthook` and an `atexit` handler write `failed` or `done` even
-  when the code forgets to;
-- a heartbeat thread updates the record every 60 seconds.
+Entering the job also:
+- prints a line at a time on stdout and stderr;
+- installs the `excepthook` and `atexit` handlers;
+- starts the heartbeat thread.
 
-Children inherit `TY_JOB` (the parent's ID) and become child jobs, never
-`DEVNULL`. The parent's record names them.
+Children inherit `TY_JOB` and become child jobs, never sent to `DEVNULL`.
 
-### 2. A launcher for every background job: `./ty bg NAME -- COMMAND...`
+### 4. The launcher and the queue: `./ty bg`
 
-This is the one way the agent, and the console where it fits, starts
-anything long. It:
+```
+./ty bg NAME [--after ID[:milestone|:released]] [--needs camera,mount,cpu,gpu] [--kind service] -- COMMAND...
+```
+
+The launcher:
 - sets `PYTHONUNBUFFERED=1` and `TY_JOB`;
-- writes the log to `cache/jobs/ID/log.txt`;
-- writes `started` and, when the process exits, `done` or `failed` with the
-  exit code.
+- writes the log to the job's `log.txt`;
+- writes `process.json` and the `started` and `exited` events.
 
-Scripts not yet changed get requirement 5 at once: no output held back, a
-known log, the exit recorded and silence noticed. Scripts that use
-`activity.job` add steps, milestones and waiting states to the same record.
+From the first day this covers every command, changed or not: output
+written as it happens, a known log, the real exit code, and silence noticed.
 
-### 3. Reading it: `./ty jobs`
+**`--after` and `--needs` make it the queue.** The job is recorded as
+`queued`, with what it waits for, and starts by itself as soon as:
+- the job it is after has done, has reached the named milestone, or has
+  released what it held (`:released`, for example darktest's hold letting
+  go of the camera); and
+- what it needs is free.
 
-`./ty jobs` lists the running, waiting and recent jobs. For each one it
-shows:
-- its name and phase;
-- step k of n and the step's text;
-- the last line and how long ago it came;
-- when it expects to end;
-- if waiting, why and what ends it;
-- its log's path.
+What a job holds comes from `job.waiting(..., holds=)`, the camera keeper,
+and `Mount.may_move`'s owner file. A queued job never runs if the job it is
+after failed. It is marked `blocked`, and the agent is woken. This is
+`desktopqueue.py`'s model (lanes, `--after`, a failure stopping only what
+waits on it, surviving a restart), brought to the laptop with the camera
+and the mount as resources. The two share their code, and `desktopqueue.py`
+keeps its CPU and GPU lanes.
 
-`--json` comes with a schema. `./ty jobs NAME --tail 20` shows the last
-lines of one job. It only reads.
+On 24 November this would have read
+`./ty bg moonvideo --after DARKTEST:released --needs camera -- ./ty lucky capture ...`,
+and the video would have started without anyone being asked.
 
-Stall rules, applied when it reads:
-- **Stalled:** no log line or step for longer than the job's own limit,
-  which a script may set (a 300 s dark is not a stall). The default is 10
-  minutes.
-- **Vanished:** the process has gone with no `done` or `failed` written.
-- **Waiting too long:** waiting for longer than it said it would.
+The queue starts only what was asked for. The commands it starts keep all
+their own protections.
 
-### 4. Waking the agent: `./ty jobs --watch`
+### 5. Events that wake the agent, kept until dealt with
 
-`./ty jobs --watch` prints one short line for each `wake` event, and the
-stalled and vanished ones it finds. Otherwise it prints nothing. The agent
-starts it as one Monitor at the start of each session and keeps it
-running. It is the only Monitor needed for jobs, and it replaces the
-practice of waiting for a process to exit. `runwatch.py` keeps its imaging
-measures but writes them as events, so an imaging run wakes the agent
-through the same watch.
+These events are `wake` events: `done`, `failed`, `vanished`, `stalled`,
+`milestone`, `waiting`, `blocked` and `idle` (section 7). Each one has an ID
+and stays **open** until the agent records what it did about it:
+`./ty jobs --ack EVENT "started the Moon video"`. Seeing an event is not
+enough. The ack says the action, so "I knew, but did nothing" shows up as
+an event still open.
 
-### 5. In front of the agent at every message
+- **`./ty jobs --watch`**, run by the agent as one Monitor for the session,
+  prints one line for each new `wake` event, and nothing else.
+- **On every one of the owner's messages and at the start of each
+  session**, the `jobs.py` hook lists every event still open, however long
+  ago it came. An event raised while no session was watching, before the
+  Monitor started or across a context compaction, is still shown until it
+  is dealt with.
+- **A `waiting` event** says what else is queued behind what the job holds,
+  so the decision it needs is plain.
 
-A `UserPromptSubmit` and `SessionStart` hook, `jobs.py` beside `news.py`
-and `sky.py`, adds a few lines to each of the owner's messages when any job
-is running or waiting: name, phase, step, the last line's age, and when it
-should end. So "progress report" is always answered from the state of that
-moment. It prints nothing when no job is running.
+### 6. Work on another computer
 
-### 6. The phone, only when a person is needed
+`remote.py` already runs the desktop's work over SSH. The changes:
+- the remote command runs with output not held back, under `ty bg` on the
+  desktop, in the desktop's own `cache/jobs/`;
+- its lines come back through SSH into the local job's log as they happen;
+- `./ty jobs` lists the desktop's jobs with `--remote HOST`, read over SSH,
+  only when asked or when a local job of kind remote names one.
 
-A job may set `phone=True` on `waiting` and `failed`, for example the
-schedule at night or a cooling fault. That event then also goes through
-`notify.py`. It is off by default, so the phone gets no progress messages.
+If the connection drops, the local job records `remote unreachable` as an
+event and keeps asking every 2 minutes. The desktop job carries on under
+its own launcher, and is read again when the desktop can be reached. The
+desktop's own queue (`desktopqueue.py`) writes the same records.
 
-### 7. Keeping to it
+### 7. The progress report: `./ty jobs`
 
-`.claude/hooks/guard.py` warns when the agent starts a project command in
-the background without `ty bg`. Whether it should block instead is an open
-question. A new long-running script uses `activity.job` from its first
-commit, as the camera's cooling rules are kept now. `AGENTS.md`,
-`CLAUDE.md` and the skills get three rules:
-- start long jobs with `ty bg`;
+`./ty jobs` gives the answer to "progress report", in this order:
+1. **Open events** that need the agent or the owner.
+2. **Running jobs**: name, step k of n, the current operation and its
+   deadline, the last line and how old it is, the expected end.
+3. **Waiting and blocked jobs**: why, what they hold, and what ends the
+   wait.
+4. **Queued jobs**: in order, what each is after and needs, and an
+   estimate where it has one. Also the total time of queued work.
+5. **The computer**: CPU, memory and disk free, and the GPU on the
+   desktop, read the way `desktopqueue.py report` reads them now.
+6. **The camera**: its owner, the sensor's temperature and target, from
+   the keeper or the job holding it.
+7. **The mount**: its owner, from `cache/mount-owner.json`.
+
+`--json` comes with a schema, and `./ty jobs NAME --tail 20` shows one
+job's last lines. It only reads, apart from `--ack`.
+
+**Busy until:** `./ty jobs --busy-until 08:00 "the owner asked for 6-8
+hours of work"` records the owner's ask. While it stands, an `idle` event
+wakes the agent whenever nothing is running or queued.
+
+### 8. Keeping to it
+
+**`guard.py` blocks** a background project command the agent starts
+without `ty bg`. The exceptions are commands `policy.py` classes as
+read-only, `ty bg` and `ty jobs` themselves, and `mount.py stop`. The guard
+only sees the agent's own commands, so the other ways jobs start are listed
+and each one is changed to use the launcher:
+
+| Entry point | What starts there now | Change |
+|---|---|---|
+| systemd timers | `storage.py --processed` (ty-archive), `schedule.py guard` (ty-night-end), `clouds.py --approach` (ty-satellite) | Their `ExecStart` runs through `ty bg`. |
+| systemd services | `serve.py` (ty-serve), `stream.py` (ty-stream), the site's live stream | Recorded as `service` jobs. |
+| The console | The commands in `console.WORKSTATION` and its table | Each one runs through `ty bg`, so the console and the agent see the same jobs. |
+| Child processes | `schedule.py`'s blocks, the dawn flats and the camera release; `shoot.restack_later`; `patrol.py`'s commands, `history.py --keep` and `search_later` | Children through `ty bg` with `TY_JOB`. None sent to `DEVNULL`. |
+| Remote | `remote.py`, `desktopqueue.py` | Section 6. |
+
+Implementation starts with a full search of every `subprocess` call and
+unit file, to confirm this list. The audit's list above is a start, not
+proof that nothing is missed.
+
+`AGENTS.md`, `CLAUDE.md` and the skills (`imaging-run`, `end-of-night`,
+`discovery-night`, `nightly-setup`) say:
+- start long jobs with `ty bg`, and queue what follows with `--after`;
 - keep `./ty jobs --watch` running;
-- answer a progress report from `./ty jobs`, and never say "I can't tell
-  until it finishes".
+- answer a progress report from `./ty jobs`;
+- ack each event with what was done.
+
+### 9. Keeping it tidy
+
+- **Old jobs:** a finished job's folder is kept for 30 days, then deleted.
+  The folders of open, running, queued and waiting jobs are never deleted.
+- **Logs:** each log is capped at 20 MB, with the oldest half dropped and
+  the result line always kept.
+- **Disk space:** if the data disk is below 5 GB free, logs are cut down
+  first, before any frames are at risk. The disk filled on 2 November.
+- **Redaction:** command lines and logged arguments go through
+  `agentlog.redact`, as the decision record does.
 
 ### What every job promises
 
 - Every line is written as it happens.
 - During a long wait, a line at least every 5 minutes saying what it is
-  waiting on and the latest figure, for example "cooling: -6.2 °C, target
-  -7.5".
-- Step k of n, and an end time where one can be known.
+  waiting on and the latest reading.
+- Step k of n, a deadline for the current operation, and an end time where
+  one can be known.
 - A `milestone` at any point a plan may continue from.
 - A `waiting` event the moment it waits on a person or another command,
-  saying what ends the wait.
+  saying what ends the wait and what it holds.
+- Releasing what it holds as soon as it no longer needs it.
 - One result line at the end.
 - Children are never sent to `DEVNULL`.
 
+Darktest's 4-hour hold becomes 30 minutes. Anything queued behind the
+camera starts when the hold ends.
+
 ## The order of the work
 
-1. `activity.job`, the job record and its schema, `./ty jobs`,
-   `./ty jobs --watch` and `./ty bg`. Every background job is covered for
-   output held back, the log, its exit and silence from this step.
-2. The `jobs.py` hook, and the rules in `AGENTS.md`, `CLAUDE.md` and the
-   skills (`imaging-run`, `end-of-night`, `discovery-night`,
-   `nightly-setup`).
-3. The scripts that cool the camera or take a night's minutes:
-   - `darktest`, `keeper`;
+1. **The job record**: the files and their single writers, the IDs, the
+   reader's rules for the ending and for stalls, the schemas, and tidying.
+   Then `ty bg` with `--after` and `--needs`, and `./ty jobs` with the
+   resources. From this step every background job is covered.
+2. **Events**: IDs, acks, `--watch`, the `jobs.py` hook, `--busy-until`
+   and `idle`.
+3. **Enforcement**: the guard's block, the search of every entry point,
+   the timers, the console and the children moved onto `ty bg`, and the
+   rules in `AGENTS.md`, `CLAUDE.md` and the skills.
+4. **The scripts that cool the camera or take a night's minutes**:
+   - `darktest` (its hold shortened, with `holds=`), `keeper` (as a
+     service);
    - `calibrate` (darks and flats);
    - `shoot`, `schedule`, `patrol`;
    - `lucky`, `moon`.
-4. The long jobs that say nothing until the end: `restack`, `remote`,
-   `desktopqueue`, `starwatch`, `precision`, `depth`, `transits`,
-   `variables`, `archive`, `brokers`, `realbogus`, `plant`, `difference`.
-   Also the children sent to `DEVNULL` in `shoot` and `patrol`.
-5. `runwatch.py` onto events. The console and the status page show
-   `./ty jobs`.
-6. The hand-named logs in `cache/` are left as they are. New ones stop.
+5. **The long jobs that say nothing until the end**, and remote work:
+   `restack`, `remote`, `desktopqueue`, `starwatch`, `precision`, `depth`,
+   `transits`, `variables`, `archive`, `brokers`, `realbogus`, `plant`,
+   `difference`.
+6. **`runwatch.py` onto events**, and `cache/activity.json` built from the
+   job records for the console and the status page.
 
 ## How it is shown to work
 
 On the next real jobs, recorded in `docs/validation.md`:
-- a cooled dark or flat run;
+- a cooled dark or flat run with a camera job queued behind it;
 - a night's imaging schedule;
-- a restack on the desktop.
+- a restack on the desktop;
+- a night of work left running with `--busy-until`.
 
 For each one, the record should show:
 - a progress report given while it ran, with the figures of the last
   minute;
-- the agent woken within a minute of the last step finishing and of a
-  waiting state starting;
-- a job killed by hand reported as vanished.
+- the queued job starting by itself within a minute of the camera being
+  released;
+- the agent woken within a minute of each `wake` event, and every event
+  acked with what was done;
+- a job killed by hand reported as vanished;
+- no `idle` time left unanswered while a busy-until stood.
 
 ## Out of scope
 
 Tests and CI. A network service. A change to Python's `logging`
-throughout. Retrying jobs automatically. Anything that moves the mount or
-changes the camera's cooling.
+throughout. Retrying a failed job automatically: it is blocked and the
+agent is woken. Anything that loosens the mount's or the camera's
+protections.
 
-## Open questions for review
+## Decided after review
 
-1. Should `guard.py` block a background project command that bypasses
-   `ty bg`, or only warn?
-2. One shared `events.jsonl` with appends a line at a time, or a file per
-   job read together? Appends are atomic for short lines on Linux. What
-   about Windows (`host.py`)?
-3. Should the default stall limit be 10 minutes, and should each script
-   name its own?
-4. Should `activity.json` and the job records merge into one, or does the
-   console keep its own file?
-5. Is a heartbeat thread safe beside the camera's library calls and the
-   keeper's streaming, or should the heartbeat come only from `say` and
-   `step`?
-6. Is anything in the audit missed: a job that runs long, waits or starts
-   children and isn't named above?
+- The guard **blocks**, with the exceptions in section 8.
+- Each job keeps **its own event file**, read together by the reader, so no
+  two processes ever append to one file, on Linux or Windows.
+- **10 minutes** is the stall limit only for commands that set no
+  deadlines. Changed commands set one for each operation.
+- **One source for the state**: the job records. `cache/activity.json`
+  becomes a view of them, and the console's calls stay as they are.
+- **A heartbeat thread** that only touches its file, kept apart from
+  progress, so a hung camera call shows as a stall.
+- The entry points are listed in section 8, and implementation starts by
+  searching for any the list misses.
