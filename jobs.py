@@ -761,6 +761,13 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
         # started there is the same session's.
         owner = f" CLAUDE_CODE_SESSION_ID={session()}" if session() else ""
         command = [*command[:-1], f"export PYTHONUNBUFFERED=1{owner}; {command[-1]}"]
+        if "-t" not in command and "-tt" not in command:
+            # A terminal at the far end, so a stop (or a dropped link) hangs
+            # the remote command up too: without one, a stopped job's
+            # colour.py ran on for ten minutes on the desktop, sharing the GPU
+            # with its replacement (24 November 2026). A remote job meant to
+            # outlive its link runs under nohup (remote.py), which ignores it.
+            command = [command[0], "-tt", *command[1:]]
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log = open(log_path, "ab", buffering=0)
     child = None
