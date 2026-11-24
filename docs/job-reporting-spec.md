@@ -577,7 +577,12 @@ Ryan-Clinton/common (`common/jobs/`, its command `cj`, and the hooks
 `jobs_running.py` and `jobs_keepgoing.py`, installed by common's
 `claude/install.sh`). telescopeyoke keeps its own (`./ty bg`, `./ty jobs`,
 its hooks), because it is public and common is private (the owner's
-decision). A fix made to one is made to the other.
+decision). Common's copy is the authoritative generic core: a fix lands
+there first with its `CORE` revision raised, and is carried here;
+`jobs.py` names the core revision it carries. Common also reserves
+exclusive resources per computer for its projects (`cj host`), which this
+copy does not need: on the laptop, telescopeyoke is the one project using
+the camera and the mount.
 
 ### Partly done
 
