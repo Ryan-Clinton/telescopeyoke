@@ -113,8 +113,9 @@ def write_state(**fields):
         pass
 
 
-def serve(cam, say=print):
-    """Hold `cam` and answer borrowers until told to stop or killed."""
+def serve(cam, say=print, job=None):
+    """Hold `cam` and answer borrowers until told to stop or killed. `job`
+    (jobs.py) is told the sensor's state, and when it first reaches its target."""
     from multiprocessing.connection import Listener
 
     import altair
@@ -226,6 +227,10 @@ def serve(cam, say=print):
                 and abs(degrees - target) <= altair.TEC_READY
             if ready and not status["ready"]:
                 say(f"camera: sensor at {degrees:.1f} °C, its target {target:g} °C: ready")
+                if job is not None:
+                    job.milestone(f"camera ready: sensor at {degrees:.1f} °C, target {target:g} °C", name="ready")
+            if job is not None and degrees is not None:
+                job.reading(f"sensor {degrees:.1f} °C, target {target} °C" + ("" if ready else ", cooling"))
             elif time.monotonic() - said >= SAY_EVERY_S and not ready:
                 unpowered = getattr(cam, "cooler_unpowered", lambda: False)()
                 note = ("; NOT FOLLOWING: the cooler draws nothing, set point held near the sensor: "
@@ -300,7 +305,9 @@ def start(say=print):
             return {"started": False}
         say(f"camera: open and cooling slowly to {cam.target:g} °C; held for every command until "
             "./keeper.py stop")
-        serve(cam, say=lambda line: print(line, flush=True))
+        import activity
+        with activity.job("keeper", kind="service") as job:
+            serve(cam, say=lambda line: print(line, flush=True), job=job)
     return {"started": True}
 
 

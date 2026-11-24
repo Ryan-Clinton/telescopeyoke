@@ -154,7 +154,7 @@ class Job:
         self._lock = threading.Lock()
         now = time.time()
         steps = [str(s) for s in steps] if steps else None
-        self.progress = {"name": name, "steps": steps, "step": None, "of": len(steps) if steps else None,
+        self.progress = {"name": name, "kind": self.kind if kind != "finite" else None, "steps": steps, "step": None, "of": len(steps) if steps else None,
                          "text": "", "operation": None, "deadline_s": None, "operation_since": None,
                          "waiting": None, "holds": [], "reading": None, "result": None,
                          "last_progress": now, "last_output": now, "started": now,
@@ -327,6 +327,19 @@ class Job:
 def job(name, steps=None, expect_s=None, kind="finite"):
     """This process's job (the one already open, if any)."""
     return CURRENT if CURRENT is not None else Job(name, steps, expect_s, kind)
+
+
+class _NoJob:
+    """Stands in when no job is open: every call does nothing."""
+
+    def __getattr__(self, _name):
+        return lambda *args, **kwargs: None
+
+
+def current():
+    """This process's job, or one that ignores every call: code deep in a
+    script reports through this without being handed the job."""
+    return CURRENT if CURRENT is not None else _NoJob()
 
 
 def _hostname():
@@ -571,7 +584,7 @@ def look(job_id, now=None):
     g = _read(d / "progress.json", {}) or {}
     events = _lines(d / "events.jsonl")
     beat, logged = _mtime(d / "heartbeat"), _mtime(d / "log.txt")
-    j = {**p, "id": job_id, "name": p.get("name") or g.get("name") or job_id, "kind": p.get("kind", "finite"),
+    j = {**p, "id": job_id, "name": p.get("name") or g.get("name") or job_id, "kind": g.get("kind") or p.get("kind", "finite"),
          "progress": g, "events": events, "holds": g.get("holds") or [], "heartbeat": beat,
          "last_output": max(filter(None, (logged, g.get("last_output"))), default=None),
          "last_progress": max(filter(None, (g.get("last_progress"), g.get("operation_since"))), default=None),

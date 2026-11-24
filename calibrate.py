@@ -51,6 +51,7 @@ from astropy.io import fits
 
 import config
 import interface
+import jobs
 import stacking
 import testmode
 from camera import WHITE, Camera
@@ -187,7 +188,10 @@ def main():
 
 def off_air(args):
     """Calibration frames are never streamed (testmode.py)."""
-    with testmode.during(f"{args.kind} frames"):
+    import activity
+    steps = ([f"{e:g} s darks" for e in args.exposure] if args.kind == "dark"
+             else list(args.filters or []) if args.kind == "flat" else None)
+    with testmode.during(f"{args.kind} frames"), activity.job(f"calibrate-{args.kind}", steps=steps):
         return indexed(args)
 
 
@@ -329,6 +333,7 @@ def run_matched(args, camera):
         print(f"saved {path}: {int(mask.sum())} bad pixels, from {longest.name}")
         return {"kind": "badpixels", "file": str(path), "bad": int(mask.sum())}
     if args.kind == "flat" and getattr(args, "twilight", False):
+        jobs.current().expect(12 * 3600, "waiting for the Sun to reach the flats' twilight")
         wait_for_twilight()
     with Camera(gain=args.gain) as cam:
         settle = getattr(cam, "settle", None)
@@ -341,9 +346,12 @@ def run_matched(args, camera):
             # the cooler is stepped up gently at the end (finally, below).
             try:
                 paths = []
-                for seconds in args.exposure:
+                job = jobs.current()
+                for k, seconds in enumerate(args.exposure, 1):
+                    job.step(k, f"{seconds:g} s darks")
                     frames, header = [], None
                     for i in range(args.frames):
+                        job.expect(seconds * 1.5 + 60, f"{seconds:g} s dark {i + 1} of {args.frames}")
                         mosaic, header = cam.frame(seconds)
                         frames.append(mosaic)
                         print(f"  {seconds:g} s dark {i + 1} of {args.frames}  "
@@ -356,6 +364,7 @@ def run_matched(args, camera):
                     print(f"saved {path}", flush=True)
                     paths.append(str(path))
             finally:
+                jobs.current().expect(15 * 60, "the slow warm-up")
                 warm_up = getattr(cam, "warm_up", None)
                 if warm_up:
                     try:
@@ -371,7 +380,9 @@ def run_matched(args, camera):
             # used to close the camera cold, which stops the cooler at once).
             kept, exposures, bands = [], [], []
             try:
-                for band in getattr(args, "filters", None) or [None]:
+                for k, band in enumerate(getattr(args, "filters", None) or [None], 1):
+                    jobs.current().step(k, band or "the filter in place")
+                    jobs.current().expect(10 * 60, f"flats in {band or 'the filter in place'}")
                     try:
                         found = flat_in(cam, camera, folder, args, band)
                     except TooBright as problem:
@@ -381,6 +392,7 @@ def run_matched(args, camera):
                     exposures.append(found["exposure"])
                     bands.append(band or "the filter in place")
             finally:
+                jobs.current().expect(15 * 60, "the slow warm-up")
                 warm_up = getattr(cam, "warm_up", None)
                 if warm_up:
                     try:
