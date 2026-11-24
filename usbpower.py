@@ -1,11 +1,12 @@
 """Cut the camera's power at the powered hub's port, and give it back, from
 the laptop: what pressing the hub's port button twice does.
 
-There is no such hub on the owner's rig now: the Realtek hub this was
-written for was returned on 1 November 2026, and the 183M goes straight
-into a laptop socket, whose power cannot be cut (docs/agents/owner-rig.md).
-The small Terminus hub (1a40:0101) carrying the focuser and filter wheel
-does not switch its ports' power. Here, this finds nothing to switch.
+The owner's rig has such a hub again: the SV241's VIA VL817 (2109:0817,
+with its USB 2 half 2109:2817) switches each port's power, Svbony's word
+notwithstanding: on 24 November 2026 a port turned off read "0000 off",
+nothing connected, and the guide camera on it came back as a new device
+when it was turned on. Its 12 V outputs cannot be switched. The small
+Terminus hub (1a40:0101) carrying the focuser does not switch its ports.
 
 The camera's jam (docs/camera-fault.md) clears only when its power is cut:
 on 30 October and 1 November 2026 Altair's own replug, a software reset,
@@ -38,13 +39,22 @@ class PowerError(RuntimeError):
     pass
 
 
+GUIDE_PRODUCT = "0b2a"              # the GPCAM guide camera (guidecam.USB_ID): the same vendor, never cycled here
+
+
 def find(root=USB, vendor=VENDOR):
-    """The camera's place on USB as the kernel names it ("2-5.1"), or None."""
+    """The main camera's place on USB as the kernel names it ("2-5.1"), or
+    None. The guide camera shares the vendor (MCS 16d0) and is passed over:
+    on 24 November 2026, with both on the SV241, this found the guide
+    camera first and would have cut its power instead of the 183M's."""
     root = Path(root)
     for here in sorted(root.iterdir()) if root.exists() else []:
         try:
-            if (here / "idVendor").read_text().strip() == vendor:
-                return here.name
+            if (here / "idVendor").read_text().strip() != vendor:
+                continue
+            if (here / "idProduct").read_text().strip() == GUIDE_PRODUCT:
+                continue
+            return here.name
         except OSError:
             continue
     return None
@@ -94,10 +104,28 @@ def remembered(path=None):
         return None
 
 
+def both_halves(hub, port, action, run=subprocess.run):
+    """One half's port switched; True if uhubctl took it. A hub that uhubctl
+    drives as a pair through its USB 2 half (the SV241's VIA VL817, with
+    uhubctl 2.6) answers "No compatible devices detected" for the USB 3
+    half on its own: that half is switched with the other, so it is passed
+    over here, not an error (24 November 2026)."""
+    try:
+        uhubctl(hub, port, action, run)
+        return True
+    except PowerError as problem:
+        if "No compatible devices detected" in str(problem):
+            return False
+        raise
+
+
 def uhubctl(hub, port, action, run=subprocess.run):
     """One uhubctl call; through sudo -n when this user cannot switch ports
     itself. A refusal is a PowerError with uhubctl's own words."""
-    command = ["uhubctl", "-l", hub, "-p", str(port), "-a", action]
+    # -e: exactly the half named. Without it uhubctl 2.6 pairs a USB 3 hub
+    # with its USB 2 half and then switches only the USB 2 half (the SV241,
+    # 24 November 2026: the 183M stayed on at 5 Gb/s with "its" port off).
+    command = ["uhubctl", "-e", "-l", hub, "-p", str(port), "-a", action]
     if os.geteuid() != 0:
         command = ["sudo", "-n"] + command
     try:
@@ -109,7 +137,7 @@ def uhubctl(hub, port, action, run=subprocess.run):
     if done.returncode != 0:
         said = (done.stderr or done.stdout or "").strip().splitlines()
         raise PowerError(f"uhubctl could not turn {action} hub {hub} port {port}: "
-                         + (said[-1] if said else f"exit {done.returncode}"))
+                         + (" ".join(said) if said else f"exit {done.returncode}"))
     return done
 
 
@@ -130,9 +158,13 @@ def cycle(off=OFF_S, back=BACK_S, root=USB, run=subprocess.run, sleep=time.sleep
         say(f"The camera is not on USB; using its last place, {place}.")
     switched = ports(place, root)
     say("Camera power off at the hub: " + ", ".join(f"{h} port {p}" for h, p in switched))
+    done = []
     try:
         for hub, port in switched:
-            uhubctl(hub, port, "off", run)
+            if both_halves(hub, port, "off", run):
+                done.append((hub, port))
+        if not done:
+            raise PowerError("uhubctl switched none of the camera's ports")
         sleep(off)
     finally:
         # Always given back, whatever went wrong, the USB 3 half first: on
@@ -140,7 +172,7 @@ def cycle(off=OFF_S, back=BACK_S, root=USB, run=subprocess.run, sleep=time.sleep
         # back at 480 Mb/s on it instead of 5000.
         for hub, port in sorted(switched, key=lambda s: -speed(s[0], root)):
             try:
-                uhubctl(hub, port, "on", run)
+                both_halves(hub, port, "on", run)
             except PowerError as problem:
                 say(f"Could not give the power back: {problem}. Press the hub's port button.")
                 raise

@@ -56,7 +56,8 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
    notes (rear bolt in lowers the axis, front bolt in raises it).
 6. **The SV241 power box** (arrived 20 November 2026), tested indoors
    before any night depends on it (`docs/usb-hub.md`, "Bought: the Svbony
-   SV241"). Its 12 V outputs are always on, with no software switching
+   SV241"). Its USB ports switch from the laptop (uhubctl -e, 24
+   November), but its 12 V outputs are always on, with no software switching
    (only the Pro has it), so the 183M's 12 V still goes in by hand, after
    the camera is warmed in software, never with the cooler running (19
    November 16:31: it ran away to -7.3 °C that way). It came with one

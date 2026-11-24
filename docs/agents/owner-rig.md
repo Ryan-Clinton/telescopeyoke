@@ -58,9 +58,13 @@ laptop, 3 m lead, SV241, 1 m lead, camera stalls long videos ("no video
 frame within 5 s", no USB error in the kernel log); laptop, 1 m, SV241,
 1 m is fine. The 3 m lead is at its limit at 5 Gbps once the hub is on its
 far end; a USB 3 signal booster at the hub end (the Durlo, £7.99) is the
-cheap try, an active USB 3 cable the sure one. With no hub port able to
-cut the camera's power (the SV241's are always on), a
-jam (no frame at all) gets software steps first, then hands: (a) a command
+cheap try, an active USB 3 cable the sure one. The SV241's USB ports can be
+switched off and on from the laptop (24 November 2026, `docs/usb-hub.md`):
+`./camera_test.py --power-cycle` cuts the 183M's for 8 s, and with it the
+camera's own hub and the focuser's Nano on it; not yet with the cooler
+running, so only with the camera warm (job 7: the cooler after a power
+cut). A jam (no frame at all) gets software steps first, then the power
+cycle, then hands: (a) a command
 refused with `CAMERA_BUSY` names the process holding the camera
 (`cameralock.py`); stop a stale one with a plain `kill` and wait until it is
 gone; (b) a command that is retrying is recovering (`altair.py`'s `frame()`

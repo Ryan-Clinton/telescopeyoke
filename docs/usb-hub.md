@@ -8,10 +8,9 @@ The camera's own fault (short exposures, jams) is a separate matter, in
 
 ## The hub
 
-**Returned to Amazon.** The RSH-ST04 below has gone back, so the camera is
-plugged straight into the laptop and nothing can cut its power from the
-laptop: `usbpower.py` and `power_cycle_on_jam` have no hub to work with
-until a hub that switches its ports is back.
+**Returned to Amazon.** The RSH-ST04 below has gone back. Its place is
+taken by the SV241 (below), whose USB ports the laptop can switch off and
+on (24 November 2026), so `usbpower.py` has a hub to work with again.
 
 - **RSHTECH RSH-ST04**, 4-port powered USB 3.0 hub, aluminium, with a 1 m
   USB-B to USB-A/USB-C lead and a 5 V / 2 A mains adapter. Bought 22 October
@@ -134,13 +133,19 @@ only: no port was switched and no device has run through it yet.
 - **The Billboard device** (`2109:8817`) is that fifth port. It has no
   driver and needs none. It announces DisplayPort over USB-C (SVID
   `0xFF01`), which is not configured and does not matter here.
-- **Port power: claimed, not proven.** Both sides' descriptors say
-  per-port power switching and per-port over-current protection, and
-  `sudo uhubctl -l 1-1` lists the USB 2 side as `ppps`. Svbony says the
-  ports are always on, and a hub can report this while leaving the 5 V on.
-  uhubctl finds no compatible hub at `2-1`, the USB 3 side, so a port
-  could not be fully cut through it as things stand. Whether the 5 V really
-  goes off needs a device on a port that shows it, such as a phone charging.
+- **Port power: works, Svbony notwithstanding** (24 November 2026). Each
+  USB port's power can be switched from the laptop with uhubctl, one half
+  at a time and exactly as named: `sudo uhubctl -e -l 1-1 -p N -a off` (the
+  USB 2 half) and `-e -l 2-1 -p N` (the USB 3 half). Without `-e`, uhubctl
+  2.6 pairs the halves and switches only the USB 2 one, and `-l 2-1` alone
+  answers "No compatible devices". A port switched off reads `0000 off`,
+  with nothing connected: the guide camera on port 1 dropped off and came
+  back as a new device, and the 183M on port 3 (both halves) did the same,
+  back at 5 Gb/s, its next frame normal. `./camera_test.py --power-cycle`
+  does the 183M's port (8 s off). The 183M's port also carries its own
+  built-in hub, with the focuser's Nano on it: cutting the camera's power
+  restarts the Nano too (its position is kept on the laptop, so nothing is
+  lost while it is idle). The 12 V outputs cannot be switched.
 - **Not yet tested:** a device through any port, the 12 V outputs, the
   20-minute camera run and the hour with the Nano and handset above. The
   hub's one disconnect, at 18:21:46, was the owner checking its mains plug
