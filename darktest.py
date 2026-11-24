@@ -20,6 +20,7 @@ here can reach calibration/ or be used to calibrate a picture.
 """
 import argparse
 import json
+import sys
 import time
 
 import numpy as np
@@ -184,6 +185,7 @@ def run(args):
 
 
 def main():
+    sys.stdout.reconfigure(line_buffering=True)     # the cooling lines reach a log as they happen, not with the next dark
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--plan", action="store_true", help="what it would do; opens nothing")
     ap.add_argument("--temperatures", type=float, nargs="+", default=list(TEMPERATURES),
