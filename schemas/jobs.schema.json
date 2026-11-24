@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/jobs.schema.json",
   "title": "Jobs",
-  "description": "data of: ty jobs --json (jobs.py). The progress report: the events that need the agent, the jobs running, waiting, blocked or queued, those finished in the last 12 hours, and the computer, camera and mount (docs/job-reporting-spec.md).",
+  "description": "data of: ty jobs --json (jobs.py). The progress report for the session asking (--all: every session's): the events that need the agent, the jobs running, waiting, blocked or queued, those finished in the last 12 hours, and the computer, camera and mount (docs/job-reporting-spec.md).",
   "type": "object",
-  "required": ["open_events", "jobs", "recent", "computer", "camera", "mount", "busy_until"],
+  "required": ["open_events", "acked_unresolved", "other_sessions", "jobs", "recent", "computer", "camera", "mount", "busy_until"],
   "$defs": {
     "job": {
       "type": "object",
@@ -53,6 +53,8 @@
         }
       }
     },
+    "acked_unresolved": {"type": "array", "description": "Waiting, stall and idle events acked but still there: an ack says what was done, not that it worked.", "items": {"type": "object"}},
+    "other_sessions": {"type": "integer", "description": "Jobs other Claude Code sessions have running, waiting or queued (./ty jobs --all shows them)."},
     "jobs": {"type": "array", "items": {"$ref": "#/$defs/job"}},
     "recent": {"type": "array", "items": {"$ref": "#/$defs/job"}},
     "computer": {"type": "object", "description": "load, cores, memory_free_gb, memory_gb, disk_free_gb, and the GPU where there is one."},

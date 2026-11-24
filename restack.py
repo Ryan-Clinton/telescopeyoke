@@ -125,6 +125,10 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
     session = sessions[0].parent / folder if several else sessions[0]
     session.mkdir(exist_ok=True)
     say(f"{len(lights)} frames in all; {workers} workers")
+    job = jobs.current()
+    job.progress["steps"], job.progress["of"] = ["measuring", "registering", "stacking", "saving"], 4
+    job.step(1, f"measuring {len(lights)} frames")
+    job.expect(len(lights) * 20 / max(workers, 1) + 300, f"measuring {len(lights)} frames")
 
     work = session / "registered.dat"
     with stacking.worker_pool(workers) as pool:
@@ -184,6 +188,8 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
         np.memmap(work, dtype=dtype, mode="w+", shape=shape).flush()
         try:
             n = len(chosen)
+            job.step(2, f"registering {n} frames")
+            job.expect(n * 30 / max(workers, 1) + 300, f"registering {n} frames")
             results = pool.map(stacking.register_file, [f["path"] for f in chosen],
                                [f["exposure"] for f in chosen], [gain] * n, [reference] * n,
                                [str(work)] * n, range(n), [shape] * n, [f["scale"] for f in chosen],
@@ -215,10 +221,14 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
 
             registered = np.memmap(work, dtype=dtype, mode="r", shape=shape)
             with timings.phase("stack"):
+                job.step(3, f"stacking {sum(1 for w in weights if w)} frames, two passes")
+                job.expect(n * 10 + 300, f"stacking {n} frames")
                 first = stacking.Stack(plane, after=10 ** 9)   # no clipping yet
                 for i in range(n):
                     if weights[i]:
                         first.add(registered[i].astype(np.float32), weights[i])
+                    if i % 25 == 24:
+                        job.reading(f"first pass: {i + 1} of {n} frames")
                 # Now that the average and its spread are known, leave out
                 # whatever strays too far from them.
                 final = stacking.Stack(plane)
@@ -228,12 +238,16 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
                 for i in range(n):
                     if weights[i]:
                         final.add(registered[i].astype(np.float32), weights[i])
+                    if i % 25 == 24:
+                        job.reading(f"second pass, clipping: {i + 1} of {n} frames")
             del registered
         finally:
             work.unlink(missing_ok=True)
             if defects:
                 Path(defects).unlink(missing_ok=True)   # 15 MB a session; its count is in the log
 
+    job.step(4, "saving the stack and its picture")
+    job.expect(600, "saving the stack and its picture")
     stacked = final.result()
     chosen = [f for f, w in zip(chosen, weights) if w]
     total = sum(f["exposure"] for f in chosen)

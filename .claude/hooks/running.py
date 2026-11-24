@@ -39,7 +39,7 @@ def main():
     try:
         sys.path.insert(0, str(PROJECT))
         import jobs
-        r = jobs.report()
+        r = jobs.report(sid=payload.get("session_id") or None)
         if not r["jobs"] and not r["open_events"]:
             return 0
         lines = jobs.text(r).splitlines()

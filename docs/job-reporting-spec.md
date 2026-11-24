@@ -489,41 +489,84 @@ protections.
 
 ## As built (24 November 2026)
 
-Where the build differs from the design above, or adds to it:
+### Implemented
 
-- **Kept only once it runs a minute.** `jobs.run_as(name, work)` (the
-  long scripts that said nothing until the end: restack, starwatch,
+- **The job record** (`jobs.py`): `process.json` written by its launcher
+  alone (or, for a job no launcher started, by the job itself),
+  `progress.json`, `heartbeat` and `events.jsonl` by the job, the log
+  through the launcher, which is its only writer and caps it (20 MB, 2 MB
+  when the disk has under 5 GB free) in the foreground and the background
+  alike; the console's records cap theirs too. IDs with a random suffix;
+  a process is the one recorded only if its number, its start time
+  (Linux's `/proc`, Windows' process times) and the boot (Linux's boot ID,
+  Windows' boot time) all match.
+- **Whose job it is.** Every job records the Claude Code session that
+  started it (`CLAUDE_CODE_SESSION_ID`, inherited by its children); timers
+  and the console start the house's jobs, which have none. `./ty jobs`,
+  `--watch`, the message hook and the Stop hook show a session its own
+  jobs and the house's, and its own busy-until (`cache/jobs/busy-SESSION.json`);
+  `--ack` takes only an event that session can see; the Stop hook counts
+  only its own. The computer, camera and mount are shown to every session,
+  with a count of the jobs other sessions have going (`--all` shows them).
+- **The queue** (`ty bg --after JOB[:ended|:released|:MILESTONE] --needs`):
+  the decision to start and the start itself are made under one lock, and
+  a started job holds what it needs from that moment. First come, first
+  served among jobs that could start now: one still waiting on its own
+  dependencies never holds up a later one.
+- **Idle** means no work getting done: no finite or remote job of the
+  session running, and nothing queued behind a running one. Waiting,
+  stalled and blocked jobs do not count, however much they hold.
+- **Acks** record what was done. A waiting, stall or idle event that is
+  still there 30 minutes after its ack opens again, and the report lists
+  "acked, not resolved" apart.
+- **Deadlines**: only `expect()` sets or ends one; an activity line
+  changing the operation's words keeps it.
+- **Kept only once it runs a minute** (`jobs.run_as`): restack, starwatch,
   transits, variables, archive, brokers, realbogus, plant, difference,
-  depth, precision) writes no record for a run under a minute, so a quick
-  look by hand leaves no event to ack. A launched job is always kept.
-- **Fewer wake events.** A child job's ending (a schedule's step, a run's
-  quality pass) wakes the agent only when it fails. A timer's routine run
-  wakes only on failure, and a run that keeps failing is one event, its
-  newest. A stall is a condition, not a happening: its event is open while
-  the job is stalled and goes when it moves again.
-- **The queue** is the launcher's own waiting process (`ty bg --after`,
-  `--needs`): a queued job lost with a restart shows as vanished. The
-  conditions are `JOB` (done), `JOB:ended` (however it ended: the keeper's
-  warm-up after the dawn flats), `JOB:released`, `JOB:MILESTONE`.
-  `desktopqueue.py` keeps its own queue and lanes; each of its jobs runs
-  through the launcher, so the desktop keeps the same records.
+  depth, precision, so a quick look leaves no event.
+- **Fewer wake events**: a child job's ending wakes only on failure; a
+  timer's routine run only on failure, a run that keeps failing being one
+  event.
+- **Restarts**: the launcher keeps each command in full in `argv.json`,
+  readable by this user only. A job lost with a restart shows as vanished
+  and says `./ty jobs --requeue JOB`, which queues it again as it was
+  asked. Never by itself: a camera or mount command waits for the agent or
+  the person, and keeps its own protections.
+- **Hooks**: `running.py` with each message; `keepgoing.py` sends the
+  agent back at most three times in fifteen minutes (it cannot loop), and
+  what is undone stays open in front of the agent with each message.
+- **Scripts with real progress**: the dark test (each temperature, each
+  dark, the hold), the keeper (its readings, ready), darks and flats (each
+  frame), imaging runs (blocks, frames through `activity`), the schedule's
+  steps, the dawn flats and warm-up, and the restack (measuring,
+  registering, stacking with frames done every 25, saving, each with a
+  deadline sized to the frames).
+- **The console** records its actions and still starts each process
+  itself, so Stop kills the process holding the mount's port.
+- **Unit files** written through `jobs.py bg --wait`; the three installed
+  timer units were updated in place.
+- **Remote** stacks run under `nohup` and the launcher on the desktop; the
+  laptop follows `jobs.py --state` every two minutes if the connection
+  drops. `desktopqueue.py` runs each of its jobs through the launcher.
+
+### Partly done
+
+- **Progress inside the other long scripts**: starwatch, transits,
+  variables, archive, brokers, realbogus, plant, difference, depth and
+  precision have a record, a heartbeat, an ending and their own printed
+  lines, but no steps or counts yet. Each gets them when it is next worked
+  on; until then a stall in one is judged by 10 minutes without output.
+- **The installed services** (the stream, the status page, new-hardware)
+  run the old way until next installed: reinstalling would restart the
+  live stream.
 - **activity.py** keeps its own `cache/activity.json` for the console and
-  the stream; each of its lines is also the job's current operation.
-- **The console** records its actions (`jobs.Recorded`) but starts each
-  process itself, so its Stop still kills the very process holding the
-  mount's port.
-- **Hooks:** `running.py` (the jobs and open events with each message,
-  and a reminder to set `--busy-until` when the owner asks for work to go
-  on) and `keepgoing.py`, a Stop hook that sends the agent back once, with
-  the reason, when the busy-until stands and nothing runs, or an event is
-  not acked. It never sends a turn back twice.
-- **Unit files:** the generators for the night-end guard, the satellite
-  and storage timers and the serve, stream and new-hardware services run
-  through `jobs.py bg --wait`. The three installed timer units were
-  updated in place on 24 November; the installed services pick it up when
-  next installed.
-- **Remote:** a desktop stack runs under `nohup` and the launcher there;
-  on a dropped connection the laptop asks `jobs.py --state` every two
-  minutes until it ends.
-- **The dark test's hold** is 30 minutes (was 4 hours) and ends at once
-  when a job is queued for the camera.
+  the stream, fed alongside the job records rather than built from them.
+
+### Not yet proven
+
+On real work, none of this has been run through a night: a dark or flat
+run with a job queued behind it, a night's schedule, a desktop stack with
+the connection dropped, a restart with jobs queued, Windows. The first
+real use is the -5 °C video test of 24 November (the keeper cooling, three
+videos queued behind it, the warm-up after). Each is recorded in
+`docs/validation.md` when it has been seen to work.
