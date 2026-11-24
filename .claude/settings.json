@@ -64,6 +64,11 @@
             "type": "command",
             "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/py\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/log.py\"",
             "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/py\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/keepgoing.py\"",
+            "timeout": 20
           }
         ]
       }
