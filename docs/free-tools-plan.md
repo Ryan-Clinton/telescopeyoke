@@ -1,6 +1,6 @@
 # Plan: use free tools for the picture pipeline
 
-Status: **noise reduction is built (`colour.py --denoise graxpert`), the stacking's star-core fault is fixed, star removal is built (Dark Star), and sharpening, stretch, background and palette stay ours after testing; colour calibration stays ours after Siril's SPCC crashed.**
+Status: **noise reduction is built (GraXpert, used by `colour.py` when installed), the stacking's star-core fault is fixed, star removal is built (Dark Star), and sharpening, stretch, background and palette stay ours after testing; colour calibration stays ours after Siril's SPCC crashed.**
 Written 23 November 2026. `final.fits` and every other kept stack were only read.
 
 **The aim:** TelescopeYoke does the best possible job of automating the freely available

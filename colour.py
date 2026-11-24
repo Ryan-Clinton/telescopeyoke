@@ -200,7 +200,7 @@ NARROWBAND_SATURATION = 1.8   # mixed linearly the palette is paler than separat
 EDGE_TRIM = 0.035    # of the picture's shorter side, off every edge of a linear narrowband picture
 QUIET = (0.7, 0.6, 0.5, 0.4)    # times its noise each scale needs to be fully kept: at this, on NGC 2174, 99% of the faintest stars stay, their flux within 1%
 MIN_CLEAR = 0.3      # of the frame clear of nebula, or the sky is not mapped
-PICTURE_VERSION = 6  # of the method below: changes what the same stacks give
+PICTURE_VERSION = 7  # of the method below: changes what the same stacks give
 EDGE_BAND = 0.25     # of the shorter side: how far in from the edge the sky map acts
 CONTRAST = 0.3       # how far local contrast may lift or lower the nebula
 SKY_CELLS = 5        # how smooth the sky map is, in cells of 16 pixels: far wider than any star
@@ -420,7 +420,7 @@ def contrast_gain(nebula, where):
 
 
 def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=False, contrast=True,
-                      star_power=1.0, sharpen=0, ghs=False, grains=None):
+                      star_power=1.0, sharpen=0, ghs=False, grains=None, star_removal=True):
     """The narrowband picture made in the light's own units: sky off, star
     widths matched, the palette mixed, and one stretch at the very end.
     Nebula and stars are balanced apart: the nebula on its own strength, so
@@ -459,7 +459,9 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
     even, before, after = matched_widths(planes, say)
     star = star_mask(np.mean([p / scale[b] for b, p in planes.items()], axis=0))
     core = star > 0.5
-    starless = without_stars(planes, before, grains or {}, say)
+    starless = without_stars(planes, before, grains or {}, say) if star_removal else None
+    if not star_removal:
+        say("  stars left in the nebula (--star-removal none): no star balancing or star reduction")
     nebula, stars, sharp_nebula, sharp_stars, flux, grain, untouched = {}, {}, {}, {}, {}, {}, {}
     for band in planes:
         nebula[band], sharp_nebula[band] = starless[band] if starless else (even[band], planes[band])
@@ -561,7 +563,7 @@ def narrowband(rgb, channels, saturation, background=2):
 
 def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette="LRGB", background=2,
             stretched=False, quiet=False, contrast=True, linear_background=None, star_power=1.0, sharpen=0,
-            ghs=False, denoise=None, denoise_strength=freetools.STRENGTH):
+            ghs=False, denoise=None, denoise_strength=freetools.STRENGTH, star_removal=True):
     """The colour picture (8-bit RGB array) and what went into it."""
     channels, base, detail_band = PALETTES[palette]
     needed = tuple(dict.fromkeys(channels))
@@ -626,7 +628,7 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
     else:
         colour, linear, done = linear_narrowband(rgb, channels, saturation,
                                                  background if linear_background is None else linear_background,
-                                                 say, quiet, contrast, star_power, sharpen, ghs, grains)
+                                                 say, quiet, contrast, star_power, sharpen, ghs, grains, star_removal)
         used.update(done)
     if detail_band in images:
         grey = np.where(valid, images[detail_band], 0)
@@ -685,8 +687,12 @@ def main():
     ap.add_argument("--noise-reduction", action="store_true",
                     help="narrowband: wavelet noise reduction (off by default: on NGC 2174 and NGC 281 it kept no more "
                          "faint detail than a plain blur)")
-    ap.add_argument("--denoise", choices=("graxpert",), help="noise reduction by a free tool you have installed "
-                    "(./freetools.py status), for the picture only; the stacks are not touched")
+    ap.add_argument("--denoise", choices=("graxpert", "none"),
+                    help="noise reduction by GraXpert, for the picture only (the stacks are not touched): used by "
+                         "default when it is installed (./freetools.py status); none leaves it out")
+    ap.add_argument("--star-removal", choices=("darkstar", "none"),
+                    help="narrowband: stars taken off the nebula by Seti Astro Suite Pro's Dark Star, used by default "
+                         "when it is installed; none leaves the stars in the nebula")
     ap.add_argument("--denoise-strength", type=bounded(float, 0.1, 1.0), default=freetools.STRENGTH, metavar="S",
                     help=f"how much of the tool's result to use (default {freetools.STRENGTH:g})")
     ap.add_argument("--no-contrast", action="store_true", help="narrowband: leave out local contrast, for comparison")
@@ -804,20 +810,28 @@ def run(args):
     linear_mix = args.palette != "LRGB" and not args.stretched
     saturation = args.saturation or (NARROWBAND_SATURATION if linear_mix else 1.25)
     background = max(process.sky_for(args.name), 1)
+    # GraXpert is used when it is installed, unless asked not to; asked for and missing, the picture says so.
+    denoise = None if args.denoise == "none" else "graxpert" if args.denoise or freetools.find("graxpert") else None
     picture, used, linear = combine(stacks, saturation, min_covered=0.0 if args.any_coverage else MIN_COVERED,
                             palette=args.palette, background=background,
                             stretched=args.stretched, quiet=args.noise_reduction,
                             contrast=not args.no_contrast, linear_background=process.sky_for(args.name),
                             star_power=args.star_reduction, sharpen=args.sharpen, ghs=args.ghs,
-                            denoise=args.denoise, denoise_strength=args.denoise_strength)
+                            denoise=denoise, denoise_strength=args.denoise_strength,
+                            star_removal=args.star_removal != "none")
     suffix = "colour" if args.palette == "LRGB" else args.palette
     # A comparison keeps its own files, so it never replaces the picture.
     if args.stretched:
         suffix += "-stretched"
     if args.noise_reduction:
         suffix += "-quiet"
-    if used.get("denoise"):
-        suffix += f"-{args.denoise}{args.denoise_strength:g}"
+    # Each free tool is used when it is installed; a picture made otherwise keeps its own name.
+    if args.denoise == "none":
+        suffix += "-nodenoise"
+    elif used.get("denoise") and args.denoise_strength != freetools.STRENGTH:
+        suffix += f"-graxpert{args.denoise_strength:g}"
+    if args.star_removal == "none":
+        suffix += "-nostarremoval"
     if args.no_contrast:
         suffix += "-nocontrast"
     if args.star_reduction != 1:

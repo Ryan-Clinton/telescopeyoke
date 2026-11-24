@@ -183,7 +183,7 @@ Reporting a dip is a person's.
 
 `corners.py` (or `--file FRAME`, which uses no camera): star width, roundness and stretch direction in the four corners against the middle, at full resolution on the 183M, and which fault the pattern points to: the corrector's 55 mm spacing (all corners alike), tilt (corners unlike) or collimation (the middle too).
 
-`freetools.py status` only reads: which free image tools are installed and where to get the rest. `freetools.py denoise IN OUT [--strength S]` writes a new file through GraXpert. `colour.py NAME --denoise graxpert [--denoise-strength S]` denoises temporary copies of each filter's stack for the picture, records the tool and version, and carries on without it if it is missing. None of these changes a stack, and their output is never used for a measurement.
+`freetools.py status` only reads: which free image tools are installed and where to get the rest. `freetools.py denoise IN OUT [--strength S]` writes a new file through GraXpert. `colour.py NAME` uses GraXpert on temporary copies of each filter's stack when it is installed (`--denoise none` leaves it out, `--denoise-strength S` changes how much), and in narrowband Dark Star to take the stars off (`--star-removal none`), records each tool, version and model, and carries on without one that is missing. None of these changes a stack, and their output is never used for a measurement.
 
 `desktopqueue.py add NAME --lane cpu|gpu --cores N --ram GB [--after NAME ...] -- COMMAND` queues a long job on the desktop, `run` works through the queue, and `status` and `report` only read. It runs only what was added to it.
 
