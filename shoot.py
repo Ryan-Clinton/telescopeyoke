@@ -50,6 +50,7 @@ from PIL import Image
 
 import host
 import interface
+import jobs
 import records
 import process
 import restack
@@ -792,23 +793,23 @@ def short_changed(taken, exposure):
     return typical if typical < 0.97 * exposure else None
 
 
-def restack_later(folder, start=subprocess.Popen, say=lambda line: print(line, flush=True)):
+def restack_later(folder, say=lambda line: print(line, flush=True)):
     """The quality pass (restack.py, which then searches the session) in the
     background at low priority, so the run ends as soon as its frames are in
     and the telescope goes on to the next step. 2 November 2026: the
     person had said many times that processing goes on in the background
     while the scope does the next job; the pass and the search still held
-    it after every run. Its lines go to the session's restack.log."""
+    it after every run. A job of its own (./ty jobs), its lines in its log."""
     folder = Path(folder)
-    lowly = {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS} if os.name == "nt" else \
-        {"preexec_fn": lambda: os.nice(19), "start_new_session": True}
+    command = [sys.executable, str(ROOT / "restack.py"), str(folder)]
+    if os.name != "nt":
+        command = ["nice", "-n", "19", *command]
     try:
-        with open(folder / "restack.log", "w", encoding="utf-8") as log:
-            start([sys.executable, str(ROOT / "restack.py"), str(folder)], cwd=ROOT, stdout=log,
-                  stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **lowly)
-        say(f"The quality pass and the search go on in the background ({folder / 'restack.log'}); "
+        job_id = jobs.launch(f"restack-{folder.parent.name}", command, why="the run's quality pass and search",
+                             cwd=ROOT)
+        say(f"The quality pass and the search go on in the background (job {job_id}, ./ty jobs); "
             "the telescope is free.")
-    except OSError as problem:
+    except (OSError, SystemExit) as problem:
         say(f"  (the quality pass would not start in the background: {problem}; restack.py {folder} later)")
 
 
@@ -822,8 +823,8 @@ def watch_on():
     command = [sys.executable, str(ROOT / "liveview.py"), "--after-run", "--exposure", "5",
                "--minutes", str(LIVE_MINUTES)]
     try:
-        subprocess.Popen(command, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         start_new_session=not host.WINDOWS, **host.QUIET)
+        jobs.launch("liveview-after-run", command, kind="routine", why="the sky shown after cloud stopped a run",
+                    cwd=ROOT)
         print(f"Live view left running for up to {LIVE_MINUTES} minutes: the page shows the sky now.",
               flush=True)
     except OSError as problem:
@@ -1389,6 +1390,15 @@ def hold_the_rig(name, path=None):
 
 
 def run(args):
+    """The run as a job (jobs.py): its blocks the steps, each block ended a
+    milestone, so ./ty jobs says where it is and what follows can be queued."""
+    blocks = getattr(args, "blocks", None)
+    steps = [f"{n} for {m:g} min" for n, m in blocks] if blocks else None
+    with activity.job(f"shoot-{args.name}", steps=steps):
+        return _run(args)
+
+
+def _run(args):
     rig = hold_the_rig(args.name)     # kept open, so locked, for the whole run
     args.supervisor = None
     if getattr(args, "guide", False):
@@ -1537,8 +1547,11 @@ def run_blocks(args, mount, results, skipping, mark):
         args.keep_cold, args.ended_on_time = not last, False
         print(f"\nBlock {number} of {len(args.blocks)}: {args.name} in {name} for {minutes:g} min", flush=True)
         mark(number - 1, "running")
+        jobs.current().step(number, f"{args.name} in {name} for {minutes:g} min")
         try:
             results.append(held(args))
+            jobs.current().milestone(f"block {number} of {len(args.blocks)} done: {args.name} in {name}",
+                                     name=f"block{number}", wake=False)
         except interface.Refusal as refusal:
             if refusal.code_name != "NO_USABLE_FRAMES" or not args.ended_on_time:
                 mark(number - 1, "failed")

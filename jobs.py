@@ -291,12 +291,13 @@ class Job:
             self._progressed()
             self._save()
 
-    def milestone(self, words, name=None):
-        """A point a plan may go on from: wakes the agent; a queued job
-        `--after ID:NAME` starts from it."""
+    def milestone(self, words, name=None, wake=True):
+        """A point a plan may go on from: wakes the agent (unless `wake` is
+        False: an imaging run's blocks); a queued job `--after ID:NAME`
+        starts from it."""
         self._progressed()
         self._save()
-        self._event("milestone", words, wake=True, name=name)
+        self._event("milestone", words, wake=wake, name=name)
 
     def waiting(self, why, ask=None, holds=(), most_s=None):
         """Waiting on a person or another command, from now: wakes the agent,
@@ -352,7 +353,7 @@ def _hostname():
 
 # ---------------------------------------------------------------- the launcher and the queue
 
-def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=False):
+def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=False, cwd=None):
     """Start COMMAND as a job; returns its ID (or its exit code with wait)."""
     if not command:
         raise SystemExit("no command given after --")
@@ -364,7 +365,7 @@ def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=Fals
     if wait:
         return supervise(job_id, name, kind, list(after), list(needs), why, True, command)
     options = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
-               "cwd": os.getcwd()}
+               "cwd": str(cwd or os.getcwd())}
     if host.WINDOWS:
         options["creationflags"] = 0x00000008 | 0x00000200      # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
     else:
@@ -419,7 +420,15 @@ def supervise(job_id, name, kind, after, needs, why, wait, command):
     put(phase="running", pid=child.pid, pid_start=started_at(child.pid), started=time.time())
     if wait:
         # Run in the foreground (a timer, the console, a parent job): the
-        # output goes to the log and on to whoever started it.
+        # output goes to the log and on to whoever started it, and a stop
+        # sent to this launcher goes on to the command, as if it were the
+        # command itself (a schedule's step stopped by its runner).
+        for sig in (signal.SIGTERM, signal.SIGINT, getattr(signal, "SIGHUP", None)):
+            if sig is not None:
+                try:
+                    signal.signal(sig, lambda number, _frame: child.send_signal(number))
+                except (OSError, ValueError):
+                    pass
         for line in child.stdout:
             log.write(line)
             try:

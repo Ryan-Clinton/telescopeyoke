@@ -661,7 +661,12 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
                 # watching (a focus offset measured only once) is refused in it.
                 refused = config.DATA / "cache" / "step-refusal.json"
                 refused.unlink(missing_ok=True)
-                done = start(command, env={**os.environ, "TY_SCHEDULED": "1",
+                # Through the job launcher (jobs.py), in the foreground: the
+                # step's lines still come here, and it is a job of its own that
+                # ./ty jobs can report on while it runs.
+                tracked = [sys.executable, str(config.ROOT / "jobs.py"), "bg", f"step-{step['id']}", "--wait",
+                           "--why", step["label"], "--", *command]
+                done = start(tracked, env={**os.environ, "TY_SCHEDULED": "1",
                                            interface.REFUSAL_FILE: str(refused)})
             except Exception as error:
                 # A step that cannot even start is a failed step, not the end
