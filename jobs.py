@@ -25,6 +25,7 @@ Moves nothing itself: a queued command keeps every protection of its own.
 """
 import argparse
 import atexit
+import contextlib
 import json
 import os
 import secrets
@@ -51,6 +52,10 @@ LOG_CAP_MB, LOG_CAP_LOW_MB, LOW_DISK_GB = 20, 2, 5
 IDLE_AFTER_S = 120          # nothing running for this long, while busy-until stands: idle
 REOPEN_S = 1800             # an acked waiting, stall or idle still there this long after: open again
 EXCLUSIVE = ("camera", "mount", "gpu")
+
+
+def exclusive():
+    return EXCLUSIVE
 KINDS = ("finite", "service", "routine", "remote")
 NEEDS = ("camera", "mount", "cpu", "gpu")
 CURRENT = None              # this process's job, once it has one
@@ -58,7 +63,7 @@ SCHEMA = 1                  # the shape of the records; readers accept older one
 # The generic core this carries: Ryan-Clinton/common's jobs/jobs.py is its
 # authoritative copy for every other project (private); a fix there is
 # carried here, and this names the revision (docs/job-reporting-spec.md).
-CORE = "2026-11-24.2"
+CORE = "2026-11-24.3"
 
 
 def home():
@@ -146,6 +151,177 @@ def mine(j, sid, strict=False):
         return True
     owner = j.get("session")
     return owner == sid or (not strict and owner is None)
+
+
+# ---------------------------------------------------------------- this computer's reservations
+# The reservation protocol (version 1), the same in common's jobs.py and
+# telescopeyoke's, so every project on a computer, in WSL or native Windows,
+# sees what the others hold. The register is a folder: held/JOB.json, one a
+# job, written under one lock (a folder made with mkdir, which is atomic on
+# Linux, WSL's view of C: and Windows alike, broken when older than
+# LOCK_STALE_S). A reservation is alive while its launcher's process is,
+# judged by its number, start time and boot on the same system, and by its
+# heartbeat (`beat`, every RESERVE_BEAT_S) from the other one: neither system
+# can see the other's processes.
+REGISTER = 1
+RESERVE_BEAT_S = 30
+RESERVE_DEAD_S = 120         # a reservation not beaten for this long, from the other system: gone
+LOCK_STALE_S = 120
+
+
+def _system():
+    return "windows" if host.WINDOWS else "linux"
+
+
+def machine():
+    """This computer's register, shared by every project on it and, on the
+    PC, by WSL and native Windows: JOBS_MACHINE; else, in WSL, the Windows
+    user's .local/state/common-jobs (through /mnt/c), so both systems use
+    the one; else ~/.local/state/common-jobs."""
+    given = os.environ.get("JOBS_MACHINE")
+    if given:
+        return Path(given)
+    if os.environ.get("WSL_DISTRO_NAME"):
+        windows = _windows_home()
+        if windows:
+            return windows / ".local" / "state" / "common-jobs"
+    state = os.environ.get("XDG_STATE_HOME") or (Path.home() / ".local" / "state")
+    return Path(state) / "common-jobs"
+
+
+def _windows_home():
+    """The Windows user's folder as WSL sees it (/mnt/c/Users/NAME), asked
+    of Windows once and kept."""
+    kept = Path.home() / ".local" / "state" / "common-jobs-windows-home"
+    try:
+        found = Path(kept.read_text().strip())
+        if found.is_dir():
+            return found
+    except OSError:
+        pass
+    try:
+        win = subprocess.run(["cmd.exe", "/c", "echo %USERPROFILE%"], capture_output=True, text=True,
+                             timeout=10, cwd="/mnt/c").stdout.strip()
+        unix = subprocess.run(["wslpath", "-u", win], capture_output=True, text=True, timeout=5).stdout.strip()
+        if unix and Path(unix).is_dir():
+            kept.parent.mkdir(parents=True, exist_ok=True)
+            kept.write_text(unix)
+            return Path(unix)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+@contextlib.contextmanager
+def machine_lock(wait_s=60):
+    """The register's lock, the same for WSL and Windows: a folder made with
+    mkdir. One left by a process that died is broken after LOCK_STALE_S."""
+    lock = machine() / "lock.d"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    until = time.time() + wait_s
+    while True:
+        try:
+            os.mkdir(lock)
+            break
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > LOCK_STALE_S:
+                    os.rmdir(lock)
+                    continue
+            except OSError:
+                pass
+            if time.time() > until:
+                raise TimeoutError(f"this computer's job register is locked ({lock})") from None
+            time.sleep(0.2)
+    try:
+        yield
+    finally:
+        try:
+            os.rmdir(lock)
+        except OSError:
+            pass
+
+
+def _held_file(job_id):
+    return machine() / "held" / f"{job_id}.json"
+
+
+def reserve(job_id, name, held, pid):
+    """This job's exclusive needs in the register, before it starts. Raises
+    OSError when it cannot be kept: the job must not start then."""
+    if not held:
+        return
+    records.write(_held_file(job_id),
+                  {"register": REGISTER, "job": job_id, "name": name, "project": project_name(),
+                   "resources": list(held), "system": _system(), "host": _hostname(), "pid": pid,
+                   "pid_start": started_at(pid), "boot": boot_id(), "session": session(),
+                   "at": time.time(), "beat": time.time()}, indent=None)
+
+
+def _held_change(job_id, how):
+    """Change a job's reservation under the register's lock (its launcher
+    beats it, the job itself may release part of it)."""
+    try:
+        with machine_lock():
+            f = _held_file(job_id)
+            r = _read(f)
+            if not r:
+                return
+            how(r)
+            if r.get("resources"):
+                records.write(f, r, indent=None)
+            else:
+                f.unlink()
+    except (OSError, TimeoutError):
+        pass
+
+
+def beat_reservation(job_id):
+    _held_change(job_id, lambda r: r.update(beat=time.time()))
+
+
+def release_reservation(job_id, what):
+    _held_change(job_id, lambda r: r.update(resources=[x for x in r.get("resources", []) if x not in what]))
+
+
+def unreserve(job_id):
+    try:
+        with machine_lock():
+            _held_file(job_id).unlink()
+    except (OSError, TimeoutError):
+        pass
+
+
+def _reservation_alive(r, now):
+    if r.get("system") == _system() and r.get("host") == _hostname():
+        return running(r.get("pid"), r.get("pid_start"), r.get("boot"))
+    return now - (r.get("beat") or 0) < RESERVE_DEAD_S
+
+
+def machine_holds(now=None):
+    """{resource: who} from the register, every project's on this computer
+    (WSL's and Windows' alike); a reservation found dead is cleared."""
+    now = now or time.time()
+    held = {}
+    try:
+        entries = list((machine() / "held").glob("*.json"))
+    except OSError:
+        return held
+    for f in entries:
+        r = _read(f, {}) or {}
+        if not _reservation_alive(r, now):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+            continue
+        for resource in r.get("resources") or []:
+            held.setdefault(resource, f"{r.get('project')}'s job {r.get('name')} ({r.get('system')})")
+    return held
+
+
+def project_name():
+    return "telescopeyoke"
 
 
 def redact(words):
@@ -401,7 +577,9 @@ class Job:
     def release(self, *what):
         """Lets go of what a queued job may need (camera, mount)."""
         self.progress["holds"] = [h for h in self.progress.get("holds", []) if h not in what]
+        self.progress["released"] = sorted(set(self.progress.get("released") or []) | set(what))
         self._save()
+        release_reservation(self.id, what)      # the computer's register too
         self._event("released", ", ".join(what), released=list(what))
 
     def result(self, words):
@@ -589,20 +767,33 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
     while child is None:
         # Deciding and starting under one lock, the job running before the
         # lock is let go: two queued jobs never take one camera at once.
-        with records.locked(home() / "queue"):
+        with machine_lock(wait_s=300):
             verdict = ready(job_id, after, needs, record["queued"])
             if isinstance(verdict, str):
                 put(phase="blocked", blocked=verdict, ended=time.time())
                 return 1
             if verdict is True:
+                exclusive_needs = [n for n in needs if n in exclusive()]
+                try:
+                    # Reserved before it starts, under the lock, in the name of
+                    # this launcher (alive as long as the workload): if the
+                    # reservation cannot be kept, the job does not start.
+                    reserve(job_id, name, exclusive_needs, os.getpid())
+                except OSError as problem:
+                    put(phase="blocked", blocked=f"could not reserve {', '.join(exclusive_needs)}: {problem}",
+                        ended=time.time())
+                    return 1
                 try:
                     # The output always comes through here: this process is
-                    # the log's one writer, so it can cap it safely.
+                    # the log's one writer, so it can cap it safely. Its own
+                    # process group (POSIX), so its workers are seen to the end.
                     child = subprocess.Popen(command, stdin=subprocess.DEVNULL, env=env,
-                                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                             start_new_session=not host.WINDOWS)
                 except OSError as problem:
                     log.write(f"could not start: {problem}\n".encode())
                     put(phase="exited", exit_code=127, started=time.time(), ended=time.time())
+                    unreserve(job_id)
                     return 127
                 put(phase="running", pid=child.pid, pid_start=started_at(child.pid), started=time.time())
                 try:
@@ -611,6 +802,12 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
                     pass
         if child is None:
             time.sleep(QUEUE_EVERY_S)
+    beating = threading.Event()
+
+    def beat():
+        while not beating.wait(RESERVE_BEAT_S):
+            beat_reservation(job_id)
+    threading.Thread(target=beat, daemon=True).start()
     if wait:
         # Run in the foreground (a timer, the console, a parent job): the
         # output goes to the log and on to whoever started it, and a stop
@@ -621,7 +818,7 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
             # outlive its SSH connection) stays ignored.
             if sig is not None and signal.getsignal(sig) is not signal.SIG_IGN:
                 try:
-                    signal.signal(sig, lambda number, _frame: child.send_signal(number))
+                    signal.signal(sig, lambda number, _frame: _signal_group(child, number))
                 except (OSError, ValueError):
                     pass
     written = 0
@@ -641,7 +838,36 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
     cap(log_path)
     log.close()
     put(phase="exited", exit_code=child.returncode, ended=time.time())
+    # A workload's workers may outlive the command that started them: its
+    # reservation stands until the last of its process group has gone.
+    if exclusive_needs and not host.WINDOWS:
+        until = time.time() + 12 * 3600
+        while _group_alive(child.pid) and time.time() < until:
+            time.sleep(QUEUE_EVERY_S)
+    beating.set()
+    unreserve(job_id)
     return child.returncode
+
+
+def _signal_group(child, number):
+    """A stop sent to the launcher, on to the command and its workers."""
+    try:
+        if host.WINDOWS:
+            child.send_signal(number)
+        else:
+            os.killpg(child.pid, number)
+    except OSError:
+        pass
+
+
+def _group_alive(pgid):
+    try:
+        os.killpg(pgid, 0)
+        return True
+    except PermissionError:
+        return True
+    except OSError:
+        return False
 
 
 def cap(path):
@@ -679,7 +905,7 @@ def find(word):
 def holds_now(listing=None):
     """{need: who holds it} for camera and mount, from the camera's lock,
     the mount's owner and the jobs that say they hold something."""
-    held = {}
+    held = dict(machine_holds())       # every project's on this computer
     try:
         import cameralock
         who = cameralock.holder()
@@ -694,7 +920,9 @@ def holds_now(listing=None):
         if j["phase"] in ("running", "waiting", "stalled"):
             # What it said it holds, and what it was started needing: a job
             # just started holds its camera before its lock is taken.
-            for h in (j.get("holds") or []) + [n for n in (j.get("needs") or []) if n in EXCLUSIVE]:
+            released = set(j["progress"].get("released") or [])
+            for h in (j.get("holds") or []) + [n for n in (j.get("needs") or []) if n in exclusive()
+                                               and n not in released]:
                 held.setdefault(h, f"job {j['name']}")
     return held
 
@@ -740,7 +968,7 @@ def ready(job_id, after, needs, queued_at):
     if needs:
         listing = look_all()
         held = holds_now(listing)       # a running, waiting or stalled job keeps what it needs
-        if any(n in held for n in needs if n in EXCLUSIVE):
+        if any(n in held for n in needs if n in exclusive()):
             return None
         if "cpu" in needs:
             try:
@@ -753,9 +981,9 @@ def ready(job_id, after, needs, queued_at):
         # dependencies, or on another thing it needs (a camera in use), never
         # holds up a later one that could run.
         if any(j["phase"] == "queued" and j["id"] != job_id and (j.get("queued") or 0) < queued_at
-               and set(j.get("needs") or []) & set(needs) & set(EXCLUSIVE)
+               and set(j.get("needs") or []) & set(needs) & set(exclusive())
                and after_ok(j.get("after") or []) is True
-               and not any(n in held for n in (j.get("needs") or []) if n in EXCLUSIVE) for j in listing):
+               and not any(n in held for n in (j.get("needs") or []) if n in exclusive()) for j in listing):
             return None
     return True
 
@@ -769,8 +997,11 @@ def owned(j, force=False):
     """A job this session may stop or queue again: its own or the house's;
     another session's only with --force (the person's say)."""
     sid = session()
-    if force or sid is None or j.get("session") in (None, sid):
+    if force or j.get("session") in (None, sid):
         return
+    if sid is None and not os.environ.get("CLAUDECODE"):
+        return                  # the person at a terminal
+    # An agent whose session is not known gets no more than any other session.
     raise SystemExit(f"{j['name']} is another session's job ({str(j.get('session'))[:8]}): "
                      "leave it to that session, or --force if the person says so")
 
@@ -1336,7 +1567,7 @@ def main():
         print(f"queued again as {requeue(args.requeue, args.force)}")
         return
     if args.ack:
-        n = ack(*args.ack, sid=sid)
+        n = ack(*args.ack, sid=session())       # an ack is always this session's, --all or not
         print(f"{n} event{'s' if n != 1 else ''} marked dealt with")
         return
     if args.busy_until:

@@ -579,10 +579,11 @@ Ryan-Clinton/common (`common/jobs/`, its command `cj`, and the hooks
 its hooks), because it is public and common is private (the owner's
 decision). Common's copy is the authoritative generic core: a fix lands
 there first with its `CORE` revision raised, and is carried here;
-`jobs.py` names the core revision it carries. Common also reserves
-exclusive resources per computer for its projects (`cj host`), which this
-copy does not need: on the laptop, telescopeyoke is the one project using
-the camera and the mount.
+`jobs.py` names the core revision it carries. Both speak one
+reservation protocol: a job's exclusive needs (camera, mount, GPU) go in
+the computer's register (`~/.local/state/common-jobs`, or on the PC the
+one WSL and Windows share) before it starts, so telescopeyoke's jobs and
+every other project's see each other's (`cj host` lists them).
 
 ### Partly done
 
