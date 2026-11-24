@@ -11,6 +11,7 @@ TY_GRAXPERT, TY_SIRIL and TY_SETIASTRO (its cosmicclarity command) name a progra
 TY_GRAXPERT_LIBS adds library folders, for a GPU whose libraries are not installed system-wide.
 """
 import argparse
+import hashlib
 import os
 import re
 import shutil
@@ -117,6 +118,31 @@ def grain(plane):
     plane = np.asarray(plane, dtype=np.float32)
     plane = plane[np.isfinite(plane)]
     return 1.4826 * float(np.median(np.abs(plane - np.median(plane)))) if plane.size else 0.0
+
+
+# Where each tool keeps the model it runs, on Linux; the application's version does not say which weights.
+MODELS = {"graxpert": ("~/.local/share/GraXpert/denoise-ai-models/*/model.onnx",),
+          "setiastro": ("~/.local/share/SASpro/runtime/*/models/darkstar_mono_AI4.pt",
+                        "~/.local/share/SASpro/runtime/*/models/darkstar_mono_AI4.onnx")}
+_model_cache = {}
+
+
+def model(tool):
+    """The model file a tool runs and the start of its SHA-256, for a picture's record; None where it is not found
+    (another system, or a tool that keeps its models elsewhere). GraXpert takes its newest version."""
+    for pattern in MODELS.get(tool, ()):
+        found = sorted(Path.home().glob(pattern.removeprefix("~/")))
+        if found:
+            path = found[-1]
+            key = (str(path), path.stat().st_mtime)
+            if key not in _model_cache:
+                digest = hashlib.sha256()
+                with open(path, "rb") as f:
+                    for block in iter(lambda: f.read(1 << 20), b""):
+                        digest.update(block)
+                _model_cache[key] = {"file": str(path.relative_to(Path.home())), "sha256": digest.hexdigest()[:16]}
+            return _model_cache[key]
+    return None
 
 
 def _stretch(plane, noise):

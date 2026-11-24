@@ -358,7 +358,8 @@ def without_stars(planes, widths, grains, say=print):
             sigma = np.sqrt(max(target ** 2 - widths[band] ** 2, 0)) / 2.355 if known else 0.0
             out[band] = (ndimage.gaussian_filter(sharp, sigma) if sigma > 0 else sharp, sharp)
     except freetools.ToolUnavailable as e:
-        say(f"  stars NOT taken apart from the nebula: {e}. They keep the nebula's colours.")
+        say(f"  stars NOT taken apart from the nebula: {e}. They keep the nebula's colours, and star "
+            "balancing and --star-reduction do nothing without it.")
         return None
     return out
 
@@ -521,7 +522,8 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
         picture = picture * gain[..., None]
     if grain:
         say("  grain in the clear sky: " + ", ".join(f"{b} x{v:.2f}" for b, v in grain.items()))
-    removal = {"tool": "setiastro", "version": freetools.version("setiastro"), "step": "Dark Star, blended"} if starless else None
+    removal = {"tool": "setiastro", "version": freetools.version("setiastro"), "model": freetools.model("setiastro"),
+               "step": "Dark Star, blended"} if starless else None
     done = {"method": "linear", "picture_version": PICTURE_VERSION, "star_removal": removal, "local_contrast": contrast, "star_power": star_power, "sharpen_steps": sharpen, "ghs": ghs, "clear_sky_share": round(open_sky, 3),
             "sky_map": open_sky >= MIN_CLEAR, "sky_guide": guide, "grain_kept": grain, "nebula_scale": {b: round(v, 2) for b, v in scale.items()},
             "star_flux": {b: round(v, 2) for b, v in flux.items()},
@@ -581,7 +583,8 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
             for band in have:
                 say(f"  GraXpert on {band} (strength {denoise_strength:g})")
                 images[band] = freetools.denoise(images[band], denoise_strength)
-            tool_used = {"tool": denoise, "version": freetools.version(denoise), "strength": denoise_strength}
+            tool_used = {"tool": denoise, "version": freetools.version(denoise), "model": freetools.model(denoise),
+                         "strength": denoise_strength}
         except freetools.ToolUnavailable as e:
             say(f"  NOT denoised: {e}. Making the picture without it.")
             images = {b: brightness(stacks[b]) for b in have}
@@ -688,7 +691,8 @@ def main():
                     help=f"how much of the tool's result to use (default {freetools.STRENGTH:g})")
     ap.add_argument("--no-contrast", action="store_true", help="narrowband: leave out local contrast, for comparison")
     ap.add_argument("--star-reduction", type=bounded(float, 1.0, 3.0), default=1.0, metavar="POWER",
-                    help="narrowband: smaller stars, keeping their peaks and colours (1 is none, 2 is about 25%% narrower, 3 the most)")
+                    help="narrowband: smaller stars, keeping their peaks and colours (1 is none, 2 is about 25%% narrower, "
+                    "3 the most); needs Seti Astro Suite Pro, which takes the stars apart from the nebula")
     ap.add_argument("--ghs", action="store_true",
                     help="narrowband: a generalised hyperbolic stretch, contrast aimed at the faint nebula")
     ap.add_argument("--sharpen", type=bounded(int, 0, 5), default=0, metavar="STEPS",

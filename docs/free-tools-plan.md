@@ -143,8 +143,10 @@ used for any star test, lined up as `colour.py` lines them up:
 
 In the full pictures NGC 2174 has no coloured doubles left and its stars are whiter, and IC 405 is
 unchanged. **Wired into `colour.py` on 24 November 2026** (picture version 6), and our own star
-removal (`colour.layers`) is deleted. Without Seti Astro Suite Pro the picture says so and keeps its
-stars in the nebula, in its colours.
+removal (`colour.layers`) is deleted, as the owner asked: there is one way to take stars off. Without
+Seti Astro Suite Pro the picture keeps its stars in the nebula, in its colours, and so star balancing
+and `--star-reduction` do nothing; the picture says so as it is made, and `--star-reduction`'s help
+says it needs the suite.
 
 ### Sharpening
 
@@ -233,6 +235,12 @@ worse than today, visible cosmic-ray pixels at most today's plus 10.
   sessions it threw out 18% of all pixels, taking the sky's drift between frames for outliers. With Siril's own normalisation
   its stack was on a different scale from the frames and could not be compared fairly.
 
+**The cosmic-ray shortfall is open.** The 3 sessions above failed the pass mark's cosmic-ray part,
+and the mark stands as set. A pair-aware test (a pixel is cleaned when its third-brightest neighbour,
+not its second, is dark, so a cosmic ray across two pixels goes) is running on the same harness and
+mark on all 11 sessions; the stack changes again only if it passes. Sparing blobs of 9 pixels or more
+instead left 15 to 99 visible cosmic-ray pixels where the old cleaning left 0 to 22, far worse.
+
 **Adopted on 24 November 2026** in `stacking.clean`, with the map made by `restack.py` from up to
 24 of the session's kept frames. A map pixel whose third-brightest neighbour also stands out is
 left alone, so a star that did not move between frames is never taken for a defect. A live stack
@@ -260,6 +268,11 @@ on stacks not used to choose it, and the science stack stays untouched. When one
 own code for that stage is deleted, so there aren't two ways of doing it.
 
 ## How it fits together
+
+Each picture's record (`colour.schema.json`) names every tool step that ran, with the tool's
+version, the model file it ran with and the start of that file's SHA-256 (`freetools.model`, found
+where each tool keeps its models on Linux; elsewhere it is left empty). A version alone does not
+say which weights were used.
 
 `colour.py` becomes a thin runner: take the science stacks, copy them, call each tool's
 command line in turn, and record the tool, version and settings beside the picture. A

@@ -25,12 +25,12 @@
         "denoise": {
           "type": "object",
           "required": ["tool", "strength"],
-          "properties": {"tool": {"type": "string"}, "version": {"type": ["string", "null"]}, "strength": {"type": "number"}}
+          "properties": {"tool": {"type": "string"}, "version": {"type": ["string", "null"]}, "model": {"type": ["object", "null"]}, "strength": {"type": "number"}}
         },
         "star_removal": {
           "type": "object",
           "required": ["tool", "step"],
-          "properties": {"tool": {"type": "string"}, "version": {"type": ["string", "null"]}, "step": {"type": "string"}}
+          "properties": {"tool": {"type": "string"}, "version": {"type": ["string", "null"]}, "model": {"type": ["object", "null"]}, "step": {"type": "string"}}
         }
       }
     },
