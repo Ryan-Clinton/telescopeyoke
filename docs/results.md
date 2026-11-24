@@ -15,6 +15,10 @@ analysis** (public data, no telescope of ours), **controlled software
 validation** (finding what was planted, so the answer is known) and
 **public operation** (it ran in front of people).
 
+None of this is a discovery. The project has found known objects again,
+rejected its own weak results, and measured its own equipment; it has not
+yet found anything new.
+
 ## How cold should a 183M run? 24 November 2026
 
 - **Evidence:** instrument characterisation.
@@ -49,10 +53,6 @@ validation** (finding what was planted, so the answer is known) and
   more than the dark signal grows from 30 s to 300 s; the 120 s darks put
   it at a few hundredths of an ADU a second at most. One camera, one gain,
   indoors in a warm room.
-
-None of this is a discovery. The project has found known objects again,
-rejected its own weak results, and measured its own equipment; it has not
-yet found anything new.
 
 ## A GoTo that finds its own way: M27, 3 October 2026
 
