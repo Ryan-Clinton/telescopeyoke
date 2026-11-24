@@ -64,7 +64,8 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
    too short to reach anything. Leads are needed for the mount, the camera
    and the focuser. Two 1.5 m (5 ft) 5.5 × 2.1 male-to-male
    leads (a twin pack), ordered on 20 November, arrived on 24 November, for
-   the mount and the camera; the focuser's (its socket is 5.5 × 2.5) is
+   the mount and the camera (24 November: the SV241 is powered from the
+   mount's power supply, one new lead between the mount and the SV241); the focuser's (its socket is 5.5 × 2.5) is
    still to make.
 7. **The 183M after a power cut**: a procedure that brings it back without
    the cooler running away. Gary: if the cooler ran with the 12 V out, warm

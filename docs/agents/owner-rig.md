@@ -46,13 +46,20 @@ either (18 October 2026: the CH340 was on USB, I took "took the
 autofocuser off earlier" to mean it was still off, and ran the
 hand-turned aid instead of the motor).
 
-## The camera's lead, and a jam
+## The camera's lead, the hub's power, and a jam
 
-Since 1 November 2026 there is no hub: the RSH-ST04 kept
-dropping off the laptop and has been returned to Amazon
-(`docs/usb-hub.md`). The camera goes on the 3 m lead straight into a laptop
-USB-A socket, where it has never dropped off USB and on 1 November kept
-every 1 s frame at 5000 Mb/s. With no hub nothing can cut its power, so a
+The SV241 power box is the hub since 23 November 2026 (the RSH-ST04 kept
+dropping off the laptop and went back to Amazon on 1 November,
+`docs/usb-hub.md`). As of 24 November its 12 V comes from the mount's
+power supply, and one of the two new 1.5 m 5.5 × 2.1 leads runs between
+the mount and the SV241 (the owner's words). The camera's leads, from the
+23 November video tests: the 3 m lead straight into the laptop is fine;
+laptop, 3 m lead, SV241, 1 m lead, camera stalls long videos ("no video
+frame within 5 s", no USB error in the kernel log); laptop, 1 m, SV241,
+1 m is fine. The 3 m lead is at its limit at 5 Gbps once the hub is on its
+far end; a USB 3 signal booster at the hub end (the Durlo, £7.99) is the
+cheap try, an active USB 3 cable the sure one. With no hub port able to
+cut the camera's power (the SV241's are always on), a
 jam (no frame at all) gets software steps first, then hands: (a) a command
 refused with `CAMERA_BUSY` names the process holding the camera
 (`cameralock.py`); stop a stale one with a plain `kill` and wait until it is
