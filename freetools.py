@@ -137,8 +137,10 @@ def _darkstar(u):
         source, made = Path(folder) / "in.fits", Path(folder) / "out.fits"
         fits.PrimaryHDU(u).writeto(source)
         try:
+            # In its own empty folder: started in a busy one (the desktop's tool folder) it hung (24 November 2026).
             done = subprocess.run([program, "darkstar", "-i", str(source), "-o", str(made), "--gpu"], capture_output=True,
-                                  text=True, timeout=RUN_LIMIT, env=tool_env("setiastro"), stdin=subprocess.DEVNULL)
+                                  text=True, timeout=RUN_LIMIT, env=tool_env("setiastro"), stdin=subprocess.DEVNULL,
+                                  cwd=folder)
         except (OSError, subprocess.SubprocessError) as e:
             raise ToolUnavailable(f"Dark Star did not run: {e}") from e
         if done.returncode or not made.exists():

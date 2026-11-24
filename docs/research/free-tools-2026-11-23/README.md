@@ -20,7 +20,7 @@ filaments, then were scored at equal grain against a blur and an independent sta
 - `eyecheck.py` makes the eye check of `freetools.remove_stars` round the brightest star and the
   darkest patch of three stacks. `colour-darkstar.patch` is the change to `colour.py` that puts
   Dark Star in the pictures, kept until close doubles are decided for all filters at once.
-- `sharpen.py` compares sharpening on the ten held-out pairs after GraXpert.
+- `sharpen.py` compares sharpening on the ten held-out pairs after GraXpert; `sharpen-scores-cpu.json` (ours, Siril) and `sharpen-scores-gpu.json` (the suite's sharpen) hold its results.
 - `scores.json` holds every measurement; `sites.json` holds the strength that gave half the grain.
 
 `prep.py` and `score.py` read the held-out pairs under `~/telescopeyoke-laptop/training/pairs3`

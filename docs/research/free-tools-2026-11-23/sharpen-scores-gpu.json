@@ -1,0 +1,232 @@
+{
+ "IC405-20261119-233452": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8952,
+   "ring": -0.0194
+  },
+  "cc-nonstellar": {
+   "detail": 2.1585,
+   "grain": 2.3591,
+   "agreement": -0.0622,
+   "line_height": 0.9746,
+   "ring": -0.0467
+  },
+  "cc-both": {
+   "detail": 2.1018,
+   "grain": 2.2527,
+   "agreement": -0.0715,
+   "line_height": 0.8398,
+   "ring": -0.1954
+  }
+ },
+ "IC405-20261119-235909": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.881,
+   "ring": -0.0426
+  },
+  "cc-nonstellar": {
+   "detail": 1.6953,
+   "grain": 1.7358,
+   "agreement": -0.0449,
+   "line_height": 1.084,
+   "ring": -0.078
+  },
+  "cc-both": {
+   "detail": 1.634,
+   "grain": 1.7045,
+   "agreement": -0.078,
+   "line_height": 1.0789,
+   "ring": -0.0851
+  }
+ },
+ "IC405-20261120-233305": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8893,
+   "ring": -0.0406
+  },
+  "cc-nonstellar": {
+   "detail": 1.3894,
+   "grain": 1.2884,
+   "agreement": -0.0179,
+   "line_height": 0.9216,
+   "ring": -0.0635
+  },
+  "cc-both": {
+   "detail": 1.3849,
+   "grain": 1.2838,
+   "agreement": -0.0732,
+   "line_height": 0.9442,
+   "ring": -0.1184
+  }
+ },
+ "IC405-20261121-203056": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8803,
+   "ring": -0.0348
+  },
+  "cc-nonstellar": {
+   "detail": 2.1549,
+   "grain": 2.1398,
+   "agreement": -0.0677,
+   "line_height": 1.0421,
+   "ring": -0.0638
+  },
+  "cc-both": {
+   "detail": 2.0325,
+   "grain": 2.0601,
+   "agreement": -0.1149,
+   "line_height": 1.02,
+   "ring": -0.0865
+  }
+ },
+ "IC405-20261121-211523": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8817,
+   "ring": -0.0482
+  },
+  "cc-nonstellar": {
+   "detail": 1.4403,
+   "grain": 1.4213,
+   "agreement": -0.0236,
+   "line_height": 0.9149,
+   "ring": -0.0778
+  },
+  "cc-both": {
+   "detail": 1.4316,
+   "grain": 1.4065,
+   "agreement": -0.0598,
+   "line_height": 0.8733,
+   "ring": -0.1641
+  }
+ },
+ "IC405-20261122-001737": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8973,
+   "ring": -0.0204
+  },
+  "cc-nonstellar": {
+   "detail": 1.4676,
+   "grain": 1.4057,
+   "agreement": -0.0218,
+   "line_height": 0.9198,
+   "ring": -0.0304
+  },
+  "cc-both": {
+   "detail": 1.4656,
+   "grain": 1.3955,
+   "agreement": -0.0485,
+   "line_height": 0.9271,
+   "ring": -0.0846
+  }
+ },
+ "NGC2174-20261120-014420": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8902,
+   "ring": -0.0268
+  },
+  "cc-nonstellar": {
+   "detail": 1.2865,
+   "grain": 1.0866,
+   "agreement": -0.0293,
+   "line_height": 0.9144,
+   "ring": -0.0487
+  },
+  "cc-both": {
+   "detail": 1.3262,
+   "grain": 1.0971,
+   "agreement": -0.137,
+   "line_height": 0.8574,
+   "ring": -0.0975
+  }
+ },
+ "NGC2174-20261121-005541": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8803,
+   "ring": -0.0523
+  },
+  "cc-nonstellar": {
+   "detail": 1.402,
+   "grain": 1.3374,
+   "agreement": -0.0306,
+   "line_height": 0.9205,
+   "ring": -0.1003
+  },
+  "cc-both": {
+   "detail": 1.4058,
+   "grain": 1.3213,
+   "agreement": -0.0789,
+   "line_height": 0.9102,
+   "ring": -0.1754
+  }
+ },
+ "NGC2174-20261121-024924": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8891,
+   "ring": -0.0374
+  },
+  "cc-nonstellar": {
+   "detail": 1.3234,
+   "grain": 1.164,
+   "agreement": -0.0089,
+   "line_height": 0.9191,
+   "ring": -0.0571
+  },
+  "cc-both": {
+   "detail": 1.3593,
+   "grain": 1.176,
+   "agreement": -0.1364,
+   "line_height": 0.9857,
+   "ring": -0.1002
+  }
+ },
+ "NGC2174-20261121-053054": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8858,
+   "ring": -0.0247
+  },
+  "cc-nonstellar": {
+   "detail": 1.65,
+   "grain": 1.714,
+   "agreement": -0.0291,
+   "line_height": 1.1119,
+   "ring": -0.0554
+  },
+  "cc-both": {
+   "detail": 1.5712,
+   "grain": 1.7089,
+   "agreement": -0.0569,
+   "line_height": 1.11,
+   "ring": -0.06
+  }
+ }
+}

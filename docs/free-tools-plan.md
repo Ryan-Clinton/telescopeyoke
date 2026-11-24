@@ -1,6 +1,6 @@
 # Plan: use free tools for the picture pipeline
 
-Status: **noise reduction is built (`colour.py --denoise graxpert`), the stacking's star-core fault is fixed, star removal is close; sharpening, stretch and colour calibration are still to test.**
+Status: **noise reduction is built (`colour.py --denoise graxpert`), the stacking's star-core fault is fixed, star removal is close, sharpening was tested and stays off; stretch and colour calibration are still to test.**
 Written 23 November 2026. `final.fits` and every other kept stack were only read.
 
 **The aim:** TelescopeYoke does the best possible job of automating the freely available
@@ -135,6 +135,27 @@ next step is to decide each star once, for all the filters together. `freetools.
 on a copy of a stack, and the change to `colour.py` is kept as
 `docs/research/free-tools-2026-11-23/colour-darkstar.patch`.
 
+### Sharpening
+
+The ten held-out pairs after GraXpert, measured away from stars against each pair's independent
+half (`docs/research/free-tools-2026-11-23/sharpen.py`). Medians; "agreement" is the change in
+how well the fine structure matches the independent half (real detail raises it), "ring" the
+deepest dip beside a planted line over its height (no sharpening: -0.04).
+
+| Method | Fine detail | Grain | Agreement | Ring |
+|---|---|---|---|---|
+| Ours, 3 Richardson-Lucy steps | 1.29 | 1.34 | -0.099 | -0.13 |
+| Siril 1.4.5 RL, PSF from the stars, defaults | 1.03 | 1.04 | -0.001 | -0.04 |
+| Seti Astro Suite Pro sharpen, non-stellar | 1.45 | 1.41 | -0.029 | -0.06 |
+| Seti Astro Suite Pro sharpen, both | 1.45 | 1.40 | -0.076 | -0.10 |
+
+The rule, set before it ran: a tool replaces ours only with agreement at least ours, detail at
+least ours, grain at most 2% above ours and ring no more than 0.02 deeper. **None passes:** the
+suite's non-stellar sharpening beats ours on detail, agreement and ring but adds 6% more grain
+than ours; Siril's adds almost no detail. Every method made the result agree less with an
+independent stack, ours most, so no sharpening gives real detail here. Ours stays as it is, off
+unless asked for (`--sharpen`).
+
 ### The star-core clipping fault (in the science stack)
 
 `stacking.clean` replaces any pixel far brighter than its neighbours, in every frame before
@@ -180,7 +201,7 @@ made are not changed until they are restacked.
 | Noise reduction | Optional in pictures | **GraXpert**, on each filter's linear stack; DeepSNR and the suite's AI4 tried and not better | Built |
 | Background and gradients | Our sky model | **Keep ours**: no tool did as well overall (GraXpert AI, Siril, Seti Astro ABE) | Tested |
 | Star removal | Plain code | Seti Astro Suite Pro's Dark Star, blended | Passed the mark on two sets of five unseen stacks; two coloured doubles left in NGC 2174, not in the pictures yet |
-| Sharpening and deconvolution | Our steps | GraXpert and Cosmic Clarity, with star and nebula checks | To test |
+| Sharpening and deconvolution | Our steps, off unless asked | Siril RL and the suite's sharpen tried; none passed, and none adds real detail | Tested |
 | Stretch | Ours, with a GHS option | Siril GHS | To test |
 | Colour calibration, broadband | Star average | Siril SPCC | To test |
 | Palette combination | `colour.py` | Keep unless Siril or Seti Astro Suite does it better | To test |

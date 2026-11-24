@@ -45,7 +45,8 @@ def tool(u, run):
 def cc(mode):
     return lambda u, fwhm: tool(u, lambda d: subprocess.run(
         [str(CC), "sharpen", "-i", f"{d}/a.fits", "-o", f"{d}/b.fits", "--gpu", "--temp-stretch", "--sharpening-mode", mode],
-        capture_output=True, text=True, stdin=subprocess.DEVNULL, env=dict(os.environ, QT_QPA_PLATFORM="offscreen")))
+        capture_output=True, text=True, stdin=subprocess.DEVNULL, env=dict(os.environ, QT_QPA_PLATFORM="offscreen"),
+        cwd=d, timeout=900))     # started in the busy tool folder it hung; why is not known (24 November 2026)
 
 
 def siril(u, fwhm):

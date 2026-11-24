@@ -1,0 +1,232 @@
+{
+ "IC405-20261119-233452": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8952,
+   "ring": -0.0194
+  },
+  "ours": {
+   "detail": 1.3553,
+   "grain": 1.3911,
+   "agreement": -0.0533,
+   "line_height": 1.1098,
+   "ring": -0.0995
+  },
+  "siril-rl": {
+   "detail": 1.0476,
+   "grain": 1.0527,
+   "agreement": -0.0026,
+   "line_height": 0.9249,
+   "ring": -0.0275
+  }
+ },
+ "IC405-20261119-235909": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.881,
+   "ring": -0.0426
+  },
+  "ours": {
+   "detail": 1.2873,
+   "grain": 1.3355,
+   "agreement": -0.1231,
+   "line_height": 1.1174,
+   "ring": -0.1448
+  },
+  "siril-rl": {
+   "detail": 1.0084,
+   "grain": 1.0085,
+   "agreement": -0.0003,
+   "line_height": 0.8885,
+   "ring": -0.0457
+  }
+ },
+ "IC405-20261120-233305": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8893,
+   "ring": -0.0406
+  },
+  "ours": {
+   "detail": 1.2832,
+   "grain": 1.3334,
+   "agreement": -0.0947,
+   "line_height": 1.1358,
+   "ring": -0.1425
+  },
+  "siril-rl": {
+   "detail": 1.0384,
+   "grain": 1.0517,
+   "agreement": -0.0017,
+   "line_height": 0.9285,
+   "ring": -0.0594
+  }
+ },
+ "IC405-20261121-203056": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8803,
+   "ring": -0.0348
+  },
+  "ours": {
+   "detail": 1.317,
+   "grain": 1.3124,
+   "agreement": -0.1693,
+   "line_height": 1.1159,
+   "ring": -0.1326
+  },
+  "siril-rl": {
+   "detail": 0.9976,
+   "grain": 1.0069,
+   "agreement": -0.0004,
+   "line_height": 0.8871,
+   "ring": -0.0379
+  }
+ },
+ "IC405-20261121-211523": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8817,
+   "ring": -0.0482
+  },
+  "ours": {
+   "detail": 1.2983,
+   "grain": 1.3008,
+   "agreement": -0.0994,
+   "line_height": 1.1299,
+   "ring": -0.1534
+  },
+  "siril-rl": {
+   "detail": 1.0606,
+   "grain": 1.1004,
+   "agreement": -0.0043,
+   "line_height": 0.9409,
+   "ring": -0.0757
+  }
+ },
+ "IC405-20261122-001737": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8973,
+   "ring": -0.0204
+  },
+  "ours": {
+   "detail": 1.3336,
+   "grain": 1.3733,
+   "agreement": -0.0983,
+   "line_height": 1.131,
+   "ring": -0.1157
+  },
+  "siril-rl": {
+   "detail": 1.0264,
+   "grain": 1.0318,
+   "agreement": -0.0012,
+   "line_height": 0.9167,
+   "ring": -0.0269
+  }
+ },
+ "NGC2174-20261120-014420": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8902,
+   "ring": -0.0268
+  },
+  "ours": {
+   "detail": 1.3176,
+   "grain": 1.3666,
+   "agreement": -0.0616,
+   "line_height": 1.1231,
+   "ring": -0.1094
+  },
+  "siril-rl": {
+   "detail": 1.0666,
+   "grain": 1.0842,
+   "agreement": -0.0047,
+   "line_height": 0.9336,
+   "ring": -0.0406
+  }
+ },
+ "NGC2174-20261121-005541": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8803,
+   "ring": -0.0523
+  },
+  "ours": {
+   "detail": 1.2676,
+   "grain": 1.3255,
+   "agreement": -0.0999,
+   "line_height": 1.1258,
+   "ring": -0.158
+  },
+  "siril-rl": {
+   "detail": 1.0249,
+   "grain": 1.0286,
+   "agreement": -0.0006,
+   "line_height": 0.91,
+   "ring": -0.0641
+  }
+ },
+ "NGC2174-20261121-024924": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8891,
+   "ring": -0.0374
+  },
+  "ours": {
+   "detail": 1.1992,
+   "grain": 1.3373,
+   "agreement": -0.0833,
+   "line_height": 1.127,
+   "ring": -0.1272
+  },
+  "siril-rl": {
+   "detail": 1.0535,
+   "grain": 1.1194,
+   "agreement": -0.0055,
+   "line_height": 0.9596,
+   "ring": -0.0629
+  }
+ },
+ "NGC2174-20261121-053054": {
+  "none": {
+   "detail": 1.0,
+   "grain": 1.0,
+   "agreement": 0.0,
+   "line_height": 0.8858,
+   "ring": -0.0247
+  },
+  "ours": {
+   "detail": 1.2296,
+   "grain": 1.3447,
+   "agreement": -0.1701,
+   "line_height": 1.1152,
+   "ring": -0.1097
+  },
+  "siril-rl": {
+   "detail": 1.0046,
+   "grain": 1.0127,
+   "agreement": -0.0004,
+   "line_height": 0.8955,
+   "ring": -0.028
+  }
+ }
+}
