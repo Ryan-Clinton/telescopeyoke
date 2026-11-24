@@ -17,9 +17,11 @@ filaments, then were scored at equal grain against a blur and an independent sta
   DeepSNR's pictures are deleted once measured: only their scores are kept.
 - `stars-chain-v4-scores.json` and `stars-chain-v5-scores.json`: the blend on two more sets of
   five stacks never used before, after each fix (clipped cores, then close doubles).
+- `stars_union.py` checks stars decided once for all filters on M33's R, G and B; `stars-union-scores.json` holds the result.
 - `eyecheck.py` makes the eye check of `freetools.remove_stars` round the brightest star and the
-  darkest patch of three stacks. `colour-darkstar.patch` is the change to `colour.py` that puts
-  Dark Star in the pictures, kept until close doubles are decided for all filters at once.
+  darkest patch of three stacks. `colour-darkstar.patch` was the change to `colour.py` that put
+  Dark Star in the pictures, before stars were decided for all filters at once; it is now in `colour.py`.
+- `stretch.py` compares stretches (`stretch-scores.json`); `palette.py` makes NGC 2174 the plain free way for comparing by eye.
 - `sharpen.py` compares sharpening on the ten held-out pairs after GraXpert; `sharpen-scores-cpu.json` (ours, Siril) and `sharpen-scores-gpu.json` (the suite's sharpen) hold its results.
 - `scores.json` holds every measurement; `sites.json` holds the strength that gave half the grain.
 

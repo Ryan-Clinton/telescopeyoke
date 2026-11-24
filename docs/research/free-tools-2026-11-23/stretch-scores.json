@@ -1,0 +1,342 @@
+{
+ "IC405-20261119-233452": {
+  "ours": {
+   "sky": 0.0,
+   "shown": 13.551,
+   "line_height": 0.0797,
+   "grain": 0.0059,
+   "bright": 0.0148,
+   "clipped_pct": 0.004
+  },
+  "siril-autostretch": {
+   "sky": 0.18094,
+   "shown": 5.126,
+   "line_height": 0.1249,
+   "grain": 0.0244,
+   "bright": 0.0233,
+   "clipped_pct": 0.002
+  },
+  "siril-autoghs": {
+   "sky": 0.19634,
+   "shown": 6.213,
+   "line_height": 0.0036,
+   "grain": 0.0006,
+   "bright": 0.0015,
+   "clipped_pct": 0.0
+  },
+  "setiastro-stat-stretch": {
+   "sky": 0.17932,
+   "shown": 5.128,
+   "line_height": 0.1249,
+   "grain": 0.0244,
+   "bright": 0.0234,
+   "clipped_pct": 0.002
+  }
+ },
+ "IC405-20261119-235909": {
+  "ours": {
+   "sky": 0.0,
+   "shown": 12.053,
+   "line_height": 0.0334,
+   "grain": 0.0028,
+   "bright": 0.0117,
+   "clipped_pct": 0.005
+  },
+  "siril-autostretch": {
+   "sky": 0.14852,
+   "shown": 5.312,
+   "line_height": 0.0563,
+   "grain": 0.0106,
+   "bright": 0.0151,
+   "clipped_pct": 0.004
+  },
+  "siril-autoghs": {
+   "sky": 0.24626,
+   "shown": 5.795,
+   "line_height": 0.0023,
+   "grain": 0.0004,
+   "bright": 0.0016,
+   "clipped_pct": 0.0
+  },
+  "setiastro-stat-stretch": {
+   "sky": 0.17181,
+   "shown": 5.441,
+   "line_height": 0.0426,
+   "grain": 0.0078,
+   "bright": 0.0134,
+   "clipped_pct": 0.003
+  }
+ },
+ "IC405-20261120-233305": {
+  "ours": {
+   "sky": 0.0,
+   "shown": 12.29,
+   "line_height": 0.0278,
+   "grain": 0.0023,
+   "bright": 0.0117,
+   "clipped_pct": 0.006
+  },
+  "siril-autostretch": {
+   "sky": 0.16758,
+   "shown": 5.716,
+   "line_height": 0.0467,
+   "grain": 0.0082,
+   "bright": 0.0151,
+   "clipped_pct": 0.005
+  },
+  "siril-autoghs": {
+   "sky": -0.39323,
+   "shown": 6.058,
+   "line_height": 0.0072,
+   "grain": 0.0012,
+   "bright": 0.0049,
+   "clipped_pct": 0.0
+  },
+  "setiastro-stat-stretch": {
+   "sky": 0.16866,
+   "shown": 5.726,
+   "line_height": 0.0457,
+   "grain": 0.008,
+   "bright": 0.0149,
+   "clipped_pct": 0.004
+  }
+ },
+ "IC405-20261121-203056": {
+  "ours": {
+   "sky": 0.0,
+   "shown": 13.389,
+   "line_height": 0.0236,
+   "grain": 0.0018,
+   "bright": 0.0092,
+   "clipped_pct": 0.005
+  },
+  "siril-autostretch": {
+   "sky": 0.18216,
+   "shown": 5.922,
+   "line_height": 0.0437,
+   "grain": 0.0074,
+   "bright": 0.012,
+   "clipped_pct": 0.002
+  },
+  "siril-autoghs": {
+   "sky": 0.245,
+   "shown": 6.303,
+   "line_height": 0.0035,
+   "grain": 0.0006,
+   "bright": 0.0019,
+   "clipped_pct": 0.001
+  },
+  "setiastro-stat-stretch": {
+   "sky": 0.1819,
+   "shown": 5.967,
+   "line_height": 0.0396,
+   "grain": 0.0066,
+   "bright": 0.0114,
+   "clipped_pct": 0.002
+  }
+ },
+ "IC405-20261121-211523": {
+  "ours": {
+   "sky": 0.0,
+   "shown": 9.799,
+   "line_height": 0.0135,
+   "grain": 0.0014,
+   "bright": 0.0097,
+   "clipped_pct": 0.005
+  },
+  "siril-autostretch": {
+   "sky": 0.15136,
+   "shown": 4.817,
+   "line_height": 0.0241,
+   "grain": 0.005,
+   "bright": 0.0125,
+   "clipped_pct": 0.003
+  },
+  "siril-autoghs": {
+   "sky": -135.77213,
+   "shown": 4.954,
+   "line_height": 0.4863,
+   "grain": 0.0982,
+   "bright": 0.4292,
+   "clipped_pct": 0.0
+  },
+  "setiastro-stat-stretch": {
+   "sky": 0.15058,
+   "shown": 4.817,
+   "line_height": 0.0241,
+   "grain": 0.005,
+   "bright": 0.0125,
+   "clipped_pct": 0.003
+  }
+ },
+ "IC405-20261122-001737": {
+  "ours": {
+   "sky": 0.0,
+   "shown": 9.917,
+   "line_height": 0.0135,
+   "grain": 0.0014,
+   "bright": 0.0076,
+   "clipped_pct": 0.005
+  },
+  "siril-autostretch": {
+   "sky": 0.17927,
+   "shown": 5.061,
+   "line_height": 0.0261,
+   "grain": 0.0052,
+   "bright": 0.0096,
+   "clipped_pct": 0.002
+  },
+  "siril-autoghs": {
+   "sky": 0.23966,
+   "shown": 5.128,
+   "line_height": 0.0038,
+   "grain": 0.0008,
+   "bright": 0.0024,
+   "clipped_pct": 0.0
+  },
+  "setiastro-stat-stretch": {
+   "sky": 0.15611,
+   "shown": 5.039,
+   "line_height": 0.0328,
+   "grain": 0.0065,
+   "bright": 0.0109,
+   "clipped_pct": 0.003
+  }
+ },
+ "NGC2174-20261120-014420": {
+  "ours": {
+   "sky": 0.00076,
+   "shown": 14.863,
+   "line_height": 0.0795,
+   "grain": 0.0053,
+   "bright": 0.0115,
+   "clipped_pct": 0.006
+  },
+  "siril-autostretch": {
+   "sky": 0.20424,
+   "shown": 5.591,
+   "line_height": 0.1293,
+   "grain": 0.0231,
+   "bright": 0.0147,
+   "clipped_pct": 0.003
+  },
+  "siril-autoghs": {
+   "sky": 0.12324,
+   "shown": 6.518,
+   "line_height": 0.007,
+   "grain": 0.0011,
+   "bright": 0.0028,
+   "clipped_pct": 0.0
+  },
+  "setiastro-stat-stretch": {
+   "sky": 0.17448,
+   "shown": 5.145,
+   "line_height": 0.1895,
+   "grain": 0.0368,
+   "bright": 0.0152,
+   "clipped_pct": 0.004
+  }
+ },
+ "NGC2174-20261121-005541": {
+  "ours": {
+   "sky": 0.0,
+   "shown": 11.457,
+   "line_height": 0.0209,
+   "grain": 0.0018,
+   "bright": 0.0084,
+   "clipped_pct": 0.006
+  },
+  "siril-autostretch": {
+   "sky": 0.16332,
+   "shown": 5.016,
+   "line_height": 0.038,
+   "grain": 0.0076,
+   "bright": 0.0093,
+   "clipped_pct": 0.003
+  },
+  "siril-autoghs": {
+   "sky": 0.16872,
+   "shown": 5.225,
+   "line_height": 0.0039,
+   "grain": 0.0007,
+   "bright": 0.0025,
+   "clipped_pct": 0.0
+  },
+  "setiastro-stat-stretch": {
+   "sky": 0.15673,
+   "shown": 5.004,
+   "line_height": 0.0399,
+   "grain": 0.008,
+   "bright": 0.0094,
+   "clipped_pct": 0.003
+  }
+ },
+ "NGC2174-20261121-024924": {
+  "ours": {
+   "sky": 0.0,
+   "shown": 15.435,
+   "line_height": 0.0325,
+   "grain": 0.0021,
+   "bright": 0.0136,
+   "clipped_pct": 0.006
+  },
+  "siril-autostretch": {
+   "sky": 0.19179,
+   "shown": 7.076,
+   "line_height": 0.0545,
+   "grain": 0.0077,
+   "bright": 0.0167,
+   "clipped_pct": 0.007
+  },
+  "siril-autoghs": {
+   "sky": 39.3158,
+   "shown": -7.307,
+   "line_height": -0.1205,
+   "grain": 0.0165,
+   "bright": 0.1166,
+   "clipped_pct": 100.0
+  },
+  "setiastro-stat-stretch": {
+   "sky": 0.15128,
+   "shown": 6.946,
+   "line_height": 0.0866,
+   "grain": 0.0125,
+   "bright": 0.0201,
+   "clipped_pct": 0.012
+  }
+ },
+ "NGC2174-20261121-053054": {
+  "ours": {
+   "sky": 0.0,
+   "shown": 14.214,
+   "line_height": 0.0679,
+   "grain": 0.0048,
+   "bright": 0.0179,
+   "clipped_pct": 0.006
+  },
+  "siril-autostretch": {
+   "sky": 0.18265,
+   "shown": 5.912,
+   "line_height": 0.1055,
+   "grain": 0.0178,
+   "bright": 0.0267,
+   "clipped_pct": 0.007
+  },
+  "siril-autoghs": {
+   "sky": 0.24875,
+   "shown": 6.909,
+   "line_height": 0.0022,
+   "grain": 0.0003,
+   "bright": 0.0017,
+   "clipped_pct": 0.0
+  },
+  "setiastro-stat-stretch": {
+   "sky": 0.18239,
+   "shown": 5.982,
+   "line_height": 0.099,
+   "grain": 0.0165,
+   "bright": 0.0256,
+   "clipped_pct": 0.007
+  }
+ }
+}

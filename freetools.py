@@ -37,7 +37,7 @@ TOOLS = {
     # Cosmic Clarity's own repository was archived in 2026; it lives on inside the suite, whose AI models
     # each person downloads and accepts in the suite itself (personal, non-commercial use).
     "setiastro": {"name": "Seti Astro Suite Pro", "env": "TY_SETIASTRO", "programs": ("cosmicclarity",),
-                  "for": "star removal (Dark Star): freetools.py stars, not yet in the pictures", "url": "https://www.setiastro.com/",
+                  "for": "star removal (Dark Star) in narrowband pictures", "url": "https://www.setiastro.com/",
                   "how": "then download its AI models from inside the suite and accept their licence there"},
 }
 TESTED = {"graxpert": "3.0.2", "siril": "1.4.5", "setiastro": "1.24.8"}    # 23 and 24 November 2026
@@ -152,13 +152,14 @@ def _darkstar(u):
     return out
 
 
-def _blend(u, ds):
-    """Dark Star's result only round stars that were really found, so a thin filament is never replaced: on its
-    own it took off up to 72% of a faint planted glow and half of a thin line (23 November 2026). A disc grows
-    with the star's brightness, for its halo and spikes; only what Dark Star changed inside it, above the broad
-    change, is taken."""
+def _change(u, ds):
     change = ndimage.gaussian_filter(u - ds, 1.0)
-    noise = 1.4826 * float(np.median(np.abs(change - np.median(change)))) + 1e-6
+    return change, 1.4826 * float(np.median(np.abs(change - np.median(change)))) + 1e-6
+
+
+def _discs(u, change, noise):
+    """Where the stars Dark Star took off are: a disc round each one really found, growing with its brightness
+    for its halo and spikes."""
     rows, cols = u.shape
     discs = np.zeros(u.shape, bool)
     for x, y, _, fwhm, round_ in stacking.find_stars(u, limit=4000):
@@ -185,6 +186,17 @@ def _blend(u, ds):
             top, left = max(box[0].start - 5, 0), max(box[1].start - 5, 0)
             near = (slice(top, box[0].stop + 5), slice(left, box[1].stop + 5))
             discs[near] |= ndimage.binary_dilation(labels[near] == n, iterations=4)
+    return discs
+
+
+def _blend(u, ds, discs=None):
+    """Dark Star's result only inside the star discs (`_discs`, this plane's own unless given), so a thin
+    filament is never replaced: on its own it took off up to 72% of a faint planted glow and half of a thin line
+    (23 November 2026). Only what Dark Star changed there, above the broad change, is taken."""
+    change, noise = _change(u, ds)
+    rows, cols = u.shape
+    if discs is None:
+        discs = _discs(u, change, noise)
     mask = ndimage.gaussian_filter((discs & (change > 2 * noise)).astype(np.float32), 1.5)
     mask = np.clip(mask * 1.6, 0, 1) * ndimage.gaussian_filter(discs.astype(np.float32), 1.0)
     # On a noisy stack Dark Star also lowers the broad level, which showed as dark discs.
@@ -207,6 +219,36 @@ def remove_stars(plane, noise=None):
     starless = _blend(u, _darkstar(u))
     out = np.where(starless != u, back(starless), filled)
     return np.where(good, out, np.nan).astype(np.float32)
+
+
+def remove_stars_together(planes, noises=None):
+    """Several lined-up linear planes (a picture's filters, {band: plane}) without their stars, each star decided
+    once for all of them: a star found in any filter is taken out of every filter Dark Star took it from. Decided
+    filter by filter, a close double read as not round in one filter only and stayed there in that filter's
+    colour, red or blue in NGC 2174 (24 November 2026)."""
+    noises = noises or {}
+    work = {}
+    for band, plane in planes.items():
+        plane = np.asarray(plane, dtype=np.float32)
+        good = np.isfinite(plane)
+        if not good.any():
+            raise ToolUnavailable(f"the {band} stack has no valid pixels")
+        filled = np.where(good, plane, float(np.median(plane[good])))
+        forward, back = _stretch(filled, noises.get(band) or grain(filled))
+        u = forward(filled)
+        ds = _darkstar(u)
+        work[band] = (good, filled, back, u, ds)
+    shapes = {w[3].shape for w in work.values()}
+    if len(shapes) != 1:
+        raise ToolUnavailable(f"the planes are not the same size: {sorted(shapes)}")
+    discs = np.zeros(shapes.pop(), bool)
+    for good, filled, back, u, ds in work.values():
+        discs |= _discs(u, *_change(u, ds))
+    out = {}
+    for band, (good, filled, back, u, ds) in work.items():
+        starless = _blend(u, ds, discs)
+        out[band] = np.where(good, np.where(starless != u, back(starless), filled), np.nan).astype(np.float32)
+    return out
 
 
 def status():

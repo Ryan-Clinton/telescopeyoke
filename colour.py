@@ -200,7 +200,7 @@ NARROWBAND_SATURATION = 1.8   # mixed linearly the palette is paler than separat
 EDGE_TRIM = 0.035    # of the picture's shorter side, off every edge of a linear narrowband picture
 QUIET = (0.7, 0.6, 0.5, 0.4)    # times its noise each scale needs to be fully kept: at this, on NGC 2174, 99% of the faintest stars stay, their flux within 1%
 MIN_CLEAR = 0.3      # of the frame clear of nebula, or the sky is not mapped
-PICTURE_VERSION = 5  # of the method below: changes what the same stacks give
+PICTURE_VERSION = 6  # of the method below: changes what the same stacks give
 EDGE_BAND = 0.25     # of the shorter side: how far in from the edge the sky map acts
 CONTRAST = 0.3       # how far local contrast may lift or lower the nebula
 SKY_CELLS = 5        # how smooth the sky map is, in cells of 16 pixels: far wider than any star
@@ -338,11 +338,29 @@ def quietened(plane, clear):
     return out
 
 
-def layers(plane, star):
-    """A linear plane as (nebula, stars), which add back up to it. Only the
-    stars' own pixels are replaced, so the nebula keeps its fine detail."""
-    nebula = star * smoothed(plane) + (1 - star) * plane
-    return nebula, plane - nebula
+def without_stars(planes, widths, grains, say=print):
+    """Each filter's nebula with its stars taken off by Dark Star
+    (freetools.remove_stars), as {band: (width-matched, sharp)}. On stacks
+    never used to tune it, it left almost nothing of each star and kept a
+    planted faint line, where our own star removal left rings and lost up to
+    three quarters of the line (24 November 2026). The width-matched nebula
+    is the sharp one blurred as matched_widths blurs, and each star is decided
+    once for all the filters: taken apart filter by filter, a close double
+    stayed in one filter of NGC 2174 and showed red or blue. None
+    when the suite is missing or fails: the stars then stay in the nebula,
+    in its colours."""
+    out = {}
+    known = all(widths.values())        # unmeasured, matched_widths blurred nothing
+    target = max(widths.values()) if known else 0.0
+    try:
+        say(f"  Dark Star on {', '.join(planes)}, each star decided once for every filter")
+        for band, sharp in freetools.remove_stars_together(planes, grains).items():
+            sigma = np.sqrt(max(target ** 2 - widths[band] ** 2, 0)) / 2.355 if known else 0.0
+            out[band] = (ndimage.gaussian_filter(sharp, sigma) if sigma > 0 else sharp, sharp)
+    except freetools.ToolUnavailable as e:
+        say(f"  stars NOT taken apart from the nebula: {e}. They keep the nebula's colours.")
+        return None
+    return out
 
 
 def star_gain(stars, power):
@@ -401,7 +419,7 @@ def contrast_gain(nebula, where):
 
 
 def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=False, contrast=True,
-                      star_power=1.0, sharpen=0, ghs=False):
+                      star_power=1.0, sharpen=0, ghs=False, grains=None):
     """The narrowband picture made in the light's own units: sky off, star
     widths matched, the palette mixed, and one stretch at the very end.
     Nebula and stars are balanced apart: the nebula on its own strength, so
@@ -410,7 +428,8 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
     nebula is weak, so scaling it up scaled its stars up too). Brightness
     comes from the unblurred filters, so matching widths costs no sharpness.
     Returns the picture (0 to 255, unrounded), the linear colour, and what
-    was done."""
+    was done. `grains` is each filter's grain before any noise reduction,
+    which sets the stretch the star removal works in."""
     planes = {}
     for c, band in enumerate(channels):
         if band not in planes:
@@ -439,10 +458,11 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
     even, before, after = matched_widths(planes, say)
     star = star_mask(np.mean([p / scale[b] for b, p in planes.items()], axis=0))
     core = star > 0.5
+    starless = without_stars(planes, before, grains or {}, say)
     nebula, stars, sharp_nebula, sharp_stars, flux, grain, untouched = {}, {}, {}, {}, {}, {}, {}
     for band in planes:
-        nebula[band], stars[band] = layers(even[band], star)
-        sharp_nebula[band], sharp_stars[band] = layers(planes[band], star)
+        nebula[band], sharp_nebula[band] = starless[band] if starless else (even[band], planes[band])
+        stars[band], sharp_stars[band] = even[band] - nebula[band], planes[band] - sharp_nebula[band]
         untouched[band] = sharp_nebula[band]
         if quiet:
             before_grain = fine_grain(nebula[band], clear)
@@ -501,7 +521,8 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
         picture = picture * gain[..., None]
     if grain:
         say("  grain in the clear sky: " + ", ".join(f"{b} x{v:.2f}" for b, v in grain.items()))
-    done = {"method": "linear", "picture_version": PICTURE_VERSION, "local_contrast": contrast, "star_power": star_power, "sharpen_steps": sharpen, "ghs": ghs, "clear_sky_share": round(open_sky, 3),
+    removal = {"tool": "setiastro", "version": freetools.version("setiastro"), "step": "Dark Star, blended"} if starless else None
+    done = {"method": "linear", "picture_version": PICTURE_VERSION, "star_removal": removal, "local_contrast": contrast, "star_power": star_power, "sharpen_steps": sharpen, "ghs": ghs, "clear_sky_share": round(open_sky, 3),
             "sky_map": open_sky >= MIN_CLEAR, "sky_guide": guide, "grain_kept": grain, "nebula_scale": {b: round(v, 2) for b, v in scale.items()},
             "star_flux": {b: round(v, 2) for b, v in flux.items()},
             "star_width_px": {b: round(v, 2) for b, v in before.items() if v},
@@ -551,6 +572,7 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
     if base not in stacks:
         base = channels[0]
     images = {b: brightness(stacks[b]) for b in have}
+    grains = {b: freetools.grain(i) for b, i in images.items()}
     tool_used = None
     if denoise:
         # Each filter on its own while still linear and unmoved: a resampled stack's
@@ -601,7 +623,7 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
     else:
         colour, linear, done = linear_narrowband(rgb, channels, saturation,
                                                  background if linear_background is None else linear_background,
-                                                 say, quiet, contrast, star_power, sharpen, ghs)
+                                                 say, quiet, contrast, star_power, sharpen, ghs, grains)
         used.update(done)
     if detail_band in images:
         grey = np.where(valid, images[detail_band], 0)
@@ -818,6 +840,8 @@ def run(args):
                 "any_coverage": args.any_coverage}
     if used.get("denoise"):
         settings["denoise"] = used["denoise"]
+    if used.get("star_removal"):
+        settings["star_removal"] = used["star_removal"]
     if linear_mix:
         settings.update(green_kept=GREEN_KEPT, linear_oiii=LINEAR_OIII, star_tint=STAR_TINT, edge_trim=EDGE_TRIM,
                         sky_cells=SKY_CELLS, min_clear=MIN_CLEAR, contrast=CONTRAST, quiet=list(QUIET))

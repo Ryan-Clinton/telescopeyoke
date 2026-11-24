@@ -1,6 +1,6 @@
 # Plan: use free tools for the picture pipeline
 
-Status: **noise reduction is built (`colour.py --denoise graxpert`), the stacking's star-core fault is fixed, star removal is close, sharpening was tested and stays off; stretch and colour calibration are still to test.**
+Status: **noise reduction is built (`colour.py --denoise graxpert`), the stacking's star-core fault is fixed, star removal is built (Dark Star), and sharpening, stretch, background and palette stay ours after testing; only colour calibration (SPCC) waits.**
 Written 23 November 2026. `final.fits` and every other kept stack were only read.
 
 **The aim:** TelescopeYoke does the best possible job of automating the freely available
@@ -130,10 +130,21 @@ never used before:
 | SN 2026sqf's field | 0.400 / **1.020** | 0.021 / 0.013 |
 | M33, 2 November | 0.284 / **1.009** | 0.010 / -0.002 |
 
-Two coloured doubles are still left in NGC 2174, so **it is not wired into the pictures.** The
-next step is to decide each star once, for all the filters together. `freetools.py stars` runs it
-on a copy of a stack, and the change to `colour.py` is kept as
-`docs/research/free-tools-2026-11-23/colour-darkstar.patch`.
+Two coloured doubles were still left in NGC 2174: each filter decided its own stars. **Now each
+star is decided once for all the filters** (`freetools.remove_stars_together`): a star found in any
+filter comes out of every filter Dark Star took it from. On M33's R, G and B of 5 November, never
+used for any star test, lined up as `colour.py` lines them up:
+
+| Filter | Line kept, ours / blend | Star left, ours / blend |
+|---|---|---|
+| R | 0.367 / **1.054** | 0.015 / 0.002 |
+| G | 0.291 / **1.021** | 0.013 / 0.009 |
+| B | 0.274 / **1.026** | 0.018 / 0.004 |
+
+In the full pictures NGC 2174 has no coloured doubles left and its stars are whiter, and IC 405 is
+unchanged. **Wired into `colour.py` on 24 November 2026** (picture version 6), and our own star
+removal (`colour.layers`) is deleted. Without Seti Astro Suite Pro the picture says so and keeps its
+stars in the nebula, in its colours.
 
 ### Sharpening
 
@@ -155,6 +166,38 @@ suite's non-stellar sharpening beats ours on detail, agreement and ring but adds
 than ours; Siril's adds almost no detail. Every method made the result agree less with an
 independent stack, ours most, so no sharpening gives real detail here. Ours stays as it is, off
 unless asked for (`--sharpen`).
+
+### Stretch
+
+The ten held-out pairs after GraXpert, each stack beside its copy with faint planted lines so one
+stretch serves both (`docs/research/free-tools-2026-11-23/stretch.py`). Measured in the faint
+nebula, away from stars; each tool at its default sky level (0.25), Siril's GHS searched to it.
+Medians:
+
+| Method | Faint lines over grain | Line height | Grain | Bright detail | Burnt white |
+|---|---|---|---|---|---|
+| **Ours** (`process.display`) | **12.8** | 0.030 | 0.0022 | 0.0116 | 0.006% |
+| Siril 1.4.5 autostretch | 5.5 | 0.051 | 0.0080 | 0.0149 | 0.003% |
+| Siril 1.4.5 autoghs | 5.9 | 0.004 | 0.0008 | 0.0024 | 0% |
+| Seti Astro Suite Pro statistical stretch | 5.3 | 0.044 | 0.0080 | 0.0141 | 0.003% |
+
+The rule, set before it ran: a tool replaces ours only with faint lines over grain and bright
+detail at least ours, and no more than 0.1 points more burnt white. **None passes; ours stays.**
+The tools draw the faint lines taller and keep a little more bright detail, but lift the grain four
+times as much; GHS at that sky level flattened everything. Ours puts the sky at black, so the first
+version of this test, measured on the sky, said nothing and was replaced before any result counted.
+
+### Palette combination and colour calibration
+
+Neither Siril nor Seti Astro Suite Pro has an automatic palette tool: Siril's `rgbcomp` only puts
+each filter in a channel, and the suite's command line offers white balance and green removal.
+The plain free route for NGC 2174 in SHO (GraXpert, lined up as `colour.py` lines them up, Siril's
+rgbcomp and autostretch, the suite's SCNR; `palette.py`) left a purple gradient across the sky, a
+flatter nebula and an edge artefact beside `colour.py`'s picture, which fits the sky and balances
+the filters itself. **`colour.py` keeps the palette.**
+
+Siril's SPCC was not tried: its sensor and filter database is a separate download not yet agreed,
+and it needs the make of this rig's R, G and B filters, which is not recorded.
 
 ### The star-core clipping fault (in the science stack)
 
@@ -200,11 +243,11 @@ made are not changed until they are restacked.
 | Star-core clipping fault | Old cleaning cut star cores | A defect map and the lone-pixel test; Siril's rejection failed | Built |
 | Noise reduction | Optional in pictures | **GraXpert**, on each filter's linear stack; DeepSNR and the suite's AI4 tried and not better | Built |
 | Background and gradients | Our sky model | **Keep ours**: no tool did as well overall (GraXpert AI, Siril, Seti Astro ABE) | Tested |
-| Star removal | Plain code | Seti Astro Suite Pro's Dark Star, blended | Passed the mark on two sets of five unseen stacks; two coloured doubles left in NGC 2174, not in the pictures yet |
+| Star removal | Plain code | **Seti Astro Suite Pro's Dark Star, blended**, each star decided once for all filters | Built |
 | Sharpening and deconvolution | Our steps, off unless asked | Siril RL and the suite's sharpen tried; none passed, and none adds real detail | Tested |
-| Stretch | Ours, with a GHS option | Siril GHS | To test |
-| Colour calibration, broadband | Star average | Siril SPCC | To test |
-| Palette combination | `colour.py` | Keep unless Siril or Seti Astro Suite does it better | To test |
+| Stretch | Ours, with a GHS option | **Keep ours**: Siril's autostretch and the suite's statistical stretch lifted the grain, Siril's GHS flattened the nebula | Tested |
+| Colour calibration, broadband | Star average | Siril SPCC | Waiting: its database to be agreed, and the filters' make |
+| Palette combination | `colour.py` | **Keep ours**: neither tool automates it; the plain free route looked worse | Tested |
 
 A tool replaces our code only if it does at least as well on the measures for that stage
 on stacks not used to choose it, and the science stack stays untouched. When one wins, our
