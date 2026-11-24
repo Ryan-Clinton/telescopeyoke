@@ -161,10 +161,15 @@ fainter than usual, beyond its scatter, a dip (`schemas/starwatch.schema.json`);
 already taken. Only nights of the same camera and filter share a usual level.
 `--colour [MINUTES]` (moves the mount; 5 minutes each by default) images it in
 B then R and, once each band has three earlier nights, says whether B changed
-more than R that night. `--transit-reach` only reads the kept nights and says
-whether their noise could show the proposed 0.012 mag transit at three sigma,
-and how nights inside its windows compare with those outside. Each night also
-keeps `check_scatter`, how steady stars of about its brightness were.
+more than R that night. `--transit-reach` only reads the kept nights and applies `docs/tabby-plan.md`:
+the gate on the 183M's L looks outside the windows, then, only if it passes,
+each stretch inside them as consistent, excluded or inconclusive. The windows
+bound the transit's middle, so each is widened by half its 21 hours. `--hours`
+gives the usable hours from here in quarter hours, `--plant` plants the transit
+in each baseline look and judges it, and `--export FOLDER` writes the site's
+`looks.csv`, `batches.csv` and `manifest.json` locally, sending nothing. Each
+night also keeps `check_scatter`, how steady stars of about its brightness
+were, and its altitude, which is never exported.
 `variables.py FIELD --compare-bands` sets a star's scatter in each kept band
 side by side.
 Reporting a dip is a person's.

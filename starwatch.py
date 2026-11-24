@@ -59,6 +59,13 @@ BRIGHTEST = 10.5         # G: trusted in its programme's 4 s frames (16 s ones f
 WARN = 0.03              # magnitudes fainter than usual that make a dip
 BASELINE_NIGHTS = 3      # nights measured before a usual level is trusted
 WITHIN = 5.0             # arcseconds from the star's place to a measured star
+# The pre-registered plan for the proposed transit (docs/tabby-plan.md).
+PRIMARY = ("183m", "L")  # the one camera and band that can answer it
+MIN_BATCHES = 5          # a look with fewer is left out
+HALF_TRANSIT_D = 21 / 48 # the windows bound the transit's middle; it runs this far either side
+STRETCH_GAP_D = 0.25     # looks further apart than this are separate stretches
+BASELINE_LOW, BASELINE_HIGH = 25.0, 45.0   # degrees: the altitude the window nights are seen at
+DARK_SUN = -12.0         # degrees: the Sun below this for a usable hour
 
 
 def star(key):
@@ -155,48 +162,212 @@ def colour_change(nights, blue="B", red="R"):
             "why": f"{blue} {jb['dimmer']:+.3f}, {red} {jr['dimmer']:+.3f}: {blue}-{red} {change:+.3f} ± {error:.3f} mag"}
 
 
-def transit_reach(nights, depth=TRANSIT_DEPTH):
-    """Whether this camera and filter's nights are steady enough to see the
-    proposed companion's transit at three sigma: measured from the newest
-    night's series, its night-to-night spread with a night's own error."""
-    if not nights:
-        return {"can_see": None, "why": "no night measured"}
-    same = [n for n in nights if series(n) == series(nights[-1])]
-    camera, name = series(nights[-1])
-    label = f"{camera}, {name or 'unfiltered'}"
+def in_window(jd, windows):
+    """Whether a transit could be under way at `jd`. The paper's windows bound
+    the transit's middle (T0 + 2P), so it can run half its length past each."""
+    return any(a - HALF_TRANSIT_D <= jd <= b + HALF_TRANSIT_D for a, b in windows)
+
+
+def left_out(night, nights, windows=()):
+    """Why the plan leaves this look out (docs/tabby-plan.md), or None. The
+    check stars' usual level comes from nights outside the windows only, so a
+    window night cannot move the yardstick it is judged by."""
+    if night["points"] < MIN_BATCHES:
+        return f"{night['points']} batches, fewer than {MIN_BATCHES}"
+    if night.get("check_scatter") is not None and night["check_scatter"] >= WARN:
+        return f"check stars scattered {night['check_scatter']:.3f} mag"
+    levels = [n["check_level"] for n in nights if n["session"] != night["session"] and series(n) == series(night)
+              and n.get("check_level") is not None and n.get("jd") is not None and not in_window(n["jd"], windows)]
+    if night.get("check_level") is not None and len(levels) >= BASELINE_NIGHTS:
+        moved = night["check_level"] - float(np.median(levels))
+        if abs(moved) >= WARN / 2:
+            return f"check stars moved {moved:+.3f} mag"
+    return None
+
+
+def primary_looks(nights, windows=()):
+    """(looks that count, inside the windows; outside them): the plan's band only."""
+    used = [n for n in nights if series(n) == PRIMARY and n.get("jd") is not None
+            and left_out(n, nights, windows) is None]
+    return [n for n in used if in_window(n["jd"], windows)], [n for n in used if not in_window(n["jd"], windows)]
+
+
+def look_error(looks):
+    return float(np.median([n["scatter"] / math.sqrt(max(n["points"], 1)) for n in looks]))
+
+
+def transit_reach(nights, depth=TRANSIT_DEPTH, windows=()):
+    """The plan's gate: whether the L baseline, outside every window, is steady
+    enough to see the proposed transit at three sigma."""
+    _, same = primary_looks(nights, windows)
+    label = f"{PRIMARY[0]}, {PRIMARY[1]}"
     if len(same) < BASELINE_NIGHTS:
         return {"can_see": None, "nights": len(same),
-                "why": f"{label}: {len(same)} night(s), {BASELINE_NIGHTS} needed to measure the spread"}
+                "why": f"{label}: {len(same)} baseline look(s), {BASELINE_NIGHTS} needed to measure the spread"}
     mags = np.array([n["mag"] for n in same])
     spread = 1.4826 * float(np.median(np.abs(mags - np.median(mags))))
-    error = float(np.median([n["scatter"] / math.sqrt(max(n["points"], 1)) for n in same]))
-    noise = math.hypot(spread, error)
+    noise = math.hypot(spread, look_error(same))
     return {"can_see": bool(depth >= 3 * noise), "nights": len(same), "noise": round(noise, 4),
-            "why": f"{label}: {len(same)} nights, noise {noise:.4f} mag; a {depth:.3f} mag transit needs "
+            "why": f"{label}: {len(same)} baseline looks, noise {noise:.4f} mag; a {depth:.3f} mag transit needs "
                    f"{depth / 3:.4f} or better"}
 
 
-def transit_window(nights, windows, depth=TRANSIT_DEPTH):
-    """The newest series' nights inside the proposed transit's windows against
-    those outside them. Never a detection by itself: 2.3 sigma is all the
-    proposal has, and a single site sees only part of a 21-hour transit."""
-    if not nights:
-        return {"seen": None, "why": "no night measured"}
-    same = [n for n in nights if series(n) == series(nights[-1]) and n.get("jd") is not None]
-    inside = [n for n in same if any(a <= n["jd"] <= b for a, b in windows)]
-    outside = [n for n in same if n not in inside]
-    if not inside or len(outside) < BASELINE_NIGHTS:
-        return {"seen": None, "inside": len(inside), "outside": len(outside),
-                "why": f"{len(inside)} night(s) in a window and {len(outside)} outside; "
-                       f"needs 1 and {BASELINE_NIGHTS}"}
+def judge_stretch(looks, outside, depth=TRANSIT_DEPTH):
+    """One stretch of looks against the baseline, by the plan's table."""
     level = np.array([n["mag"] for n in outside])
     usual = float(np.median(level))
     spread = 1.4826 * float(np.median(np.abs(level - usual)))
-    change = float(np.median([n["mag"] for n in inside])) - usual
-    error = math.hypot(spread, float(np.median([n["scatter"] / math.sqrt(max(n["points"], 1)) for n in inside])))
-    return {"seen": bool(change >= max(depth / 2, 3 * error)), "inside": len(inside), "outside": len(outside),
-            "change": round(change, 4), "uncertainty": round(error, 4),
-            "why": f"{change:+.4f} ± {error:.4f} mag in the window against {len(outside)} nights outside it"}
+    change = float(np.median([n["mag"] for n in looks])) - usual
+    error = math.hypot(spread, look_error(looks))
+    if change >= depth / 2 and change >= 3 * error:
+        outcome = "consistent"
+    elif change + 2 * error < depth:
+        outcome = "excluded"
+    else:
+        outcome = "inconclusive"
+    return {"outcome": outcome, "looks": len(looks), "first_jd": min(n["jd"] for n in looks),
+            "last_jd": max(n["jd"] for n in looks), "change": round(change, 4), "uncertainty": round(error, 4)}
+
+
+def transit_window(nights, windows, depth=TRANSIT_DEPTH):
+    """L looks in the proposed transit's windows, each stretch judged on its
+    own because a transit may cover only some. With the gate not passed no
+    figure from a window is given. "Consistent" is never a detection: 2.3
+    sigma is all the proposal has, and one site sees part of a 21-hour event."""
+    inside, outside = primary_looks(nights, windows)
+    gate = transit_reach(nights, depth, windows)
+    if not gate["can_see"]:
+        return {"seen": None, "outcome": "not testable", "inside": len(inside), "outside": len(outside),
+                "why": f"not testable: the gate has not passed ({gate['why']})"}
+    if not inside:
+        return {"seen": None, "outcome": "no data", "inside": 0, "outside": len(outside),
+                "why": "the gate has passed; no usable look in a window yet"}
+    inside.sort(key=lambda n: n["jd"])
+    groups = [[inside[0]]]
+    for n in inside[1:]:
+        if n["jd"] - groups[-1][-1]["jd"] > STRETCH_GAP_D:
+            groups.append([])
+        groups[-1].append(n)
+    stretches = [judge_stretch(g, outside, depth) for g in groups]
+    outcomes = {s["outcome"] for s in stretches}
+    outcome = ("consistent" if "consistent" in outcomes else "excluded" if outcomes == {"excluded"}
+               else "inconclusive")
+    words = {"consistent": "consistent with a transit in at least one stretch (not a detection)",
+             "excluded": "excluded for the hours covered", "inconclusive": "inconclusive"}
+    return {"seen": outcome == "consistent", "outcome": outcome, "inside": len(inside), "outside": len(outside),
+            "stretches": stretches, "why": f"{words[outcome]}: {len(stretches)} stretch(es), {len(inside)} looks, "
+                                           f"against {len(outside)} baseline looks"}
+
+
+def plant(nights, windows, depth=TRANSIT_DEPTH):
+    """Can the judging recover the transit? Each baseline look in turn is made
+    `depth` fainter, batch by batch, and judged against the others; unchanged,
+    the same looks show how often nothing is called something."""
+    _, outside = primary_looks(nights, windows)
+    if len(outside) < BASELINE_NIGHTS + 1:
+        return {"recovered": None, "looks": len(outside),
+                "why": f"{len(outside)} baseline look(s); planting needs {BASELINE_NIGHTS + 1}"}
+    recovered = false = 0
+    for n in outside:
+        others = [x for x in outside if x is not n]
+        faint = dict(n, mag=float(np.median(np.array(n["batches"]) + depth)))
+        recovered += judge_stretch([faint], others, depth)["outcome"] == "consistent"
+        false += judge_stretch([n], others, depth)["outcome"] == "consistent"
+    return {"recovered": recovered, "false_alarms": false, "looks": len(outside),
+            "why": f"a {depth:.3f} mag dip planted in each of {len(outside)} baseline looks: {recovered} recovered; "
+                   f"{false} of the same looks unchanged were called consistent"}
+
+
+def altitude(s, jd):
+    """The star's altitude at `jd`, degrees. Kept private: with its time it
+    helps place the site, so an export says only whether it met the rule."""
+    import astropy.units as u
+    from astropy.coordinates import AltAz, EarthLocation, SkyCoord
+    from astropy.time import Time
+    site = config.load()["site"]
+    place = EarthLocation(lat=site["latitude"] * u.deg, lon=site["longitude"] * u.deg)
+    frame = AltAz(obstime=Time(jd, format="jd"), location=place)
+    return float(SkyCoord(s["ra"] * u.deg, s["dec"] * u.deg).transform_to(frame).alt.deg)
+
+
+def usable_hours(s, windows):
+    """The hours a transit could be seen from here: the Sun below -12°, the
+    star at the mount's 20° or higher and inside its meridian limit. UT, each
+    stretch trimmed inward to whole quarter hours, as the public plan gives."""
+    import astropy.units as u
+    from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_body
+    from astropy.time import Time
+    from mount import MAX_HOUR_ANGLE, MIN_ALTITUDE
+    site = config.load()["site"]
+    place = EarthLocation(lat=site["latitude"] * u.deg, lon=site["longitude"] * u.deg)
+    target = SkyCoord(s["ra"] * u.deg, s["dec"] * u.deg)
+    answer = []
+    for a, b in windows:
+        start = a - HALF_TRANSIT_D
+        times = Time(start + np.arange(0, b + HALF_TRANSIT_D - start, 5 / 1440), format="jd", scale="tdb").utc
+        frame = AltAz(obstime=times, location=place)
+        sun = get_body("sun", times, place).transform_to(frame).alt.deg
+        alt = target.transform_to(frame).alt.deg
+        hour = (times.sidereal_time("apparent", longitude=place.lon).hour - s["ra"] / 15 + 12) % 24 - 12
+        good = (sun < DARK_SUN) & (alt >= MIN_ALTITUDE) & (np.abs(hour) <= MAX_HOUR_ANGLE)
+        edges = np.flatnonzero(np.diff(np.concatenate([[0], good.astype(int), [0]])))
+        stretches = []
+        for i, j in zip(edges[::2], edges[1::2]):
+            first = math.ceil(times[i].unix / 900) * 900
+            last = math.floor(times[j - 1].unix / 900) * 900
+            if last > first:
+                stretches.append({"from": time.strftime("%d %b %H:%M", time.gmtime(first)),
+                                  "to": time.strftime("%d %b %H:%M", time.gmtime(last)),
+                                  "hours": round((last - first) / 3600, 2)})
+        answer.append({"window": [a, b], "stretches": stretches,
+                       "hours": round(sum(x["hours"] for x in stretches), 2)})
+    return answer
+
+
+def export(s, folder, windows):
+    """looks.csv, batches.csv and manifest.json as the site's posting rules
+    ask (~/.cache/posting-tabby.md): only the agreed columns, so no altitude
+    or position goes out with a look's time. Writes locally and sends nothing."""
+    import csv
+    import hashlib
+    nights = history(s)["nights"]
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    with open(folder / "looks.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["session", "jd", "band", "mag", "batches", "scatter", "check_scatter", "check_level", "used",
+                    "reason", "baseline_altitude"])
+        for n in nights:
+            if series(n) == PRIMARY or n.get("camera") == PRIMARY[0]:
+                reason = left_out(n, nights, windows)
+            else:
+                reason = "taken with the 183C, not part of this plan"
+            height = ""
+            if series(n) == PRIMARY and n.get("jd") is not None and not in_window(n["jd"], windows):
+                up = n.get("altitude")
+                up = altitude(s, n["jd"]) if up is None else up
+                height = "yes" if BASELINE_LOW <= up <= BASELINE_HIGH else "no"
+            w.writerow([n["session"], n.get("jd", ""), n.get("filter") or "unfiltered", n["mag"], n["points"],
+                        n["scatter"], "" if n.get("check_scatter") is None else n["check_scatter"],
+                        "" if n.get("check_level") is None else n["check_level"], "no" if reason else "yes",
+                        reason or "", height])
+    with open(folder / "batches.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["session", "batch", "mag"])
+        for n in nights:
+            w.writerows([n["session"], i + 1, m] for i, m in enumerate(n.get("batches", [])))
+    made = records.provenance()
+    files = {name: hashlib.sha256((folder / name).read_bytes()).hexdigest() for name in ("looks.csv", "batches.csv")}
+    (folder / "manifest.json").write_text(json.dumps(
+        {"files": files, "provenance": {"version": made["telescopeyoke"], "commit": (made["git_commit"] or "")[:12],
+                                        "python": made["python"], "libraries": made["libraries"],
+                                        "uncommitted_changes": made["uncommitted_changes"]}}, indent=1) + "\n",
+        encoding="utf-8")
+    measured = history(s).get("provenance", {})
+    ready = made["uncommitted_changes"] is False and measured.get("uncommitted_changes") is False
+    return {"folder": str(folder), "looks": len(nights), "ready_to_post": ready,
+            "why": "ready" if ready else "not ready to post: the code or the kept measurements have uncommitted "
+                                         "changes, so measure again from a clean commit first"}
 
 
 def check_stars(n, j):
@@ -238,6 +409,7 @@ def measure(key, session, size=BIN, say=print, night=None):
               "scatter": round(float(np.std(mags, ddof=1)) if len(mags) > 1 else 0.0, 4),
               "batches": [round(float(m), 4) for m in mags], "check_scatter": check_scatter,
               "check_level": check_level,
+              "altitude": round(altitude(s, float(np.mean(jd))), 1) if jd else None,
               **session_band(session)}
     record = history(s)
     record["nights"] = [x for x in record["nights"] if x["session"] != latest["session"]] + [latest]
@@ -341,11 +513,26 @@ def run(args, say=print):
     s = star(args.star)
     if args.colour is not None:
         return colour_look(args.star, args.colour, args.plan or args.dry_run, say)
-    if args.transit_reach:
+    if args.transit_reach or args.hours or args.plant or args.export:
         import patrol
         nights = history(s)["nights"]
-        reach = transit_reach(nights)
         windows = [w for watch in patrol.programme(s["programme"]).get("watch", []) for w in watch.get("windows", [])]
+        if args.hours:
+            hours = usable_hours(s, windows)
+            for h in hours:
+                say(f"window {h['window'][0]} to {h['window'][1]}: {h['hours']:.2f} h")
+                for x in h["stretches"]:
+                    say(f"  {x['from']} to {x['to']} UT")
+            return {"star": s["id"], "name": s["name"], "usable_hours": hours, "kind": "inferred"}
+        if args.plant:
+            planted = plant(nights, windows)
+            say(planted["why"])
+            return {"star": s["id"], "name": s["name"], "planted": planted, "kind": "measured"}
+        if args.export:
+            done = export(s, args.export, windows)
+            say(f"{done['looks']} looks written to {done['folder']}; {done['why']}")
+            return {"star": s["id"], "name": s["name"], "export": done, "kind": "measured"}
+        reach = transit_reach(nights, windows=windows)
         window = transit_window(nights, windows)
         say(reach["why"])
         say(f"In the windows: {window['why']}")
@@ -372,6 +559,9 @@ def main():
                     help=f"image in {' then '.join(COLOUR_BANDS)}, this long each (default {COLOUR_MINUTES:g})")
     ap.add_argument("--transit-reach", action="store_true",
                     help="whether the nights so far are steady enough for the proposed 1.1%% transit; only reads")
+    ap.add_argument("--hours", action="store_true", help="the hours a proposed transit could be seen from here; only reads")
+    ap.add_argument("--plant", action="store_true", help="plant the transit in each baseline look and judge it; only reads")
+    ap.add_argument("--export", metavar="FOLDER", help="the looks as the site's files, written here; sends nothing")
     ap.add_argument("--bin", type=int, default=BIN, help=f"frames in each point (default {BIN})")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()

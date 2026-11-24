@@ -131,7 +131,11 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
       (`monkey-head-2026-11-20.jpg`), `2026-11-20-the-monkey-head-in-colour.md`
       (`monkey-head-hoo-2026-11-20.jpg`, `monkey-head-sho-2026-11-20.jpg`),
       `2026-11-21-a-pleasant-surprise.md` (`flaming-star-ha-2026-11-21.jpg`),
-      `2026-11-22-the-night-the-mount-forgot.md` (`moon-2026-11-22.jpg`).
+      `2026-11-22-the-night-the-mount-forgot.md` (`moon-2026-11-22.jpg`),
+      `2026-11-23-testing-the-free-tools.md` (topics, and
+      `free-tools-ngc2174-graxpert.jpg`, `free-tools-star-removal.jpg`). The
+      12 entries from 21 October to 18 November are tagged on the server:
+      start from its copy if reposting one.
     - `clouds.py`: `cover` turns NCD into CLR, so take the code from `rawOb`.
     - `compendium.merge()`: NGC 4889 rated 4 (likely the Coma Cluster's), about
       41 galaxies given a group's rating, and LMC added beside ESO 056-115.

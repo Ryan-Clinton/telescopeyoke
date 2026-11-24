@@ -131,7 +131,8 @@ COMMANDS = {
     "skywatch.py": ("hardware", {}, {}),
     "snap.py": ("hardware", {}, {}),
     "solve.py": ("local_write", {}, {}),
-    "starwatch.py": ("hardware", {"--measure": "local_write", "--history": "read_only"},
+    "starwatch.py": ("hardware", {"--measure": "local_write", "--history": "read_only", "--transit-reach": "read_only",
+                                  "--hours": "read_only", "--plant": "read_only", "--export": "local_write"},
                      {"--plan": "read_only", "--dry-run": "read_only"}),
     "streak.py": ("local_write", {}, {}),           # keeps CelesTrak's orbits in cache/
     "stitch.py": ("local_write", {}, {}),           # the mosaic of every night; --on stacks on the person's own desktop
