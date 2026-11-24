@@ -37,8 +37,8 @@ Only on the person's word. The imaging run stops at its own limits
    the folder, `frames/OBJECT/DATE-TIME`), and where the other computer
    cannot (unreachable, or no Python with astropy there), `./restack.py
    SESSION` here instead, never left undone (20 November 2026: the desktop
-   had no Python, nothing was stacked until the person asked), in the
-   background.
+   had no Python, nothing was stacked until the person asked), each as a
+   job (`./ty bg restack-NAME -- ./restack.py SESSION --on HOST`).
 4. `./patrol.py --sweep` for any field with a reference.
 4b. `./clouds.py --scores 1 --keep`: the night's cloud and rain forecasts
    against what was seen, kept dated in cache/sky_scores/ with the scoring
@@ -50,7 +50,7 @@ Only on the person's word. The imaging run stops at its own limits
    (cache/dawn-flats.log): never start them a second time. Only when the
    night was ended without `schedule.py end`, or its message says the flats
    could not be started, start them by hand:
-   `./calibrate.py flat --filters FILTERS --twilight` in the background,
+   `./ty bg dawn-flats -- ./calibrate.py flat --filters FILTERS --twilight`,
    with the filters the night used. Never skip them for dew no one has seen or cloud: an
    overcast dawn makes good flats. Tell the person in one line to leave the
    camera, wheel and focus alone until they are done, and if they pack up

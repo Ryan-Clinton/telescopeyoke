@@ -92,9 +92,10 @@ them and every file kept under `demo/`.
 | `camera.py`, `indi.py`, `altair.py`, `keeper.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library; `keeper.py` holds the cooled camera open and cold all night for every command) and focusing |
 | `host.py` | Everything that differs between Linux and Windows, in one place |
 | `policy.py` | What each command may do: `read_only`, `local_write`, `hardware` or `external`, every runnable script classed once; `classify_text` gives the worst class in a shell line, and anything unknown or hidden counts as `hardware`. The base of the safety hooks in `docs/skills-and-agents.md` |
+| `jobs.py` | Every long job's record, its queue and the progress report (`docs/job-reporting-spec.md`): `./ty bg NAME [--after JOB[:ended\|:released\|:MILESTONE]] [--needs camera,mount,cpu,gpu] -- COMMAND` starts a command as a job, now or once what it waits for is done, its output never held back; `./ty jobs` says what needs the agent, what runs, waits and is queued, and the computer, camera and mount; `--watch` prints only the events that need the agent; `--ack`, `--busy-until`, `--stop`. In a script, `activity.job(...)` (steps, deadlines, milestones, waits); `jobs.run_as` keeps a job only once it has run a minute |
 | `agentlog.py` | `ty agent-report`: the decision record the hooks keep in `cache/agent-log.jsonl` (what ran, who asked, what was refused; redacted), summed up |
 | `runwatch.py` | `ty watch-run`: watches an imaging run and prints a line only when frames stop, stop being kept, the share kept halves, the stars dim or come back, or the run ends |
-| `.claude/` | Claude Code's side: `settings.json` and `hooks/guard.py`, the safety hooks (fail closed: the motion lock, no inline hardware scripts, no subagent moving anything, no `pkill -f`, no secrets printed), `hooks/log.py`, the decision record, `hooks/sky.py`, which adds `./clouds.py --approach` (when clear sky gets here) and `./rain.py` (when rain does) to any message of the person's about the sky, read from the answers the satellite timer keeps when they are recent, `skills/`, fourteen procedures, and `agents/`, six agents that read and advise and never move anything (`docs/skills-and-agents.md`) |
+| `.claude/` | Claude Code's side: `settings.json` and `hooks/guard.py`, the safety hooks (fail closed: the motion lock, no inline hardware scripts, no subagent moving anything, no `pkill -f`, no secrets printed, no project command left in the background outside `./ty bg`), `hooks/log.py`, the decision record, `hooks/running.py`, the jobs and their open events with each message, `hooks/keepgoing.py`, which sends the agent back once when it would stop with the person's work undone, `hooks/sky.py`, which adds `./clouds.py --approach` (when clear sky gets here) and `./rain.py` (when rain does) to any message of the person's about the sky, read from the answers the satellite timer keeps when they are recent, `skills/`, fourteen procedures, and `agents/`, six agents that read and advise and never move anything (`docs/skills-and-agents.md`) |
 | `records.py` | Every kept JSON file: written whole or not at all, changed under a lock (`records.change`), checked against its schema before it replaces anything, and each scientific result stamped with the code that made it (`schemas/provenance.schema.json`) |
 | `alert.py` | Tells the house when cloud or rain arrives: a Hue light changes colour and a Google Home speaker says so. Reads the run's frames and the forecast; moves nothing |
 | `focuser.py`, `firmware/focuser/` | The focuser's motor: an Arduino Nano driving a NEMA 17 on a TMC2209 (docs/focuser.md), and the firmware it runs. `focuser.py` turns the motor; `focus.py --motor` uses it to focus on the stars in view |
@@ -214,6 +215,19 @@ a motor's creep rate. `mount.py stop` is always allowed.
 - On another computer (the desktop), everything goes under one folder,
   `~/telescopeyoke-laptop/`: `remote/` for `restack.py --on`. Nothing else
   is made in its home folder.
+- A job that runs more than a minute is started with `./ty bg NAME --
+  COMMAND` (the guard refuses a project command left in the background
+  any other way), and what must follow it is queued with `--after`, so it
+  starts by itself. `./ty jobs --watch` runs as the one Monitor for jobs;
+  a progress report is `./ty jobs`; each event that needs the agent is
+  acted on and acked (`./ty jobs --ack EVENT "what was done"`). When the
+  person asks for work to go on ("keep going until they are all done",
+  "fill the next 8 hours"), `./ty jobs --busy-until TIME "their words"`:
+  the Stop hook then sends the agent back whenever nothing runs or is
+  queued. A question for the person is asked the moment it arises, while
+  the work that does not need the answer goes on; never saved for the end
+  (24 November 2026). A new long-running script reports through
+  `activity.job` from its first commit.
 - What goes to the person's phone (`notify.send`) is copied to
   `cache/sent.jsonl`; `.claude/hooks/news.py` puts anything new from it in
   front of the agent at the start of a session and with each message, so

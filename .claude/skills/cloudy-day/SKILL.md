@@ -8,8 +8,8 @@ allowed-tools: Bash(./ty candidates *) Bash(./ty characterise *) Bash(./ty agent
 # A cloudy day
 
 A cloudy day is research time: the telescope is not the only instrument.
-Start A and B at once, each in the background, without offering them; C
-waits for A's batch. Say each result when it lands (docs/discovery.md,
+Start A and B at once, each as a job (`./ty bg NAME -- COMMAND`), without
+offering them; C is queued behind A's batch (`--after NAME:ended`). Say each result when it lands (docs/discovery.md,
 docs/archive.md):
 
 A. **Kepler's archive:** `./archive.py screen --batch 200` (on the
@@ -41,7 +41,7 @@ Then, in a few lines, whichever of these apply now:
 2. **Old nights again:** after any change to the search, `./patrol.py
    --sweep --all-history`.
 3. **Stacks:** heavy restacks on the desktop (`./restack.py SESSION --on
-   desktop`), in the background.
+   desktop`), each as a job (`./ty bg`).
 4. **Candidates:** open ones in `./ty candidates`, each through
    `catalogue-researcher` and `candidate-vetter`.
 6. **Measurements still missing:** `./ty characterise` lists them and

@@ -17,7 +17,9 @@ filter by filter (below). On the owner's rig, `docs/agents/owner-rig.md`
 2. `./ty mount goto TARGET --solve --dry-run`, then the GoTo itself, which
    with no approval asked.
 3. The run, dry-run first (`--dry-run`: it fails if any later GoTo or
-   filter change would be refused), then in the background. One of these
+   filter change would be refused), then as a job: `./ty bg shoot-TARGET --
+   ./shoot.py ...`, and anything to follow it queued at once with `--after
+   shoot-TARGET` (or `:blockN` to start from a block's end). One of these
    shapes, which `shoot.py` keeps apart:
 
    | Asked for | Command |
@@ -37,7 +39,9 @@ filter by filter (below). On the owner's rig, `docs/agents/owner-rig.md`
    the plan in one line (target, filters and minutes, exposure, guided or
    not, when it ends), then start it. Tell them it is running and they can
    go in.
-4. Start the watch as a Monitor: `./ty watch-run`. It prints nothing while
+4. Start the watch as a job: `./ty bg watch-run --kind service -- ./ty
+   watch-run`; its lines reach you through the one `./ty jobs --watch`
+   Monitor (start that if this session has none). It prints nothing while
    all is well and a line when frames stop, stop being kept, the share kept
    halves, the stars dim or come back, or the run ends. Tell the person at
    once about each line; for dimming stars, the satellite and the airports

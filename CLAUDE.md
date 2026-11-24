@@ -12,7 +12,13 @@ what is specific to Claude.
 ## Working on this project
 
 - Run anything expected to take more than a minute in the background and
-  carry on with the next task.
+  carry on with the next task: through `./ty bg NAME -- COMMAND`, never a
+  bare background shell (the guard refuses one), with what follows it
+  queued by `--after`. Keep `./ty jobs --watch` running as a Monitor from
+  the start of the session; answer "progress report" from `./ty jobs`; act
+  on and ack each event it raises. Asked to keep going until the work is
+  done, record it with `./ty jobs --busy-until`, and ask any question the
+  moment it arises while the rest goes on (docs/job-reporting-spec.md).
 - There are no tests and no CI, by the maintainer's choice: do not write,
   run or restore them, add CI, or make a commit wait on anything. Before a
   commit: `ruff check` on the changed files, then commit and push. What is

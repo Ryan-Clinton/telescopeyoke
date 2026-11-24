@@ -64,7 +64,7 @@ project's commands refuse what is unsafe.
    the router (no screens; switched on at home; `sethome` and `directions`
    as `docs/agents/setup-routine.md` step 1 says), and where
    the kit says `keeper` (a cooled camera keeper.py can hold),
-   `./keeper.py start` in the background at the same time: the camera
+   `./ty bg keeper --kind service -- ./keeper.py start` at the same time: the camera
    cools slowly while the rest of the setup goes on, and stays open and
    cold for every step until the night's end. Say it is cooling only once
    `./keeper.py status` says so. A cooled camera without `keeper`: its own

@@ -371,7 +371,10 @@ differently).
 | `no-motion` | Bash, PowerShell | From a subagent: any line `policy.classify_text` calls `hardware` or `external` |
 | `no-self-kill` | Bash | `pkill -f` or `pgrep -f` on a name in the same line |
 | `no-secrets-out` | Bash, Read | Printing the `[telegram]` section or a token from `config.toml` |
+| `tracked-jobs` | Bash, PowerShell | A project command left in the background (run in the background, `nohup`, `setsid`, a trailing `&`) outside `./ty bg`, unless policy.py calls it read-only |
 | `log` | every tool (PostToolUse) | Nothing: it writes the decision record (below) |
+| `running.py` | SessionStart, UserPromptSubmit | Nothing: the jobs running, waiting and queued, and every event still open, with each message; a reminder to record `--busy-until` when the person asks for work to go on |
+| `keepgoing.py` | Stop | Sends the agent back once, with the reason, when the person asked for work until a time and nothing runs or is queued, or when a job event has not been acted on and acked |
 
 The hooks are meant to refuse every one of these, fed the JSON Claude Code
 sends, and let through their read-only twins (checked when they were built;

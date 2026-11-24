@@ -18,11 +18,9 @@ is `docs/agents/setup-routine.md` step 6b.
 0. Asked what's interesting tonight, the outlook or tonight's plan: what
    to look at through the telescope, from now. One message of tool calls,
    all at once, then the answer:
-   - one Bash call in the background (`run_in_background`), each job to
-     its own log in the scratchpad (`S`) and its exit status printed:
-     `(./brokers.py > $S/brokers.log 2>&1; echo "brokers exit $?") &
-     ./archive.py screen --batch 200 > $S/archive.log 2>&1; echo "archive exit $?";
-     ./investigate.py > $S/investigate.log 2>&1; echo "investigate exit $?"; wait`
+   - the research as jobs, each with its own log (`./ty jobs`):
+     `./ty bg brokers -- ./brokers.py; ./ty bg archive -- ./archive.py screen --batch 200;
+     ./ty bg investigate --after archive:ended -- ./investigate.py`
      (the research goes on; it is not the answer);
    - `./ty outlook` (3 seconds: the plan from now, the other choice, the
      sky, the candidates worth a second look, and only what is up tonight);
@@ -75,7 +73,7 @@ is `docs/agents/setup-routine.md` step 6b.
      (`python3 candidates.py FIELD --dismiss ID --reason ... --note ...`),
      never planned for.
 
-   When the background job finishes, a follow-up message only if there is
+   When those jobs finish (`./ty jobs --watch` says so), a follow-up message only if there is
    something to say: a survey transient bright enough for this camera (its
    magnitude, whether it is brightening, its best time), a lead
    `./investigate.py` found unexplained and watchable, or a job that failed
@@ -101,7 +99,7 @@ is `docs/agents/setup-routine.md` step 6b.
 1. `./patrol.py m31-panels --plan` (or `m31-novae`, `m33-novae`): read it
    out. Anything marked NO is said once; the focus line comes before going
    on. A panel's first good night becomes its reference by itself.
-2. At once, as part of the plan: `./patrol.py m31-panels` in the background. Say it has
+2. At once, as part of the plan: `./ty bg patrol -- ./patrol.py m31-panels`. Say it has
    started, then each panel's result; never a line per frame or per plate
    solve. Tell them at once only if frames stop being kept
    (`./ty watch-run --once` to check). The patrol moves the mount only through the project's

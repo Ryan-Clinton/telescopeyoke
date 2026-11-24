@@ -69,10 +69,10 @@ without a star alignment, or drift on a rough polar alignment: 18 November
 - It checks the collimation on its first doughnuts: say that line once,
   and if it says "off", that the mirrors want collimating
   (`docs/collimation.md`).
-- Run it with its output to a log and a Monitor on the log (never through
-  `tail`, which holds every line back until the end). Say nothing per
-  reading: say only a fault, or the end.
-- Asked for progress: read the log's last lines and answer in one line,
+- Run it as a job (`./ty bg focus -- ./focus.py --auto`); `./ty jobs
+  --watch` says when it ends or stalls. Say nothing per reading: say only
+  a fault, or the end.
+- Asked for progress: `./ty jobs focus --tail 5`, and answer in one line,
   "coming in, +480, HFR 6.1, best 6.1, aim 2.3, 4 min in". Every line
   starts with its time; a frame late by 15 s says "no picture from the
   camera ... still waiting". A run that ends "the camera sent no picture

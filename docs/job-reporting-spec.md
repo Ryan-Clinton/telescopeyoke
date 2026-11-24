@@ -1,6 +1,6 @@
 # Spec: one way for every long job to report
 
-Status: draft, revised after a first review, 24 November 2026. Nothing here is built yet.
+Status: built 24 November 2026 (see "As built" at the end); not yet proven on a real night's jobs.
 
 Reviewers (ChatGPT included): this project has no tests and no CI by the
 owner's choice (`AGENTS.md`, "No testing, and why"). Do not suggest tests,
@@ -67,6 +67,13 @@ and had to ask.
   finishing it?"
 - 24 Nov, 10:49: "why did the dark test not notify you it had finished for
   you to continue with the rest of the tasks?"
+
+**Stopping with work left, questions saved for the end** (24 Nov, 11:45,
+another session, on the free-tools tests): it stopped with three of four
+tests done and two questions it had known for some time, then cancelled
+its own check-ins. The owner: "'shedule them and keep going until they are
+all done. negotiate cpu and gpu use with the 2 desktop sessions' do you
+need to gogole the word shedule? was i not clear wenough?"
 
 **And the ask behind this spec** (24 Nov, 10:54): "i have asked you to do
 this before and you obviously didnt do it right. im getting very sick of
@@ -171,7 +178,11 @@ darktest, but not the next script.
    work until a given time, the agent is woken whenever nothing is running
    or queued before that time (23 November: "why is the cpu idle have i not
    been clear?").
-8. **Safety unchanged.** No new network listener. The read-only rules for
+8. **No turn ends with the work undone.** While the owner's ask for work
+   stands, the agent is sent back when it would end its turn with nothing
+   running or queued, or with an event not dealt with; a question for the
+   owner is asked the moment it arises, while the rest goes on.
+9. **Safety unchanged.** No new network listener. The read-only rules for
    the web server and the MCP server stand. The queue starts only work that
    was asked for, through the project's own commands, so their protections
    apply as they do now: the camera's cooling, `Mount.may_move` and its
@@ -475,3 +486,44 @@ protections.
   progress, so a hung camera call shows as a stall.
 - The entry points are listed in section 8, and implementation starts by
   searching for any the list misses.
+
+## As built (24 November 2026)
+
+Where the build differs from the design above, or adds to it:
+
+- **Kept only once it runs a minute.** `jobs.run_as(name, work)` (the
+  long scripts that said nothing until the end: restack, starwatch,
+  transits, variables, archive, brokers, realbogus, plant, difference,
+  depth, precision) writes no record for a run under a minute, so a quick
+  look by hand leaves no event to ack. A launched job is always kept.
+- **Fewer wake events.** A child job's ending (a schedule's step, a run's
+  quality pass) wakes the agent only when it fails. A timer's routine run
+  wakes only on failure, and a run that keeps failing is one event, its
+  newest. A stall is a condition, not a happening: its event is open while
+  the job is stalled and goes when it moves again.
+- **The queue** is the launcher's own waiting process (`ty bg --after`,
+  `--needs`): a queued job lost with a restart shows as vanished. The
+  conditions are `JOB` (done), `JOB:ended` (however it ended: the keeper's
+  warm-up after the dawn flats), `JOB:released`, `JOB:MILESTONE`.
+  `desktopqueue.py` keeps its own queue and lanes; each of its jobs runs
+  through the launcher, so the desktop keeps the same records.
+- **activity.py** keeps its own `cache/activity.json` for the console and
+  the stream; each of its lines is also the job's current operation.
+- **The console** records its actions (`jobs.Recorded`) but starts each
+  process itself, so its Stop still kills the very process holding the
+  mount's port.
+- **Hooks:** `running.py` (the jobs and open events with each message,
+  and a reminder to set `--busy-until` when the owner asks for work to go
+  on) and `keepgoing.py`, a Stop hook that sends the agent back once, with
+  the reason, when the busy-until stands and nothing runs, or an event is
+  not acked. It never sends a turn back twice.
+- **Unit files:** the generators for the night-end guard, the satellite
+  and storage timers and the serve, stream and new-hardware services run
+  through `jobs.py bg --wait`. The three installed timer units were
+  updated in place on 24 November; the installed services pick it up when
+  next installed.
+- **Remote:** a desktop stack runs under `nohup` and the launcher there;
+  on a dropped connection the laptop asks `jobs.py --state` every two
+  minutes until it ends.
+- **The dark test's hold** is 30 minutes (was 4 hours) and ends at once
+  when a job is queued for the camera.

@@ -9,6 +9,8 @@
 | Command | Returns | Notes |
 |---|---|---|
 | `ty context` | plain-text briefing | *demo*. Start here. |
+| `ty jobs` | the progress report: events that need the agent (each with its ID to ack), jobs running, waiting, blocked and queued with their step, operation, deadline, last line and end, those finished in the last 12 h, the computer (load, memory, disk, GPU), who has the camera and the mount, and any busy-until; `--json` (`schemas/jobs.schema.json`); `ty jobs NAME --tail 20`; `--watch` (one line per event that needs the agent, nothing else); `--state JOB` | reads only. `--ack EVENT WORDS` and `--busy-until TIME WORDS` write the jobs' records; `--stop JOB` ends a job as a kill would (hardware) |
+| `ty bg NAME [--after JOB[:ended\|:released\|:MILESTONE]] [--needs camera,mount,cpu,gpu] [--kind finite\|service\|routine] [--why WORDS] [--wait] -- COMMAND` | the job's ID; it starts now or once what it is queued behind is done and what it needs is free | classed by COMMAND (policy.py): `ty bg x -- ./mount.py goto M27` moves the mount |
 | `ty capabilities` | what is available, motion limits, each component's state | |
 | `ty status` | mount / camera / imaging / solver states | |
 | `ty doctor` | readiness and every check | same as `doctor.py --skip-handset` |
