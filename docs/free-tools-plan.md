@@ -1,6 +1,6 @@
 # Plan: use free tools for the picture pipeline
 
-Status: **noise reduction is built (`colour.py --denoise graxpert`); the other stages are still to test.**
+Status: **noise reduction is built (`colour.py --denoise graxpert`), the stacking's star-core fault is fixed, star removal is close; sharpening, stretch and colour calibration are still to test.**
 Written 23 November 2026. `final.fits` and every other kept stack were only read.
 
 **The aim:** TelescopeYoke does the best possible job of automating the freely available
@@ -115,6 +115,26 @@ blended the same way scored about the same as Dark Star on the first five; Dark 
 needs no further licence step. By eye, the stars go and the nebula and galaxies are untouched, but
 the very brightest stars (M45's) stay almost whole, and one left a small black dot beside it.
 
+**In the full pictures it is not right yet.** IC 405 in HSS looked right: AE Aurigae stays white
+with no ring, the small stars are tighter and the filaments are untouched. NGC 2174 in SHO showed
+a few close double stars in one filter's colour, red (SII) or blue (OIII): taken apart filter by
+filter, a double read as not round in one filter and was kept there. Counting any detection Dark
+Star took down by 0.3 or more as a star cleared most of them, and passed again on five more stacks
+never used before:
+
+| Fresh stack | Line kept, ours / blend | Brightest 20 left, ours / blend |
+|---|---|---|
+| M31, panel 2 | 0.202 / **0.986** | 0.017 / -0.002 |
+| M31, panel 7 | 0.157 / **0.995** | 0.016 / 0.001 |
+| NGC 3310 | 0.145 / **1.014** | 0.014 / 0.005 |
+| SN 2026sqf's field | 0.400 / **1.020** | 0.021 / 0.013 |
+| M33, 2 November | 0.284 / **1.009** | 0.010 / -0.002 |
+
+Two coloured doubles are still left in NGC 2174, so **it is not wired into the pictures.** The
+next step is to decide each star once, for all the filters together. `freetools.py stars` runs it
+on a copy of a stack, and the change to `colour.py` is kept as
+`docs/research/free-tools-2026-11-23/colour-darkstar.patch`.
+
 ### The star-core clipping fault (in the science stack)
 
 `stacking.clean` replaces any pixel far brighter than its neighbours, in every frame before
@@ -159,7 +179,7 @@ made are not changed until they are restacked.
 | Star-core clipping fault | Old cleaning cut star cores | A defect map and the lone-pixel test; Siril's rejection failed | Built |
 | Noise reduction | Optional in pictures | **GraXpert**, on each filter's linear stack; DeepSNR and the suite's AI4 tried and not better | Built |
 | Background and gradients | Our sky model | **Keep ours**: no tool did as well overall (GraXpert AI, Siril, Seti Astro ABE) | Tested |
-| Star removal | Plain code | Seti Astro Suite Pro's Dark Star; StarNet if its terms allow | Tested: far better on stars, missed the thin-line mark on one of two unseen stacks |
+| Star removal | Plain code | Seti Astro Suite Pro's Dark Star, blended | Passed the mark on two sets of five unseen stacks; two coloured doubles left in NGC 2174, not in the pictures yet |
 | Sharpening and deconvolution | Our steps | GraXpert and Cosmic Clarity, with star and nebula checks | To test |
 | Stretch | Ours, with a GHS option | Siril GHS | To test |
 | Colour calibration, broadband | Star average | Siril SPCC | To test |

@@ -59,10 +59,14 @@ def blended(u, ds):
     change = N.gaussian_filter(u - ds, 1.0); noise = 1.4826 * float(np.median(np.abs(change - np.median(change)))) + 1e-6
     rows, cols = u.shape; discs = np.zeros(u.shape, bool)
     for x, y, _, fwhm, round_ in stacking.find_stars(u, limit=4000):
-        if round_ < .45: continue
         r0, c0 = int(round(y)), int(round(x))
         if not (0 <= r0 < rows and 0 <= c0 < cols): continue
         height = float(change[max(r0 - 2, 0):r0 + 3, max(c0 - 2, 0):c0 + 3].max())
+        # A star whose core is clipped reads as not round, and is too big for the compact test below
+        # (IC 1848, 24 November 2026).
+        # A close double reads as not round too (NGC 2174's SII, 24 November 2026): any not-round detection
+        # Dark Star took down by 0.3 or more is a star; the planted faint line, 5 sigma high, is 0.15 to 0.22 after the stretch.
+        if round_ < .45 and height < .3: continue
         radius = int(np.clip(1.6 * max(fwhm, 2.5) * (1 + 5 * max(height - .25, 0)), 5, 45))
         top, left = max(r0 - radius, 0), max(c0 - radius, 0)
         yy, xx = np.ogrid[top - r0:min(r0 + radius + 1, rows) - r0, left - c0:min(c0 + radius + 1, cols) - c0]

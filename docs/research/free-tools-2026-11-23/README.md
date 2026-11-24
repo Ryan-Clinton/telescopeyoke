@@ -15,6 +15,11 @@ filaments, then were scored at equal grain against a blur and an independent sta
   blended; `stars-chain-scores.json` and `stars-starnet-scores.json` hold their results on five
   stacks not used before, from before the blend was fixed for clipped star cores. StarNet's and
   DeepSNR's pictures are deleted once measured: only their scores are kept.
+- `stars-chain-v4-scores.json` and `stars-chain-v5-scores.json`: the blend on two more sets of
+  five stacks never used before, after each fix (clipped cores, then close doubles).
+- `eyecheck.py` makes the eye check of `freetools.remove_stars` round the brightest star and the
+  darkest patch of three stacks. `colour-darkstar.patch` is the change to `colour.py` that puts
+  Dark Star in the pictures, kept until close doubles are decided for all filters at once.
 - `sharpen.py` compares sharpening on the ten held-out pairs after GraXpert.
 - `scores.json` holds every measurement; `sites.json` holds the strength that gave half the grain.
 

@@ -32,7 +32,7 @@ for stem in stems:
     clean = {"base": freetools.denoise(x), "glow": freetools.denoise(g), "line": freetools.denoise(l)}
     u = {k: s(v) for k, v in clean.items()}; results[stem] = {}
     made = {"ours-after-graxpert": {k: ours(v, s) for k, v in clean.items()}}
-    for mode in ("unscreen", "additive"):
+    for mode in ("unscreen",) if os.environ.get("TY_ONE_MODE") else ("unscreen", "additive"):    # the same starless image
         made[f"graxpert-darkstar-{mode}"] = {k: darkstar(v, mode) for k, v in u.items()}
     made["graxpert-darkstar-blend"] = {k: blended(u[k], made["graxpert-darkstar-unscreen"][k]) for k in u}
     for name, out in made.items():
