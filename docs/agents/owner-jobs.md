@@ -117,10 +117,6 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
     on laptop port 1-4 (error -110) until replugged; twice it failed as the
     hub came up with it, and it worked with the hub up first. Try it last in
     the plugging order, then on the SV241.
-42. **Is -5 °C enough for the 183M?** `./darktest.py`, cap on, camera and 12 V
-    plugged in, about 90 minutes on a rainy night: darks at +5, 0, -2.5 and
-    -5 °C. Built 23 November, not yet run on the camera. Only if the noise is
-    still falling at -5 does a colder test go to Gary and the owner.
 
 ## In code, no hands needed
 

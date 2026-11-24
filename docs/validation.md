@@ -761,6 +761,18 @@ to 3.5 px HFD binned through haze; the guide camera needs gain 400 % (at
 (0.48 and 0.67 px/s, about 0.42 expected), then the star was lost, once
 to a crowded field (the Double Cluster) and once to haze; not proven.
 
+### 24 November 2026: is -5 °C enough for the 183M?
+
+Indoors, cap on, gain 1500, six 120 s darks against 1 s at each temperature (`./darktest.py`, kept in `cache/darktest/`). First run, +5 to -5 °C: the noise was 7.34 ADU at +5 °C and 6.29 ADU at 0, -1.9 and -5.1 °C, so it had stopped falling by 0 °C. Second run, `--colder`, which allows -10 °C for that run only, with clipped means:
+
+| Sensor | Dark signal | Noise | Hot pixels (>200 ADU) |
+|---|---|---|---|
+| -5.0 °C | 0.020 ADU/s | 6.71 ADU | 1,613 |
+| -7.0 °C | 0.031 ADU/s | 6.66 ADU | 1,387 |
+| -9.9 °C | 0.030 ADU/s | 6.60 ADU | 1,051 |
+
+Proven: going from -5 to -10 °C lowers a 120 s dark's noise by 1.6% and leaves the dark signal (about 3 ADU in 120 s) within its own scatter. The hot pixels fall by a third, but the matched darks take them out anyway. Gary's -5 °C stands. The cooler held -10 °C at 46% of its power in a warm room, with no fault. Each run ended with the slow warm-up, and the second held the sensor cold for its 4 hours first.
+
 ### 24 November 2026: the guide camera through the SV241 hub
 
 Indoors, no sky ([the record](nights/2026-11-23/guide-camera-driver.md)). Proven: through the hub, the guider's binned 640 x 480 mode and a full-resolution 512 x 960 window each kept 149 of 150 2 s frames over 5 minutes, with no USB error. Full-width frames still fail in every mode tried, and delivery falls off from 544 pixels wide. Not proven: that a window guides better than binned, or that any driver could fix full width.
