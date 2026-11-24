@@ -256,7 +256,7 @@ What a person does; everything else is automatic.
    spell is the hours at least half of the forecasting centres (Met
    Office, ECMWF, DWD ICON, NOAA GFS, and Meteosource for the next 24 h
    when `[meteosource] key` is set: `feeds.CENTRES`) call clear, as
-   ryanclinton.uk's Meanwhile page counts them; when that differs from
+   [Meanwhile](https://meanwhileinspace.com) counts them; when that differs from
    Open-Meteo's default forecast (the Met Office's in the UK) the sky line
    says "forecasts disagree", and a night is GO only when three in four
    agree through the spell; a split spell names where three of four or

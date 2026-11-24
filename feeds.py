@@ -109,7 +109,7 @@ def weather(lat, lon):
 
 
 # The four forecasting centres the clear spell is checked against (the same
-# four as ryanclinton.uk's Meanwhile page). Open-Meteo's default forecast is
+# four as Meanwhile, https://meanwhileinspace.com). Open-Meteo's default forecast is
 # one model: in the UK it is the Met Office's, and on 3 November 2026 it gave
 # one clear hour while ECMWF, ICON and GFS all cleared 00:00-03:00.
 OPEN_METEO_CENTRES = {"ukmo_seamless": "Met Office", "ecmwf_ifs025": "ECMWF",

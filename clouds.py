@@ -253,9 +253,16 @@ def airports(site, radius_km=150, timeout=30):
                     "wind_kt": m.get("wspd"),
                     "covers": [c["cover"] for c in m.get("clouds") or []], "wind": wind,
                     "age_min": round((time.time() - m["obsTime"]) / 60), "layers": layers,
-                    "says": "; ".join(layers) or SAYS.get(m.get("cover"), m.get("cover") or "no cloud given"),
+                    "says": "; ".join(layers) or SAYS.get(reported_cover(m), reported_cover(m) or "no cloud given"),
                     "temp_c": m.get("temp"), "dew_c": m.get("dewp"), "raw": m["rawOb"]})
     return sorted(out, key=lambda a: a["km"])
+
+
+def reported_cover(m):
+    """The no-cloud code the station itself sent. The API's `cover` rewrites
+    an automatic station's NCD as CLR, which claims more than NCD does."""
+    said = re.search(r"\b(CAVOK|NCD|NSC|SKC|CLR)\b", (m.get("rawOb") or "").split(" RMK")[0])
+    return said.group(1) if said else m.get("cover")
 
 
 def airport_lines(site, found=None):

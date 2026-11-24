@@ -16,6 +16,7 @@ and the real centring, focusing and stacking code runs on it.*
 [ASCOM Alpaca](https://ryan-clinton.github.io/telescopeyoke/ascom-alpaca.html) ·
 [Set it up with Claude Code](#with-claude-code) ·
 [Results](docs/results.md) ·
+[The project and its diary](https://ryanclinton.uk/projects/telescopeyoke/) ·
 [What it has been tried on](docs/hardware.md) ·
 [All the docs](docs/README.md) ·
 [Ask a question](https://github.com/Ryan-Clinton/telescopeyoke/discussions)**

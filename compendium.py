@@ -400,6 +400,13 @@ def load():
     return []
 
 
+# His name for an object the catalogue holds under another, and no name shared.
+SAME_OBJECT = {"LMC": "ESO 056-115"}
+# His row for several objects: its rating is theirs together, so one member
+# named in it does not inherit it (the Coma Cluster's 4 on NGC 4889).
+SEVERAL = {"Cluster", "Group", "Pair", "Trio", "Chain"}
+
+
 def _key(name):
     return name.replace(" ", "").upper()
 
@@ -415,7 +422,8 @@ def _keys(t):
 def _names(r):
     """His row's names, in the order they decide a match: its own name, its
     alternative, then Messier, NGC and IC."""
-    names = [r["id"], r["alt_id"]] + [f"{p}{r[k]}" for p, k in (("M", "messier"), ("NGC ", "ngc"), ("IC ", "ic")) if r[k]]
+    names = [r["id"], r["alt_id"], SAME_OBJECT.get(r["id"], "")]
+    names += [f"{p}{r[k]}" for p, k in (("M", "messier"), ("NGC ", "ngc"), ("IC ", "ic")) if r[k]]
     return [_key(n) for n in dict.fromkeys(names) if n]
 
 
@@ -471,9 +479,10 @@ def merge(targets):
             continue
         t = by_id.get(tid) or next(x for x in targets if x["id"] == tid)
         own = [r for r in rs if _key(r["id"]) in _keys(t)]
-        best = (own or rs)[0]
-        t.update(_his(best))
-        matched.add(tid)
+        his = own or [r for r in rs if r["sub"] not in SEVERAL]
+        if his:
+            t.update(_his(his[0]))
+            matched.add(tid)
         # Every row that matched it lends its names: "C49" finds the Rosette.
         t["aliases"] = list(t.get("aliases", []))
         for r in rs:

@@ -124,28 +124,6 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
 
 ## In code, no hands needed
 
-43. **Leftovers from the ryanclinton.uk session** (24 November, unchecked here;
-    after the Tabby freeze work):
-    - Repost with `[[images]]` records, as these break a site test:
-      `2026-11-20-the-flaming-star-and-a-mount-that-only-goes-one-way.md`
-      (`monkey-head-2026-11-20.jpg`), `2026-11-20-the-monkey-head-in-colour.md`
-      (`monkey-head-hoo-2026-11-20.jpg`, `monkey-head-sho-2026-11-20.jpg`),
-      `2026-11-21-a-pleasant-surprise.md` (`flaming-star-ha-2026-11-21.jpg`),
-      `2026-11-22-the-night-the-mount-forgot.md` (`moon-2026-11-22.jpg`),
-      `2026-11-23-testing-the-free-tools.md` (topics, and
-      `free-tools-ngc2174-graxpert.jpg`, `free-tools-star-removal.jpg`). The
-      12 entries from 21 October to 18 November are tagged on the server:
-      start from its copy if reposting one.
-    - `clouds.py`: `cover` turns NCD into CLR, so take the code from `rawOb`.
-    - `compendium.merge()`: NGC 4889 rated 4 (likely the Coma Cluster's), about
-      41 galaxies given a group's rating, and LMC added beside ESO 056-115.
-    - `data/targets.csv`: the names of IC 434, NGC 253 (and its magnitude) and
-      NGC 2070; `build_catalogue.py` takes OpenNGC's first common name.
-    - `docs/validation.md`: settle "parked and told" from the 3-4 November run
-      records.
-    - README: a line linking https://ryanclinton.uk/projects/telescopeyoke/ and
-      the diary. Forecasts: Meanwhile is now https://meanwhileinspace.com.
-
 16. **The demo drives the real focuser**: on 20 November `TY_DEMO=1
     ./focus.py --auto` opened the real Nano while `--measure-backlash` was
     using it, broke that measurement and lost the focuser's kept position.

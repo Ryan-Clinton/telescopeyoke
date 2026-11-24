@@ -56,7 +56,12 @@ SKIP_TYPES = {"Dup", "NonEx", "*", "Nova"}
 # gives the North America Nebula 120' x 30'; it is about 120' x 100' (as
 # this catalogue has had since 15 October 2026), which matters for its
 # mosaic and its surface brightness.
-CORRECTIONS = {"NGC7000": {"MinAx": "100.00"}}
+CORRECTIONS = {"NGC7000": {"MinAx": "100.00"},
+               # OpenNGC's first common name is not always the object's own.
+               "IC0434": {"Common names": "Glow behind the Horsehead"},
+               "NGC2024": {"Common names": "Flame Nebula"},
+               "NGC0253": {"Common names": "Sculptor Galaxy", "V-Mag": "7.1"},
+               "NGC2070": {"Common names": "Tarantula Nebula"}}
 
 # Coarse classes used for scoring and display.
 KIND = {
