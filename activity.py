@@ -22,6 +22,7 @@ import inspect
 import itertools
 import json
 import os
+import sys
 import threading
 import time
 from contextlib import contextmanager
@@ -128,8 +129,19 @@ def set_(what, detail="", step=None, of=None, key=None, **extra):
                             "updated": time.time(),
                             "started": before.get("started") if before.get("what") == what else time.time()}
             _write(entries)
+        current = getattr(sys.modules.get("jobs"), "CURRENT", None)
+        if current is not None:
+            # The same line in this process's job record (docs/job-reporting-spec.md).
+            current.note(_words(entries[key]))
     except Exception:
         pass
+
+
+def job(name, steps=None, expect_s=None, kind="finite"):
+    """This process as a job, for `with activity.job(...) as job:` (jobs.py):
+    its progress, milestones and waits, kept where `./ty jobs` reads them."""
+    import jobs
+    return jobs.job(name, steps, expect_s, kind)
 
 
 def _ended(entry, when, stopped=False):

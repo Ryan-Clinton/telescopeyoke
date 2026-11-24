@@ -69,6 +69,8 @@ COMMANDS = {
     "darktest.py": ("hardware", {}, {"--plan": "read_only"}),   # the camera and its cooler; keeps no frames
     "desktopqueue.py": ("local_write", {"status": "read_only", "report": "read_only"}, {}),   # runs only the jobs added to it, on the desktop
     "depth.py": ("local_write", {}, {}),
+    # The jobs' records and the report; bg is classed by the command it starts (classify).
+    "jobs.py": ("read_only", {"--ack": "local_write", "--busy-until": "local_write", "--stop": "hardware"}, {}),
     "difference.py": ("local_write", {}, {}),
     "doctor.py": ("read_only", {}, {}),
     "focus.py": ("hardware", {}, DRY),
@@ -158,7 +160,8 @@ TY_VALUED = {"--limit", "--kind", "--frames"}
 TY_PASSES = {"mount": "mount.py", "tonight": "tonight.py", "shoot": "shoot.py", "focus": "focus.py",
              "solve": "solve.py", "restack": "restack.py", "console": "console.py", "watch-run": "runwatch.py",
              "agent-report": "agentlog.py", "streak": "streak.py",
-             "lucky": "lucky.py", "moon": "moon.py", "collimation": "collimation.py", "onboard": "onboard.py"}
+             "lucky": "lucky.py", "moon": "moon.py", "collimation": "collimation.py", "onboard": "onboard.py",
+             "jobs": "jobs.py", "bg": "jobs.py"}
 
 
 def script_of(word):
@@ -215,7 +218,7 @@ def classify(argv):
         while len(rest) > 1 and rest[0] in ("--rig", "--camera"):
             rest = rest[2:]           # which telescope or camera: the command after it decides
         if rest and rest[0] in TY_PASSES:
-            script, rest = TY_PASSES[rest[0]], rest[1:]
+            script, rest = TY_PASSES[rest[0]], (rest if rest[0] == "bg" else rest[1:])
         else:
             # ty's own words: its options (some taking a value) may come
             # before or after them, as argparse allows.
@@ -241,6 +244,9 @@ def classify(argv):
             if given[0] == "research" and "--html" in rest:
                 return "local_write"
             return "read_only"
+    if script == "jobs.py" and rest and rest[0] in ("bg", "_supervise"):
+        # A job is what it starts: ty bg NAME --after X -- ./mount.py goto M27 is hardware.
+        return classify(rest[rest.index("--") + 1:]) if "--" in rest else "hardware"
     if script not in COMMANDS:
         return "hardware"
     keys = [w.split("=", 1)[0] for w in rest]

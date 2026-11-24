@@ -20,6 +20,9 @@ starting, a timeout). The rules (docs/skills-and-agents.md):
 - no-self-kill: no pkill -f or pgrep -f, which match their own command line.
 - no-secrets-out: nothing prints config.toml whole, its Telegram section,
   or a token from the environment.
+- tracked-jobs: a project command left running in the background (run in
+  the background, nohup, setsid, a trailing &) goes through ./ty bg,
+  unless policy.py calls it read-only (docs/job-reporting-spec.md).
 - small-focus: no focus.py sweep (--motor, --sweep, --measure-step).
   --measure-backlash is allowed from 19 November 2026, on the person's go:
   sized for the NEMA 17, 8 half-steps at a time, 512 at most, within
@@ -359,6 +362,44 @@ def read_only_bash(payload):
                 raise Refused("config.toml holds the Telegram token: not for an agent to read.")
 
 
+BACKGROUND = re.compile(r"(^|[^&>|])&\s*($|[;\n)])|\b(nohup|setsid|disown)\b")
+
+
+def tracked_jobs(payload):
+    """A project command left running in the background goes through
+    ./ty bg, so its output is written as it comes, its progress and ending
+    are kept, and what follows it can be queued (docs/job-reporting-spec.md).
+    24 November 2026: a dark test started with its log redirected held its
+    output back for 30 minutes, and its end was noticed four hours late."""
+    if payload.get("tool_name") not in SHELL_TOOLS:
+        return
+    data = payload.get("tool_input") or {}
+    command = data.get("command", "")
+    if not (data.get("run_in_background") or BACKGROUND.search(command)):
+        return
+    try:
+        commands = policy.parts_of(command)
+    except ValueError:
+        if any(name in command for name in [*policy.COMMANDS, "ty "]):
+            raise Refused("A background line that cannot be read, naming a project command: "
+                          "start it with ./ty bg NAME -- COMMAND.")
+        return
+    for words in commands:
+        bare = policy.unwrapped(words)
+        script = policy.script_of(bare[0]) if bare else None
+        if script not in policy.COMMANDS and script != "ty":
+            continue
+        rest = bare[1:]
+        if (script == "ty" and rest[:1] in (["bg"], ["jobs"])) or script == "jobs.py":
+            continue
+        if script in ("mount.py", "ty") and "stop" in rest[:2]:
+            continue
+        if policy.classify(words) == "read_only":
+            continue
+        raise Refused(f"{' '.join(bare[:3])} in the background: start it with ./ty bg NAME -- COMMAND "
+                      f"(--after JOB to queue it), so its progress is kept and ./ty jobs can say how it goes.")
+
+
 def docs_only(payload):
     """docs-keeper's pen: docs/, README.md and CHANGELOG.md, nothing else."""
     if payload.get("tool_name") not in EDIT_TOOLS:
@@ -372,11 +413,12 @@ def docs_only(payload):
 
 RULES = {"motion-lock": motion_lock, "no-inline-hardware": no_inline_hardware, "no-motion": no_motion,
          "no-self-kill": no_self_kill, "no-secrets-out": no_secrets_out, "small-focus": small_focus,
-         "read-only-bash": read_only_bash, "docs-only": docs_only}
+         "read-only-bash": read_only_bash, "docs-only": docs_only, "tracked-jobs": tracked_jobs}
 AGENT_RULES = {"read-only-bash", "docs-only"}
 
 
-EVERY_SESSION = ("motion-lock", "no-inline-hardware", "no-motion", "no-self-kill", "no-secrets-out", "small-focus")
+EVERY_SESSION = ("motion-lock", "no-inline-hardware", "no-motion", "no-self-kill", "no-secrets-out", "small-focus",
+                 "tracked-jobs")
 
 
 def check(rule, payload):

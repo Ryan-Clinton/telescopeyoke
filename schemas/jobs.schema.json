@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/jobs.schema.json",
+  "title": "Jobs",
+  "description": "data of: ty jobs --json (jobs.py). The progress report: the events that need the agent, the jobs running, waiting, blocked or queued, those finished in the last 12 hours, and the computer, camera and mount (docs/job-reporting-spec.md).",
+  "type": "object",
+  "required": ["open_events", "jobs", "recent", "computer", "camera", "mount", "busy_until"],
+  "$defs": {
+    "job": {
+      "type": "object",
+      "required": ["id", "name", "kind", "phase", "log"],
+      "properties": {
+        "id": {"type": "string", "description": "YYYYMMDD-HHMMSS-name-xxxxxx"},
+        "name": {"type": "string"},
+        "kind": {"enum": ["finite", "service", "routine", "remote"]},
+        "phase": {"enum": ["queued", "running", "waiting", "stalled", "blocked", "done", "failed", "vanished", "unknown"]},
+        "step": {"type": ["integer", "null"]},
+        "of": {"type": ["integer", "null"]},
+        "text": {"type": ["string", "null"]},
+        "operation": {"type": ["string", "null"], "description": "What it is doing now."},
+        "deadline_s": {"type": ["number", "null"], "description": "The longest the operation should take."},
+        "reading": {"type": ["string", "null"], "description": "The latest measurement it gave."},
+        "waiting": {"type": ["object", "null"], "description": "why, ask (what ends the wait), since, most_s"},
+        "holds": {"type": "array", "items": {"type": "string"}},
+        "stall": {"type": ["string", "null"], "description": "Why it is taken to have stalled, or waited too long."},
+        "last_line": {"type": ["string", "null"]},
+        "last_output_s": {"type": ["integer", "null"], "description": "Seconds since its last output."},
+        "expect_end": {"type": ["number", "null"]},
+        "started": {"type": ["number", "null"]},
+        "ended": {"type": ["number", "null"]},
+        "after": {"type": "array", "items": {"type": "string"}},
+        "needs": {"type": "array", "items": {"type": "string"}},
+        "blocked": {"type": ["string", "null"]},
+        "result": {"type": ["string", "null"]},
+        "log": {"type": "string"}
+      }
+    }
+  },
+  "properties": {
+    "open_events": {
+      "type": "array",
+      "description": "Events that woke, or should wake, the agent and have not been acked with what was done.",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "kind", "words"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "kind": {"enum": ["milestone", "waiting", "done", "failed", "vanished", "blocked", "stalled", "idle"]},
+          "words": {"type": "string"},
+          "at": {"type": ["number", "null"]},
+          "ask": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "jobs": {"type": "array", "items": {"$ref": "#/$defs/job"}},
+    "recent": {"type": "array", "items": {"$ref": "#/$defs/job"}},
+    "computer": {"type": "object", "description": "load, cores, memory_free_gb, memory_gb, disk_free_gb, and the GPU where there is one."},
+    "camera": {"type": "object", "required": ["words"], "properties": {"by": {"type": ["string", "null"]}, "words": {"type": "string"}}},
+    "mount": {"type": "object", "required": ["words"], "properties": {"by": {"type": ["string", "null"]}, "words": {"type": "string"}}},
+    "busy_until": {"type": ["object", "null"], "description": "until, why, set: the owner's ask for work until then."}
+  }
+}
