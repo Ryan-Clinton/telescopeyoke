@@ -29,6 +29,14 @@ camera open and the cooler held off (`--watch-cooler`): 23 °C, 0 V.
   colder room; the camera's own Mean Well supply plugged straight into it,
   not the SV241's output; the camera's controller not reset beforehand.
   Unknown which matters.
+- The keeper's own guards did not run in these tests (the test command
+  sets the target and only watches): its check that closes the camera when
+  the 12 V drops, so the cooler is not on when it comes back, and its
+  check that the cooler's target has not changed by itself. Since today,
+  when the fail-safe catches a runaway or a target changed by itself, it
+  also closes the camera and cuts its USB power at the SV241 for 8 s, which
+  resets the camera's controller (19 November: what cleared it). Not yet
+  seen on a real runaway.
 - Not tested: a set point near -5 °C. A runaway there could frost the
   sensor indoors, so it would want the cap on in a cold room and the same
   trip.

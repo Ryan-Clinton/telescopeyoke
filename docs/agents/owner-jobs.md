@@ -84,7 +84,10 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
    19 °C set point: the 12 V out and back in with the cooler on, and the
    cooler started with no 12 V then the 12 V in, both recovered with a
    2 °C overshoot, no runaway (`docs/nights/2026-11-24/cooler-runaway-test.md`).
-   Still to try: the same nearer -5 °C, cap on, in a cold room.
+   Still to try: the same nearer -5 °C, cap on, in a cold room. Since 24
+   November the fail-safe, on a runaway or a target changed by itself, also
+   cuts the camera's USB power at the SV241 for 8 s (not yet seen on a real
+   one).
 8. **Dew**: the guide scope's USB dew strap fitted when it comes (due
    4 December; from one of the SV241's USB ports; the plain SV241 has no
    dew outputs). The dew shields from

@@ -262,7 +262,7 @@ FAULT_FILE = "cache/cooler-fault.json"
 FAULT_REST_S = 600     # closed this long after a cooler fault before it may be opened again
 
 
-NO_POWER, RUNAWAY, OTHER = "no_power", "runaway", "other"   # a kept fault's kind
+NO_POWER, RUNAWAY, CHANGED, OTHER = "no_power", "runaway", "changed", "other"   # a kept fault's kind
 
 
 def latch_fault(reason, clock=time.time, kind=OTHER):
@@ -630,7 +630,7 @@ class AltairCamera:
             return
         if held != int(round(self.level * 10)):
             self.fail_safe(f"the cooler's target is {held / 10:g} °C, not the {self.level:g} °C it was set to: "
-                           "it changed by itself, as after its power was cut")
+                           "it changed by itself, as after its power was cut", kind=CHANGED)
 
     def fail_safe(self, why, kind=OTHER):
         """Turn the cooler off here and now, whatever the caller does with
@@ -645,11 +645,31 @@ class AltairCamera:
         except Exception as problem:            # still latched and raised: the close turns it off
             off = f"switching the cooler off failed ({problem}); closing the camera will"
         kept = latch_fault(why, kind=kind)
+        reset = self._reset_controller() if kind in (RUNAWAY, CHANGED) else ""
         wait = "" if kind == NO_POWER else f"leave the camera closed {FAULT_REST_S / 60:.0f} minutes, "
-        raise CameraError(f"{why}: {off} and the camera closed. Secure the 12 V lead, {wait}"
+        raise CameraError(f"{why}: {off} and the camera closed{reset}. Secure the 12 V lead, {wait}"
                           "then ./keeper.py start --after-fault"
                           + ("" if kept else ". THE FAULT COULD NOT BE WRITTEN DOWN: do not start the keeper "
                              "again tonight"))
+
+    def _reset_controller(self):
+        """After a runaway, or a target changed by itself: close the camera
+        and cut its USB power at the hub for a few seconds, which resets its
+        own controller. 19 November 2026: a runaway survived ten minutes
+        closed and cleared only when the camera's USB power was cut; since
+        24 November the SV241 lets the laptop do that. Where nothing can cut
+        the power (the camera on a laptop socket), said, and the fault stands
+        as before. Returns words for the error."""
+        if host.WINDOWS:
+            return ""
+        self.close()
+        try:
+            import usbpower
+            done = usbpower.cycle(say=lambda line: print(f"camera: {line}", file=sys.stderr, flush=True))
+        except Exception as problem:                # a help: the fault is latched whatever happens here
+            return f"; its USB power could not be cut ({problem})"
+        return ("; its USB power was cut and given back, which resets its controller"
+                + ("" if done.get("back") else " (it has not come back on USB)"))
 
     def ramp(self, clock=time.monotonic):
         """One step further down towards the target when RAMP_EVERY_S has
