@@ -563,6 +563,12 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
     except (OSError, ValueError):
         pass
     env = dict(os.environ, PYTHONUNBUFFERED="1", TY_JOB=job_id, TY_JOB_ADOPT=str(os.getpid()))
+    if command and Path(command[0]).name == "ssh" and len(command) > 2 and not command[-1].startswith("-"):
+        # SSH does not carry the environment: the other computer's Python
+        # would hold its output back, and the job here look stalled while
+        # it worked (24 November 2026: clip12b, an hour "stalled" on the
+        # desktop at 100% of four cores).
+        command = [*command[:-1], f"export PYTHONUNBUFFERED=1; {command[-1]}"]
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log = open(log_path, "ab", buffering=0)
     child = None
