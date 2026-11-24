@@ -153,12 +153,12 @@ worse than today, visible cosmic-ray pixels at most today's plus 10.
 
 - It keeps every star's light (1.000) and the Tabby scatter back at the uncleaned level, and
   leaves fewer fixed defects than today on every session.
-- It passed on 5 of the 8 sessions used to make it, and on both unseen sessions it ran on (M33,
-  5 November 01:21; Tabby, 22 November 18:25). On the other 3 it left 12 to 20 more visible
+- It passed on 5 of the 8 sessions used to make it, and on all three unseen sessions it ran on (M33,
+  5 November 01:21; Tabby, 22 November 18:25 and 18:53). On the other 3 it left 12 to 20 more visible
   cosmic-ray pixels than today.
 - The neighbour test alone, with no map, left 3.4 times as much of the planted fixed defects.
 - Siril 1.4.5's winsorized sigma rejection (3, 3) across the aligned frames, after the same
-  defect map, caught the cosmic rays but failed the mark on all 9 sessions it ran: its grain
+  defect map, caught the cosmic rays but failed the mark on all 11 sessions it ran: its grain
   differed from the plain stack's by 2% to 73% and the brightest stars' light by up to 20%. On two
   sessions it threw out 18% of all pixels, taking the sky's drift between frames for outliers. With Siril's own normalisation
   its stack was on a different scale from the frames and could not be compared fairly.
