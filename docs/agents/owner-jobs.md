@@ -58,9 +58,13 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
    before any night depends on it (`docs/usb-hub.md`, "Bought: the Svbony
    SV241"). Its USB ports switch from the laptop (uhubctl -e, 24
    November), but its 12 V outputs are always on, with no software switching
-   (only the Pro has it), so the 183M's 12 V still goes in by hand, after
-   the camera is warmed in software, never with the cooler running (19
-   November 16:31: it ran away to -7.3 °C that way). It came with one
+   (only the Pro has it). From 24 November the 183M's 12 V is on the box
+   too, at the owner's choice: it is there from the moment the mount's
+   supply goes in, before anything cools, so the safe order holds. What
+   must not happen is the 12 V coming back with the cooler running (19
+   November 16:31: it ran away to -7.3 °C that way): warm the camera in
+   software before switching the supply off, and after a power drop
+   mid-night follow job 7. It came with one
    5.5 × 2.1 DC lead, as SVBONY's box list says, only about 10 cm long:
    too short to reach anything. Leads are needed for the mount, the camera
    and the focuser. Two 1.5 m (5 ft) 5.5 × 2.1 male-to-male

@@ -54,8 +54,10 @@ dropping off the laptop and went back to Amazon on 1 November,
 power supply, and one of the two new 1.5 m 5.5 × 2.1 leads runs between
 the mount and the SV241 (the owner's words). The focuser's 12 V comes
 from the SV241 too, on a lead the owner made (24 November: the motor
-turned out and back on it), so everything but the camera's 12 V is on
-the box. The camera's leads, from the
+turned out and back on it), and the camera's 12 V is on it as well (the
+owner's choice, 24 November): the mount's supply powers the mount, the
+box, the focuser and the 183M's cooler. Warm the camera in software
+before that supply goes off; a drop mid-night is job 7. The camera's leads, from the
 23 November video tests: the 3 m lead straight into the laptop is fine;
 laptop, 3 m lead, SV241, 1 m lead, camera stalls long videos ("no video
 frame within 5 s", no USB error in the kernel log); laptop, 1 m, SV241,
