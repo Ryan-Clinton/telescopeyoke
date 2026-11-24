@@ -191,23 +191,6 @@ its job comes off this list.
     `./precision.py SESSION --planet NAME` and `--compare FIELD`. One shared
     night is provisional, two wins are firm. `precision.py`'s mono path has
     not yet run on a real 183M transit.
-34. **Mono Moon video.** `./ty moon` and `./ty lucky` failed under the keeper
-    on 22 November (`TypeError: cannot pickle 'generator' object`). From
-    23 November the keeper streams the frames one at a time, its cooler checks
-    going on between them. 23 November, cap on, through the SV241 at USB 3:
-    120 and 300 frames (512 x 512, 10 ms, 50 a second) came through the
-    keeper, and a normal frame worked after. **Longer videos stall**: "no video
-    frame within 5 s" after 1 to 284 frames in all six 600-frame runs with the
-    keeper stopped, and once through it, with no USB error in the kernel log.
-    Straight into the laptop, six of six finished, and three of three through
-    the keeper. With the owner's shorter lead to the SV241, six of six, then
-    three 2,400-frame videos (82-88 a second, none dropped) while the guide
-    camera took 12 frames each and the wheel turned, with no USB error. So the
-    longer lead was the fault. The guide frames (0.5 s) came 1 to 5 s apart:
-    look at that with the new lead. **Still owed: video with the sensor held
-    at -5 °C**, then this job comes off and goes in `docs/validation.md`.
-    **`./ty moon`'s centring** also lost the Moon that night, probably on the
-    test moves in Dec (job 2): the disc had to be centred by `--aim-off`.
 35. **Mineral Moon from B, G and R** (`./ty lucky capture --filter`, stack
     each, `./ty lucky mineral --mono B G R`), and **a supernova's colour**
     (`./patrol.py TARGET --colour-at RA,DEC`): both built, neither run on

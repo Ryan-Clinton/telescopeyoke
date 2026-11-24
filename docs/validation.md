@@ -761,6 +761,10 @@ to 3.5 px HFD binned through haze; the guide camera needs gain 400 % (at
 (0.48 and 0.67 px/s, about 0.42 expected), then the star was lost, once
 to a crowded field (the Double Cluster) and once to haze; not proven.
 
+### 24 November 2026: the 183M's video through the keeper at -5 °C
+
+Indoors, cap on, the camera through the SV241 on the owner's shorter lead. Proven: with the keeper holding the sensor at -5 °C (it read -4.2 to -4.7 °C), three 2,400-frame videos (512 x 512, 10 ms, gain 100) came through the keeper at 87.3, 85.6 and 85.0 frames a second, none dropped, each started by itself as the one before ended (the first runs of `./ty bg --after`), and the keeper then warmed the sensor slowly. With the earlier tries (22 to 23 November: the keeper streaming frames one at a time; the longer lead found to be what stalled long videos), the mono Moon video works under the keeper. Not proven: `./ty moon`'s centring, which lost the Moon on 22 November on its test moves in Dec, the drive that is faulty (job 2).
+
 ### 24 November 2026: is -5 °C enough for the 183M?
 
 Indoors, cap on, gain 1500, six 120 s darks against 1 s at each temperature (`./darktest.py`, kept in `cache/darktest/`). First run, +5 to -5 °C: the noise was 7.34 ADU at +5 °C and 6.29 ADU at 0, -1.9 and -5.1 °C, so it had stopped falling by 0 °C. Second run, `--colder`, which allows -10 °C for that run only, with clipped means:
