@@ -1,0 +1,291 @@
+{
+ "camera": "Altair Hypercam 183M PRO TEC (Sony IMX183, mono), 12-bit readout",
+ "gain": "1500 (Altair's units, the camera's own scale)",
+ "offset": 80,
+ "readout_speed": 3,
+ "units": "ADU on the camera's 12-bit scale",
+ "temperature_runs": [
+  {
+   "when_utc": "2026-11-24T00:13",
+   "method": "six 120 s darks and six 1 s darks at each temperature, cap on, indoors; the 1 s frames give the zero level",
+   "rows": [
+    {
+     "target_c": 5.0,
+     "sensor_c": 5.1,
+     "zero_adu": 80.33,
+     "level_adu": 88.5,
+     "dark_adu_per_s": 0.06863,
+     "noise_adu": 7.338,
+     "hot_pixels": 40337,
+     "amp_glow_adu": 1.67
+    },
+    {
+     "target_c": 0.0,
+     "sensor_c": 0.0,
+     "zero_adu": 80.17,
+     "level_adu": 80.0,
+     "dark_adu_per_s": -0.0014,
+     "noise_adu": 6.29,
+     "hot_pixels": 71606,
+     "amp_glow_adu": 1.83
+    },
+    {
+     "target_c": -2.5,
+     "sensor_c": -1.9,
+     "zero_adu": 80.17,
+     "level_adu": 81.67,
+     "dark_adu_per_s": 0.01261,
+     "noise_adu": 6.29,
+     "hot_pixels": 62185,
+     "amp_glow_adu": 1.67
+    },
+    {
+     "target_c": -5.0,
+     "sensor_c": -5.1,
+     "zero_adu": 80.0,
+     "level_adu": 83.17,
+     "dark_adu_per_s": 0.02661,
+     "noise_adu": 6.29,
+     "hot_pixels": 52186,
+     "amp_glow_adu": 1.5
+    }
+   ],
+   "verdict": "From -1.9 to -5.1 \u00b0C the noise fell 0.0% and the dark signal went from 0.0126 to 0.0266 ADU/s: flattening, so colder is unlikely to help."
+  },
+  {
+   "when_utc": "2026-11-24T01:54",
+   "method": "six 120 s darks and six 1 s darks at each temperature, cap on, indoors; the 1 s frames give the zero level",
+   "rows": [
+    {
+     "target_c": -5.0,
+     "sensor_c": -5.0,
+     "zero_adu": 80.03,
+     "level_adu": 82.44,
+     "dark_adu_per_s": 0.02031,
+     "noise_adu": 6.707,
+     "hot_pixels": 1613,
+     "amp_glow_adu": 1.46
+    },
+    {
+     "target_c": -7.5,
+     "sensor_c": -7.0,
+     "zero_adu": 79.41,
+     "level_adu": 83.11,
+     "dark_adu_per_s": 0.03113,
+     "noise_adu": 6.658,
+     "hot_pixels": 1387,
+     "amp_glow_adu": 1.45
+    },
+    {
+     "target_c": -10.0,
+     "sensor_c": -9.9,
+     "zero_adu": 79.3,
+     "level_adu": 82.83,
+     "dark_adu_per_s": 0.02963,
+     "noise_adu": 6.597,
+     "hot_pixels": 1051,
+     "amp_glow_adu": 1.42
+    }
+   ],
+   "verdict": "From -7.0 to -9.9 \u00b0C the noise fell 0.9% and the dark signal went from 0.0311 to 0.0296 ADU/s: flattening, so colder is unlikely to help."
+  }
+ ],
+ "note_on_runs": "The first run measured with plain means; the second with clipped means and hot pixels counted as more than 200 ADU above the zero level, so their hot pixel counts are not comparable.",
+ "master_darks_minus_5C": {
+  "what": "Master darks at -5 degC, each the average of 20 frames, made on different nights between 4 and 21 November 2026. centre_* is the clipped mean and spread of the central 1200 x 1200 pixels; above_zero_adu is relative to the 0.77 s master; hot_pixels_200 counts pixels more than 200 ADU above that zero; amp_glow_adu is the brightest 300 x 300 corner above the centre.",
+  "rows": [
+   {
+    "exposure_s": 0.773524,
+    "sensor_c": -5.0,
+    "frames": 20,
+    "centre_mean_adu": 79.475,
+    "centre_sd_adu": 1.616,
+    "above_zero_adu": 0.0,
+    "hot_pixels_200": 13,
+    "amp_glow_adu": 0.26
+   },
+   {
+    "exposure_s": 0.775626,
+    "sensor_c": -5.1,
+    "frames": 20,
+    "centre_mean_adu": 79.97,
+    "centre_sd_adu": 1.618,
+    "above_zero_adu": 0.495,
+    "hot_pixels_200": 15,
+    "amp_glow_adu": 0.26
+   },
+   {
+    "exposure_s": 1.77677,
+    "sensor_c": -4.4,
+    "frames": 20,
+    "centre_mean_adu": 79.47,
+    "centre_sd_adu": 1.624,
+    "above_zero_adu": -0.005,
+    "hot_pixels_200": 22,
+    "amp_glow_adu": 0.32
+   },
+   {
+    "exposure_s": 2.18926,
+    "sensor_c": -5.4,
+    "frames": 20,
+    "centre_mean_adu": 79.456,
+    "centre_sd_adu": 1.619,
+    "above_zero_adu": -0.019,
+    "hot_pixels_200": 20,
+    "amp_glow_adu": 0.34
+   },
+   {
+    "exposure_s": 3.05925,
+    "sensor_c": -4.6,
+    "frames": 20,
+    "centre_mean_adu": 79.478,
+    "centre_sd_adu": 1.626,
+    "above_zero_adu": 0.003,
+    "hot_pixels_200": 28,
+    "amp_glow_adu": 0.4
+   },
+   {
+    "exposure_s": 3.43222,
+    "sensor_c": -4.9,
+    "frames": 20,
+    "centre_mean_adu": 79.469,
+    "centre_sd_adu": 1.623,
+    "above_zero_adu": -0.006,
+    "hot_pixels_200": 25,
+    "amp_glow_adu": 0.45
+   },
+   {
+    "exposure_s": 3.65362,
+    "sensor_c": -4.9,
+    "frames": 20,
+    "centre_mean_adu": 79.994,
+    "centre_sd_adu": 1.623,
+    "above_zero_adu": 0.519,
+    "hot_pixels_200": 29,
+    "amp_glow_adu": 0.47
+   },
+   {
+    "exposure_s": 4.0,
+    "sensor_c": -5.3,
+    "frames": 20,
+    "centre_mean_adu": 78.335,
+    "centre_sd_adu": 1.627,
+    "above_zero_adu": -1.14,
+    "hot_pixels_200": 29,
+    "amp_glow_adu": 0.5
+   },
+   {
+    "exposure_s": 5.0,
+    "sensor_c": -5.0,
+    "frames": 20,
+    "centre_mean_adu": 79.481,
+    "centre_sd_adu": 1.624,
+    "above_zero_adu": 0.006,
+    "hot_pixels_200": 29,
+    "amp_glow_adu": 0.64
+   },
+   {
+    "exposure_s": 16.0,
+    "sensor_c": -5.0,
+    "frames": 20,
+    "centre_mean_adu": 81.768,
+    "centre_sd_adu": 1.638,
+    "above_zero_adu": 2.293,
+    "hot_pixels_200": 73,
+    "amp_glow_adu": 0.24
+   },
+   {
+    "exposure_s": 30.0,
+    "sensor_c": -5.0,
+    "frames": 20,
+    "centre_mean_adu": 82.067,
+    "centre_sd_adu": 1.649,
+    "above_zero_adu": 2.592,
+    "hot_pixels_200": 292,
+    "amp_glow_adu": 0.38
+   },
+   {
+    "exposure_s": 60.0,
+    "sensor_c": -4.9,
+    "frames": 20,
+    "centre_mean_adu": 82.047,
+    "centre_sd_adu": 1.688,
+    "above_zero_adu": 2.572,
+    "hot_pixels_200": 815,
+    "amp_glow_adu": 0.77
+   },
+   {
+    "exposure_s": 90.0,
+    "sensor_c": -5.0,
+    "frames": 20,
+    "centre_mean_adu": 81.972,
+    "centre_sd_adu": 1.735,
+    "above_zero_adu": 2.497,
+    "hot_pixels_200": 1208,
+    "amp_glow_adu": 1.13
+   },
+   {
+    "exposure_s": 120.0,
+    "sensor_c": -4.9,
+    "frames": 20,
+    "centre_mean_adu": 82.559,
+    "centre_sd_adu": 1.9,
+    "above_zero_adu": 3.084,
+    "hot_pixels_200": 1618,
+    "amp_glow_adu": 1.24
+   },
+   {
+    "exposure_s": 150.0,
+    "sensor_c": -4.9,
+    "frames": 20,
+    "centre_mean_adu": 82.347,
+    "centre_sd_adu": 1.827,
+    "above_zero_adu": 2.872,
+    "hot_pixels_200": 1981,
+    "amp_glow_adu": 2.13
+   },
+   {
+    "exposure_s": 180.0,
+    "sensor_c": -4.9,
+    "frames": 20,
+    "centre_mean_adu": 81.162,
+    "centre_sd_adu": 1.876,
+    "above_zero_adu": 1.687,
+    "hot_pixels_200": 2857,
+    "amp_glow_adu": 2.46
+   },
+   {
+    "exposure_s": 210.0,
+    "sensor_c": -4.9,
+    "frames": 20,
+    "centre_mean_adu": 79.308,
+    "centre_sd_adu": 1.91,
+    "above_zero_adu": -0.167,
+    "hot_pixels_200": 5475,
+    "amp_glow_adu": 3.05
+   },
+   {
+    "exposure_s": 240.0,
+    "sensor_c": -4.9,
+    "frames": 20,
+    "centre_mean_adu": 80.026,
+    "centre_sd_adu": 1.925,
+    "above_zero_adu": 0.552,
+    "hot_pixels_200": 12158,
+    "amp_glow_adu": 3.48
+   },
+   {
+    "exposure_s": 300.0,
+    "sensor_c": -5.0,
+    "frames": 20,
+    "centre_mean_adu": 81.747,
+    "centre_sd_adu": 2.424,
+    "above_zero_adu": 2.272,
+    "hot_pixels_200": 14217,
+    "amp_glow_adu": 3.66
+   }
+  ],
+  "dark_current": "Not measurable from these masters: the zero level drifts by about 2 ADU between sessions, more than the dark signal grows from 30 s to 300 s."
+ },
+ "source": "TelescopeYoke, darktest.py and calibrate.py; docs/results.md, 24 November 2026"
+}

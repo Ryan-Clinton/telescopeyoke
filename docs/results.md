@@ -15,6 +15,41 @@ analysis** (public data, no telescope of ours), **controlled software
 validation** (finding what was planted, so the answer is known) and
 **public operation** (it ran in front of people).
 
+## How cold should a 183M run? 24 November 2026
+
+- **Evidence:** instrument characterisation.
+- **Question:** is -5 °C cold enough for the Altair Hypercam 183M PRO TEC
+  (Sony IMX183, mono), or does going colder help?
+- **Done with:** the camera indoors with its cap on, gain 1500 (Altair's
+  own scale), offset 80, readout speed 3, 12-bit ADU. `./darktest.py`:
+  six 120 s darks and six 1 s darks at each temperature (the 1 s frames
+  give the zero level), twice. Then the 19 master darks the rig uses at
+  -5 °C (0.8 s to 300 s, 20 frames each). The data, every row:
+  [183m-darks-2026-11-24.json](results/183m-darks-2026-11-24.json).
+- **Result, by temperature** (the second run, clipped means):
+
+  | Sensor | Dark signal | Noise, one 120 s dark | Hot pixels (>200 ADU) |
+  |---|---|---|---|
+  | -5.0 °C | 0.020 ADU/s | 6.71 ADU | 1,613 |
+  | -7.0 °C | 0.031 ADU/s | 6.66 ADU | 1,387 |
+  | -9.9 °C | 0.030 ADU/s | 6.60 ADU | 1,051 |
+
+  From -5 to -10 °C the noise falls 1.6%. The dark signal, about 3 ADU in
+  two minutes, is within its own scatter at every temperature. The first
+  run (+5, 0, -2.5, -5 °C) had the noise flat from 0 °C down: 7.34 ADU at
+  +5 °C, 6.29 at 0, -1.9 and -5.1 °C.
+- **Result, by exposure at -5 °C** (the master darks): hot pixels grow
+  from 13 at 0.8 s to 292 at 30 s, 1,618 at 120 s and 14,217 at 300 s,
+  under 0.1% of the sensor; the amp glow in the brightest corner from 0.3
+  to 3.7 ADU; the spread of a 20-frame master from 1.62 to 2.42 ADU.
+- **Answer:** -5 °C is enough. Colder trims the hot pixels, which matched
+  darks remove anyway, and does almost nothing for the noise.
+- **Does not show:** the dark current itself. The masters were made on
+  different nights and the zero level drifts by about 2 ADU between them,
+  more than the dark signal grows from 30 s to 300 s; the 120 s darks put
+  it at a few hundredths of an ADU a second at most. One camera, one gain,
+  indoors in a warm room.
+
 None of this is a discovery. The project has found known objects again,
 rejected its own weak results, and measured its own equipment; it has not
 yet found anything new.
