@@ -570,6 +570,15 @@ protections.
   laptop follows `jobs.py --state` every two minutes if the connection
   drops. `desktopqueue.py` runs each of its jobs through the launcher.
 
+### A copy for every other project
+
+On 24 November 2026 the job system was copied, made general, into
+Ryan-Clinton/common (`common/jobs/`, its command `cj`, and the hooks
+`jobs_running.py` and `jobs_keepgoing.py`, installed by common's
+`claude/install.sh`). telescopeyoke keeps its own (`./ty bg`, `./ty jobs`,
+its hooks), because it is public and common is private (the owner's
+decision). A fix made to one is made to the other.
+
 ### Partly done
 
 - **Windows**: process start times and the boot time are read on Windows,
