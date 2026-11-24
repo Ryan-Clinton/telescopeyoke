@@ -98,8 +98,9 @@ refused until it has been. Never answer the direction for them.
 At the same time, start the camera keeper in the background (only where `./ty onboard`'s kit
 says `keeper`: a cooled camera on Altair's own library):
 
-    ./keeper.py start
+    ./ty bg keeper --kind service -- ./keeper.py start
 
+(a person at a terminal can run `./keeper.py start` in a window of its own).
 It opens the camera, cools it slowly to its `tec_target` (1 °C a minute,
 about 15 minutes from a warm sensor) while the rest of the setup goes on,
 and holds it open and cold all night: focus, polar alignment, plate solves,

@@ -70,7 +70,7 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
 
 ## Setting up
 
-- With the 183M, `./keeper.py start` in the background at the settime
+- With the 183M, `./ty bg keeper --kind service -- ./keeper.py start` at the settime
   step: the camera cools slowly (1 °C a minute) to -5 °C while the setup
   goes on, and stays open and cold until the night's end.
 - A look at what the camera sees: `./snap.py --exposure 2 --gain 1500`.
