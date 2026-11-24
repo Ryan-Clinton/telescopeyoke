@@ -150,10 +150,19 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
         # Second pass, the kept frames only, in full: line everything up on
         # the sharpest frame. The results go into one file shared between the
         # workers, so memory holds a frame per worker and not the whole run.
+        with timings.phase("map the sensor's defects"):
+            # Defects the dark missed, from the frames themselves: cleaning
+            # them frame by frame cut star cores (24 November 2026).
+            found = stacking.defect_map(pool, [f["path"] for f in chosen], [f["exposure"] for f in chosen], gain)
+            defects = None
+            if found is not None:
+                defects = str(session / "defects.npy")
+                np.save(defects, found)
+                say(f"{int(found[..., 0].sum())} sensor defects mapped from the frames")
         with timings.phase("calibrate and clean"):
             mosaic, header = stacking.load_light(Path(best["path"]))
             rgb = stacking.prepare(mosaic, stacking.Calibration(best["exposure"], gain, header),
-                                   mono=stacking.is_mono(header))
+                                   mono=stacking.is_mono(header), defects=found)
             lum = rgb.sum(axis=2)
         reference = {"square": stacking.centre_square(lum), "stars": stacking.find_stars(lum)}
         # Line up on the sharpest frame, but frame the picture where most of
@@ -176,7 +185,8 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
             n = len(chosen)
             results = pool.map(stacking.register_file, [f["path"] for f in chosen],
                                [f["exposure"] for f in chosen], [gain] * n, [reference] * n,
-                               [str(work)] * n, range(n), [shape] * n, [f["scale"] for f in chosen])
+                               [str(work)] * n, range(n), [shape] * n, [f["scale"] for f in chosen],
+                               [defects] * n)
             residuals = []
             for f, (info, spent) in zip(chosen, results):
                 f.update(info)
@@ -220,6 +230,8 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
             del registered
         finally:
             work.unlink(missing_ok=True)
+            if defects:
+                Path(defects).unlink(missing_ok=True)   # 15 MB a session; its count is in the log
 
     stacked = final.result()
     chosen = [f for f, w in zip(chosen, weights) if w]

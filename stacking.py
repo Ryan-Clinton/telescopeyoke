@@ -483,17 +483,78 @@ def stack_cards(calibration, header):
     return cards
 
 
-def clean(rgb):
-    """Replace hot pixels the dark frame did not catch: anything far brighter
-    than its neighbours."""
+RING = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], bool)
+DEFECT_FRAMES = 24      # frames sampled for a session's defect map
+DEFECT_MIN = 5          # fewer than this and there is no map
+
+
+def clean(rgb, defects=None):
+    """Replace hot pixels the dark frame did not catch. `defects` (a session's
+    defect_map) are replaced first; then anything far brighter than its
+    neighbours, only when it stands alone. The old test, far brighter than
+    its neighbours' median, also cut this rig's sharp star cores: the
+    brightest third of stars lost up to 7% of their light in the stack, and
+    in Tabby's frames stars lost 11% to 23% in a tight aperture and the light
+    curves' scatter rose by 40% (24 November 2026). A core has a bright
+    second neighbour; a lone hot pixel or cosmic ray hit does not. Without a
+    map, defects in pairs are left (in a live stack)."""
     out = rgb.copy()
     for c in range(3):
-        plane = rgb[..., c]
+        plane = rgb[..., c].copy()
+        if defects is not None and defects[..., c].any():
+            plane[defects[..., c]] = ndimage.median_filter(plane, 5)[defects[..., c]]
         local = ndimage.median_filter(plane, 3)
         spread = 1.4826 * np.median(np.abs(plane - local)) + 1e-6
         hot = plane - local > 8 * spread
-        out[..., c][hot] = local[hot]
+        back = ndimage.median_filter(plane, 7)
+        second = ndimage.rank_filter(plane, rank=-2, footprint=RING) - back
+        hot &= second < np.maximum(0.2 * (plane - back), 3 * spread)
+        plane[hot] = local[hot]
+        out[..., c] = plane
     return out
+
+
+def defect_score(path, exposure, gain):
+    """Worker: how far each pixel of one calibrated frame stands above its
+    neighbours, in the frame's own spread, before any cleaning."""
+    mosaic, header = load_light(Path(path))
+    calibration = _calibration(exposure, gain, worker_cards(header))
+    mono = is_mono(header)
+    rgb = colour(destripe(calibration.apply(mosaic)), mono=mono, block=PROCESSING_SCALE if mono else 2)
+    planes = rgb[..., :1] if mono else rgb
+    out = np.empty(planes.shape, np.float16)
+    for c in range(planes.shape[2]):
+        d = planes[..., c] - ndimage.median_filter(planes[..., c], 3)
+        out[..., c] = np.clip(d / (1.4826 * np.median(np.abs(d[::2, ::2])) + 1e-6), -60000, 60000)
+    return out
+
+
+def defect_map(pool, paths, exposures, gain):
+    """The sensor's defects in one session that its dark did not take off:
+    pixels that stand out in the median of a sample of its frames, where
+    stars have moved between frames and defects have not. One whose
+    third-brightest neighbour stands out too is a star that did not move,
+    and is left. None with too few frames. On 8 sessions this, with clean's
+    lone-pixel test, kept every star's light and left fewer defects than the
+    old cleaning; it let through up to 20 more cosmic-ray pixels (24 November
+    2026)."""
+    if len(paths) < DEFECT_MIN:
+        return None
+    step = max(1, len(paths) // DEFECT_FRAMES)
+    picked = list(range(0, len(paths), step))[:DEFECT_FRAMES]
+    scores = list(pool.map(defect_score, [str(paths[i]) for i in picked], [exposures[i] for i in picked],
+                           [gain] * len(picked)))
+    middle = np.median(np.stack(scores).astype(np.float32), axis=0)
+    del scores
+    third = np.stack([ndimage.rank_filter(middle[..., c], rank=-3, footprint=RING)
+                      for c in range(middle.shape[2])], axis=2)
+    bad = (middle > 5) & (third < np.maximum(0.2 * middle, 3))
+    return np.repeat(bad, 3, axis=2) if bad.shape[2] == 1 else bad
+
+
+@functools.lru_cache(maxsize=2)
+def _defects(path):
+    return np.load(path) if path else None
 
 
 # Rows over which a row's own level is compared with its neighbours', in
@@ -615,11 +676,12 @@ def level_rows(frame, sections=STRIPE_SECTIONS, light=None):
     return out
 
 
-def prepare(mosaic, calibration, mono=False):
+def prepare(mosaic, calibration, mono=False, defects=None):
     """A raw frame, calibrated and destriped, as half-size RGB with hot
-    pixels removed; grey RGB from a mono camera (camera.is_mono), at
-    PROCESSING_SCALE."""
-    return clean(colour(destripe(calibration.apply(mosaic)), mono=mono, block=PROCESSING_SCALE if mono else 2))
+    pixels removed (and the session's `defects`, a defect_map); grey RGB from
+    a mono camera (camera.is_mono), at PROCESSING_SCALE."""
+    return clean(colour(destripe(calibration.apply(mosaic)), mono=mono, block=PROCESSING_SCALE if mono else 2),
+                 defects)
 
 
 # --- raw frames on disk --------------------------------------------------------
@@ -1198,15 +1260,17 @@ def store_dtype(shape):
     return np.float32 if shape[-1] == 1 else np.float16
 
 
-def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0):
+def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0, defects=None):
     """Worker: prepare one raw frame in full, line it up on the reference and
     write it into its slot of the shared file of registered frames. A store
-    of one plane (shape ending in 1) keeps a mono frame's single plane."""
+    of one plane (shape ending in 1) keeps a mono frame's single plane.
+    `defects` names the session's defect map (a .npy file), if it has one."""
     timings = Timings()
     with timings.phase("load raw frames"):
         mosaic, header = load_light(Path(path))
     with timings.phase("calibrate and clean"):
-        rgb = prepare(mosaic, _calibration(exposure, gain, worker_cards(header)), mono=is_mono(header))
+        rgb = prepare(mosaic, _calibration(exposure, gain, worker_cards(header)), mono=is_mono(header),
+                      defects=_defects(defects))
         lum = rgb.sum(axis=2)
         if shape[-1] == 1:
             rgb = np.ascontiguousarray(rgb[..., :1])   # a mono frame's three planes are the same

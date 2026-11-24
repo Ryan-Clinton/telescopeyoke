@@ -92,16 +92,71 @@ code on two stacks not used to tune the blend:
 | M33, 16 October | 0.977 | 0.991 | 1.037 |
 | M81 and M82, 2 November | 0.973 | **0.863** | 1.021 |
 
-**The blend failed that mark on M81 and M82, so it is not wired in.** By eye it removes stars
-much better and leaves no ghosts, but a very bright star keeps a faint ring and spikes, and a
-star on a filament can leave a soft patch.
+**The blend failed that mark on M81 and M82.** By eye it removed stars much better and left no
+ghosts, but a very bright star kept a faint ring and spikes.
+
+**Second try, 24 November 2026: GraXpert first, as a picture has it.** Each method started from the
+same GraXpert-denoised stack. On five stacks not used before (IC 1848, M1, M27, IC 405, M31), the
+blend kept the line on all five (0.94 to 1.02, ours 0.52 to 0.65). Their scores also showed it
+leaving IC 1848's brightest stars whole: a clipped core reads as not round, and the blend skipped
+it. With that fixed (a clipped core Dark Star took far down counts as a star), the same pass mark
+was applied to five more stacks never used for any of this work:
+
+| Fresh stack | Star left, ours / blend | Brightest 20 left, ours / blend | Line kept, ours / blend | Glow, blend |
+|---|---|---|---|---|
+| M45 | 0.013 / 0.001 | 0.146 / 0.013 | 0.264 / **0.997** | 1.021 |
+| NGC 7000 | 0.014 / 0.000 | 0.035 / 0.007 | 0.587 / **1.022** | 1.038 |
+| M37 | 0.018 / -0.003 | 0.060 / 0.004 | 0.634 / **0.771** | 1.053 |
+| NGC 7331 | 0.011 / -0.003 | 0.024 / 0.003 | 0.364 / **0.994** | 1.031 |
+| M34 | 0.031 / 0.001 | 0.065 / 0.010 | 0.654 / **0.892** | 1.029 |
+
+**It passed on all five.** Dark Star used whole kept only 1% to 62% of the line. StarNet2
+blended the same way scored about the same as Dark Star on the first five; Dark Star is kept as it
+needs no further licence step. By eye, the stars go and the nebula and galaxies are untouched, but
+the very brightest stars (M45's) stay almost whole, and one left a small black dot beside it.
+
+### The star-core clipping fault (in the science stack)
+
+`stacking.clean` replaces any pixel far brighter than its neighbours, in every frame before
+alignment. On this rig's sharp stars that includes star cores. On 8 sessions, against no cleaning,
+the brightest third of stars kept 92.7% to 99.9% of their light in the stack. In Tabby's star's
+frames, measured in a 1.5 FWHM aperture, stars lost 11% (the faintest) to 23% (the brightest) of their light, and the light
+curves' scatter rose from 24 to 35 mmag on the brightest stars and from 41 to 57 on the faintest
+(85 frames of 21 November). This touches every stack, depth measurement and photometry run.
+
+The candidate (scripts kept on the desktop under `training/stackexp`): a map of the sensor's fixed
+defects, from the median of each session's frames, then the old test only on a pixel whose
+second-brightest neighbour is barely above the background, as a hot pixel's or a cosmic ray's
+is and a star core's is not. Pass mark, set before it ran, on every
+session: brightest-third flux within 0.5%, peak within 1%, grain within 1%, fixed defects left no
+worse than today, visible cosmic-ray pixels at most today's plus 10.
+
+- It keeps every star's light (1.000) and the Tabby scatter back at the uncleaned level, and
+  leaves fewer fixed defects than today on every session.
+- It passed on 5 of the 8 sessions used to make it, and on both unseen sessions it ran on (M33,
+  5 November 01:21; Tabby, 22 November 18:25). On the other 3 it left 12 to 20 more visible
+  cosmic-ray pixels than today.
+- The neighbour test alone, with no map, left 3.4 times as much of the planted fixed defects.
+- Siril 1.4.5's winsorized sigma rejection (3, 3) across the aligned frames, after the same
+  defect map, caught the cosmic rays but failed the mark on all 9 sessions it ran: its grain
+  differed from the plain stack's by 2% to 73% and the brightest stars' light by up to 20%. On two
+  sessions it threw out 18% of all pixels, taking the sky's drift between frames for outliers. With Siril's own normalisation
+  its stack was on a different scale from the frames and could not be compared fairly.
+
+**Adopted on 24 November 2026** in `stacking.clean`, with the map made by `restack.py` from up to
+24 of the session's kept frames. A map pixel whose third-brightest neighbour also stands out is
+left alone, so a star that did not move between frames is never taken for a defect. A live stack
+has no map yet and uses the neighbour test alone; the restack after a run uses both. Restacked
+with it, Tabby's 85 frames of 21 November 20:05 kept 12% more starlight than the old cleaning
+(26% more for the brightest third) with the same grain and no lone spikes left. Stacks already
+made are not changed until they are restacked.
 
 ## What each stage becomes
 
 | Stage | Today | Plan | State |
 |---|---|---|---|
 | Calibration, alignment, science stack | `stacking.py` | **Keep.** Photometry and discovery depend on its checks and records | Stays |
-| Star-core clipping fault | Open | Fix in `stacking.py`, comparing with Siril's rejection | To do |
+| Star-core clipping fault | Old cleaning cut star cores | A defect map and the lone-pixel test; Siril's rejection failed | Built |
 | Noise reduction | Optional in pictures | **GraXpert**, on each filter's linear stack; DeepSNR and the suite's AI4 tried and not better | Built |
 | Background and gradients | Our sky model | **Keep ours**: no tool did as well overall (GraXpert AI, Siril, Seti Astro ABE) | Tested |
 | Star removal | Plain code | Seti Astro Suite Pro's Dark Star; StarNet if its terms allow | Tested: far better on stars, missed the thin-line mark on one of two unseen stacks |
