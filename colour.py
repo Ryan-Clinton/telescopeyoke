@@ -812,6 +812,9 @@ def run(args):
     background = max(process.sky_for(args.name), 1)
     # GraXpert is used when it is installed, unless asked not to; asked for and missing, the picture says so.
     denoise = None if args.denoise == "none" else "graxpert" if args.denoise or freetools.find("graxpert") else None
+    if args.denoise is None and denoise is None:
+        print(f"  GraXpert is not installed: the picture is made without noise reduction "
+              f"(get it from {freetools.TOOLS['graxpert']['url']})")
     picture, used, linear = combine(stacks, saturation, min_covered=0.0 if args.any_coverage else MIN_COVERED,
                             palette=args.palette, background=background,
                             stretched=args.stretched, quiet=args.noise_reduction,

@@ -270,9 +270,12 @@ own code for that stage is deleted, so there aren't two ways of doing it.
 ## How it fits together
 
 Each picture's record (`colour.schema.json`) names every tool step that ran, with the tool's
-version, the model file it ran with and the start of that file's SHA-256 (`freetools.model`, found
-where each tool keeps its models on Linux; elsewhere it is left empty). A version alone does not
-say which weights were used.
+version, the model file it ran with, the start of that file's SHA-256 and how the file is known
+(`freetools.model`). A version alone does not say which weights were used. GraXpert names its model
+file in its own output, which is what is recorded; Seti Astro Suite Pro 1.24.8's Dark Star always
+loads `darkstar_mono_AI4.pt` (its `load_darkstar_models`), so that file is recorded, found where the
+suite keeps its models on Linux. When neither is known the model is left empty rather than guessed.
+A missing GraXpert is said as the picture is made, as a missing Dark Star already was.
 
 `colour.py` becomes a thin runner: take the science stacks, copy them, call each tool's
 command line in turn, and record the tool, version and settings beside the picture. A

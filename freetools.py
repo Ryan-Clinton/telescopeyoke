@@ -104,6 +104,9 @@ def denoise(plane, strength=STRENGTH):
         except (OSError, subprocess.SubprocessError) as e:
             raise ToolUnavailable(f"GraXpert did not run: {e}") from e
         result = made.with_suffix(".fits")
+        named = re.search(r"AI model path - (.+)", done.stdout + done.stderr)
+        if named:
+            _seen["graxpert"] = named.group(1).strip()
         if done.returncode or not result.exists():
             tail = (done.stderr or done.stdout).strip().splitlines()[-1:] or ["no message"]
             raise ToolUnavailable(f"GraXpert failed: {tail[0][:200]}")
@@ -120,29 +123,34 @@ def grain(plane):
     return 1.4826 * float(np.median(np.abs(plane - np.median(plane)))) if plane.size else 0.0
 
 
-# Where each tool keeps the model it runs, on Linux; the application's version does not say which weights.
-MODELS = {"graxpert": ("~/.local/share/GraXpert/denoise-ai-models/*/model.onnx",),
-          "setiastro": ("~/.local/share/SASpro/runtime/*/models/darkstar_mono_AI4.pt",
-                        "~/.local/share/SASpro/runtime/*/models/darkstar_mono_AI4.onnx")}
+# The application's version does not say which weights it ran. GraXpert names its model file in its output
+# ("AI model path - ...", kept by denoise below); Seti Astro Suite Pro 1.24.8's Dark Star always loads
+# darkstar_mono_AI4.pt through torch, never its ONNX copy (its darkstar_engine.load_darkstar_models).
+DARKSTAR_MODEL = "~/.local/share/SASpro/runtime/*/models/darkstar_mono_AI4.pt"
+_seen = {}
 _model_cache = {}
 
 
 def model(tool):
-    """The model file a tool runs and the start of its SHA-256, for a picture's record; None where it is not found
-    (another system, or a tool that keeps its models elsewhere). GraXpert takes its newest version."""
-    for pattern in MODELS.get(tool, ()):
-        found = sorted(Path.home().glob(pattern.removeprefix("~/")))
-        if found:
-            path = found[-1]
-            key = (str(path), path.stat().st_mtime)
-            if key not in _model_cache:
-                digest = hashlib.sha256()
-                with open(path, "rb") as f:
-                    for block in iter(lambda: f.read(1 << 20), b""):
-                        digest.update(block)
-                _model_cache[key] = {"file": str(path.relative_to(Path.home())), "sha256": digest.hexdigest()[:16]}
-            return _model_cache[key]
-    return None
+    """The model file a tool ran, how that is known and the start of its SHA-256, for a picture's record; None when
+    it is not known (GraXpert has not said in this run, or the suite keeps its models elsewhere)."""
+    if tool == "graxpert" and tool in _seen:
+        path, how = Path(_seen[tool]), "named in GraXpert's output"
+    elif tool == "setiastro" and (found := sorted(Path.home().glob(DARKSTAR_MODEL.removeprefix("~/")))):
+        path, how = found[-1], "the file Dark Star loads in Seti Astro Suite Pro 1.24.8"
+    else:
+        return None
+    if not path.is_file():
+        return None
+    key = (str(path), path.stat().st_mtime)
+    if key not in _model_cache:
+        digest = hashlib.sha256()
+        with open(path, "rb") as f:
+            for block in iter(lambda: f.read(1 << 20), b""):
+                digest.update(block)
+        _model_cache[key] = digest.hexdigest()[:16]
+    shown = path.relative_to(Path.home()) if path.is_relative_to(Path.home()) else path
+    return {"file": str(shown), "sha256": _model_cache[key], "how": how}
 
 
 def _stretch(plane, noise):
