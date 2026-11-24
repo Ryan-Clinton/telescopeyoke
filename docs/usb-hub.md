@@ -92,8 +92,9 @@ Amazon UK £55.99.
 - **Power:** 12 V into its 5.5 × 2.5 mm input. A 5.5 × 2.1 plug fits but
   sits loose, so use a 2.1-to-2.5 adapter lead. The mount runs from one of
   its 12 V outputs (5.5 × 2.1, the EQ3 Pro's socket) on the supplied lead.
-  The supply must give at least 3 A, ideally 5 A. Which supply (the
-  mount's, or the 12 V one ordered from Alibaba) waits on their labels.
+  The supply must give at least 3 A, ideally 5 A. Since 24 November 2026
+  the box runs from the mount's supply (below), with one of the two 1.5 m
+  5.5 × 2.1 leads between the mount and the box.
   The camera's own (Mean Well GST40A12-P1J: 12 V, 3.34 A, 40 W, centre
   positive, 5.5 × 2.1 plug; read 20 November 2026) is too small to feed
   the box with the camera on it: the camera alone can draw about 3 A.
