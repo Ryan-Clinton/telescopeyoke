@@ -120,6 +120,25 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
 
 ## In code, no hands needed
 
+42. **Loose ends of 24 November** (the job system's day), each the owner's
+    word:
+    - Delete the 35 `frames/lucky/KeeperVideoTest-*` videos (6.9 GB, cap-on
+      tests; the results are in `docs/validation.md`)? Permanent.
+    - Reinstall the stream, status page and new-hardware services so they
+      run through the job launcher (`./stream.py --install`, `./serve.py
+      --install`, `./newhardware.py --watch --install`): restarts the live
+      stream. The three timers already do.
+    - YouTube's sign-in has expired (refused since 23 November): sign in
+      again at the browser before the next streamed night.
+    - Restart the laptop: six stuck video encoders (`ffmpeg` in state D,
+      the oldest from 14 November) clear only with a reboot.
+    - On the PC, in WSL: `git -C ~/common pull && ~/common/claude/install.sh
+      && ~/common/claude/install.sh --check`, then restart the sessions: the
+      job system (`cj`) and its hooks for the other projects, the Windows
+      half not yet run anywhere.
+    - `docs/tabby-plan.md` is uncommitted on purpose: the freeze, the post
+      and Zenodo wait for the owner.
+
 16. **The demo drives the real focuser**: on 20 November `TY_DEMO=1
     ./focus.py --auto` opened the real Nano while `--measure-backlash` was
     using it, broke that measurement and lost the focuser's kept position.

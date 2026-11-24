@@ -33,6 +33,19 @@ What is left of the eighteen reviews' plan, done on 20 November 2026
   tried on the sky.
 - **Tonight's plan** says which filters suit each target under the Moon, as
   advice.
+- **Every long job reports** (`jobs.py`, `docs/job-reporting-spec.md`, 24
+  November): `./ty bg NAME -- COMMAND` starts it with its output written as
+  it comes, `--after` queues what follows so it starts by itself, and
+  `./ty jobs` is the progress report; `--watch` wakes the agent only for
+  what needs it. The dark test, keeper, darks and flats, imaging runs,
+  schedule steps, patrols, the Moon, lucky imaging, the dawn flats and
+  restacks report through it, and the camera and mount are reserved on the
+  computer so two jobs never take one. A copy for the owner's other
+  projects lives in their private shared repository.
+- **The dark test** holds the sensor cold for 30 minutes after its last
+  temperature (it was 4 hours), and gives way at once to a job queued for
+  the camera.
+- **The keeper**: asking for its status no longer hangs while it warms up.
 
 ## 0.4.2: a GoTo by name keeps clear of the Sun, and eighteen reviews' fixes
 
