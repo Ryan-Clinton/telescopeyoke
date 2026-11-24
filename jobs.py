@@ -1038,14 +1038,11 @@ def computer():
 
 
 def camera_state(held):
+    # From the keeper's own state file, never by asking it: a keeper warming
+    # up answers nothing, and the report must not wait on it.
     state = _read(Path(config.DATA) / "cache" / "keeper.json") or {}
-    keeper = None
-    try:
-        import keeper as k
-        keeper = k.running()
-    except Exception:
-        pass
-    if keeper and state:
+    keeper = bool(state) and host.alive(state.get("pid"))
+    if keeper:
         sensor, target = state.get("sensor_c"), state.get("target_c")
         return {"by": "the keeper", "sensor_c": sensor, "target_c": target, "ready": state.get("ready"),
                 "words": f"the keeper holds it: sensor {sensor} °C, target {target} °C"}

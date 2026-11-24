@@ -51,13 +51,45 @@ def address():
     return str(SOCKET)
 
 
+QUICK_ANSWER_S = 10     # seconds a ping or status is waited for
+
+
 def running():
     """Whether a keeper is answering now."""
     return ask(("ping",), quiet=True) == "pong"
 
 
 def ask(request, quiet=False):
-    """One request to the keeper; its answer. None (quiet) if none answers."""
+    """One request to the keeper; its answer. None (quiet) if none answers.
+
+    A ping or a status is answered at once by a keeper that is listening;
+    one warming up answers nothing, not even the connection's handshake, and
+    asking it must not wait for ever (24 November 2026: ./ty jobs and
+    ./keeper.py status hung through the warm-up). So those two are asked in
+    a thread given QUICK_ANSWER_S; a frame may take its whole exposure, so
+    other requests wait as long as they need."""
+    if not (request and request[0] in ("ping", "status")):
+        return _ask(request, quiet)
+    got = {}
+
+    def asking():
+        try:
+            got["answer"] = _ask(request, quiet)
+        except BaseException as problem:     # handed back to the caller below
+            got["problem"] = problem
+    t = threading.Thread(target=asking, daemon=True)
+    t.start()
+    t.join(QUICK_ANSWER_S)
+    if t.is_alive():
+        if quiet:
+            return None
+        raise TimeoutError(f"the keeper did not answer within {QUICK_ANSWER_S} s (warming up?)")
+    if "problem" in got:
+        raise got["problem"]
+    return got.get("answer")
+
+
+def _ask(request, quiet=False):
     from multiprocessing.connection import Client
     try:
         with Client(address(), family="AF_UNIX", authkey=key()) as link:
@@ -249,6 +281,8 @@ def serve(cam, say=print, job=None):
     finally:
         stopping.set()
         say("camera: the keeper is stopping: warming the sensor slowly, then closing the camera")
+        if job is not None:
+            job.expect(15 * 60, "the slow warm-up, then the camera closed")
         with calls:
             off = cam.warm_up(say=say)
             try:
@@ -370,7 +404,15 @@ def main():
                              "Secure the 12 V lead, then ./keeper.py start --after-fault (10 minutes after it).")
         start()
     elif args.action == "status":
-        print("The camera keeper: " + words(ask(("status",), quiet=True)))
+        import host
+        import records
+        answer = ask(("status",), quiet=True)
+        state = records.read(STATE, {}) if STATE.exists() else {}
+        if answer is None and state and host.alive(state.get("pid")):
+            # Alive but not answering: the warm-up holds it (its log says how far).
+            print("The camera keeper: running but not answering (warming up, or a long camera call)")
+        else:
+            print("The camera keeper: " + words(answer))
     else:
         stop()
 
