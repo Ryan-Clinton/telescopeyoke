@@ -26,6 +26,61 @@ What it has cost:
 | 24 Nov 2026, 01:55-02:30 | The owner asked how the colder dark test was going. The agent couldn't say whether the camera was cooling, because the log was empty for 30 minutes. | `darktest.py`'s output went to a file, where Python holds back what it prints until a block is full. |
 | 24 Nov 2026, 03:18-07:28 | The darks finished at 03:18. The script then held the camera cold for 4 hours, waiting for more temperatures or `--finish`. The agent heard only at 07:28, when the script exited, and the Moon video test planned to follow it wasn't done. | The agent is told only when a job's process exits. A job that is waiting for someone has no way to say so. |
 
+### What the owner has said
+
+These are taken from the owner's messages to Claude Code in this project,
+21 October to 24 November 2026, quoted as typed. Between 1 and 24 November
+they asked for a progress report 29 times ("progress report", "check
+progress", "eta?", "update please"), 10 of them on the night of
+1 November alone. Each ask means the owner didn't know what a job was doing
+and had to ask.
+
+**The agent couldn't see what a job was doing:**
+- 21 Oct, about the focus logging: "thats niot good enough fix the
+  logging", then "15 minutews for a logging chager is ridiculious".
+- 22 Oct, 03:45: "imaginmg still says what it was doing 2 nighs ago while i
+  wait for it to sort itself out whith no comprehinsion of whats happening".
+- 1 Nov, 00:19 to 02:02: "check progress", ten times in under two hours,
+  from beside the telescope.
+- 4 Nov, 11:55, after "progress report" got no answer: "you have 10 seconds
+  before i kil this session if you are actully doing things i cant see you
+  better tidy up".
+- 19 Nov, 16:53: "ok tail the logs so i can see as well instead of me
+  having to ask you 3 times".
+- 19 Nov, 20:04: "your messages got lost in the logs what happened".
+- 22 Nov, 23:43: "when i say progress report i mean progrees on the things
+  you are workong on not things that dont concern you".
+- 24 Nov, 02:13, quoting the agent's own answer: "Both tests are still
+  running, but I can't yet confirm the colder dark test is cooling. … <<
+  fix that".
+
+**Jobs finished or waited, and nothing went on:**
+- 3 Nov, 22:30: "yeah i said that hours ago its dark now and your still not
+  done".
+- 21 Nov, 19:21: "why ais the B and R waitign on the measurment?"
+- 22 Nov, 23:44: "can you fill the next 8 to 10 hours with useful work?"
+  Then 23 Nov, 11:57: "why is the cpu idle have i not been clear?"
+- 24 Nov, 02:11: "shedule up some work to keep yourselg busy fo 6-8
+  hours". The dark test then sat holding the camera from 03:18 to 07:28,
+  and the planned video test after it was never done.
+- 24 Nov, 07:57: "why have you been sitting for 5 hours instead of
+  finishing it?"
+- 24 Nov, 10:49: "why did the dark test not notify you it had finished for
+  you to continue with the rest of the tasks?"
+
+**And the ask behind this spec** (24 Nov, 10:54): "i have asked you to do
+this before and you obviously didnt do it right. im getting very sick of
+'i didnt do x because job y didnt report' or 'i cant tell you what is going
+on right now becasue the script saves its logs to after its finished' … so
+that i never get frustrated again after askin you for a progress report and
+you telling me you are blind for 40 mins until the script completes."
+
+The owner has also refused the opposite failure. On 17-18 October the
+watchers passed on every line, and the owner called the console "still a pile of
+garbage in my console" and "my console is full of crap agin". The design
+has to answer both complaints: the agent can see everything, and the owner
+is told only what needs them.
+
 The fix after the 30-minute gap was narrow: one script and a memory note
 saying "every script that cools the camera must not wait to log". That fixed
 darktest, but not the next script.
