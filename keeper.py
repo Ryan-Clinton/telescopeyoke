@@ -227,8 +227,10 @@ def serve(cam, say=print, job=None):
                 and abs(degrees - target) <= altair.TEC_READY
             if ready and not status["ready"]:
                 say(f"camera: sensor at {degrees:.1f} °C, its target {target:g} °C: ready")
-                if job is not None:
+                if job is not None and not status.get("was_ready"):
+                    # Once: the reading wobbling round the line is not news.
                     job.milestone(f"camera ready: sensor at {degrees:.1f} °C, target {target:g} °C", name="ready")
+                status["was_ready"] = True
             if job is not None and degrees is not None:
                 job.reading(f"sensor {degrees:.1f} °C, target {target} °C" + ("" if ready else ", cooling"))
             elif time.monotonic() - said >= SAY_EVERY_S and not ready:

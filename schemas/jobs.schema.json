@@ -13,7 +13,7 @@
         "id": {"type": "string", "description": "YYYYMMDD-HHMMSS-name-xxxxxx"},
         "name": {"type": "string"},
         "kind": {"enum": ["finite", "service", "routine", "remote"]},
-        "phase": {"enum": ["queued", "running", "waiting", "stalled", "blocked", "done", "failed", "vanished", "unknown"]},
+        "phase": {"enum": ["queued", "running", "waiting", "stalled", "blocked", "cancelled", "done", "failed", "vanished", "unknown"]},
         "step": {"type": ["integer", "null"]},
         "of": {"type": ["integer", "null"]},
         "text": {"type": ["string", "null"]},

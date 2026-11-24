@@ -553,6 +553,15 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
     except Exception:
         pass
     put()
+
+    def taken_off(_number, _frame):
+        # ./ty jobs --stop on a job still queued: cancelled, not vanished.
+        put(phase="cancelled", ended=time.time())
+        raise SystemExit(0)
+    try:
+        signal.signal(signal.SIGTERM, taken_off)
+    except (OSError, ValueError):
+        pass
     env = dict(os.environ, PYTHONUNBUFFERED="1", TY_JOB=job_id, TY_JOB_ADOPT=str(os.getpid()))
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log = open(log_path, "ab", buffering=0)
@@ -576,6 +585,10 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
                     put(phase="exited", exit_code=127, started=time.time(), ended=time.time())
                     return 127
                 put(phase="running", pid=child.pid, pid_start=started_at(child.pid), started=time.time())
+                try:
+                    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+                except (OSError, ValueError):
+                    pass
         if child is None:
             time.sleep(QUEUE_EVERY_S)
     if wait:
@@ -634,7 +647,12 @@ def find(word):
     """A job by its ID, or the newest job with that name."""
     if (folder(word) / "process.json").exists():
         return word
-    named = sorted((p.name for p in home().glob(f"*-{word}-*") if p.is_dir()), reverse=True)
+    # The name exactly: YYYYMMDD-HHMMSS-NAME-xxxxxx (on 24 November "keeper"
+    # found "keeper-stop", and the videos queued behind the keeper waited on it).
+    try:
+        named = sorted((p.name for p in home().iterdir() if p.is_dir() and p.name[16:-7] == word), reverse=True)
+    except OSError:
+        return None
     return named[0] if named else None
 
 
@@ -780,7 +798,7 @@ def look(job_id, now=None):
     alive = running(p.get("pid"), p.get("pid_start"), p.get("boot"))
     if phase == "queued":
         phase = "queued" if running(p.get("supervisor"), p.get("supervisor_start"), p.get("boot")) else "vanished"
-    elif phase == "blocked":
+    elif phase in ("blocked", "cancelled"):
         pass
     elif p.get("exit_code") is not None:
         failed = p["exit_code"] != 0 or str(g.get("result") or "").startswith("failed")
