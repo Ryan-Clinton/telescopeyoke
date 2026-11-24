@@ -54,6 +54,7 @@
       }
     },
     "acked_unresolved": {"type": "array", "description": "Waiting, stall and idle events acked but still there: an ack says what was done, not that it worked.", "items": {"type": "object"}},
+    "underused": {"type": "array", "items": {"type": "string"}, "description": "While the owner's busy-until stands: the CPU or GPU mostly idle. A note for the session, not a schedule."},
     "other_sessions": {"type": "integer", "description": "Jobs other Claude Code sessions have running, waiting or queued (./ty jobs --all shows them)."},
     "jobs": {"type": "array", "items": {"$ref": "#/$defs/job"}},
     "recent": {"type": "array", "items": {"$ref": "#/$defs/job"}},

@@ -122,7 +122,8 @@ def restack(host, sessions, options, say=print):
     # carries on there and is followed until it ends (docs/job-reporting-spec.md).
     name = f"restack-remote-{secrets.token_hex(3)}"
     data = f"TY_DATA=~/{PLACE}/data"
-    command = (f"cd ~/{PLACE}/code && {data} TY_CAMERA={shlex.quote(camera)} TY_NO_WATCH=1 PYTHONUNBUFFERED=1 "
+    owner = f"CLAUDE_CODE_SESSION_ID={jobs.session()} " if jobs.session() else ""     # the same session's job there
+    command = (f"cd ~/{PLACE}/code && {data} TY_CAMERA={shlex.quote(camera)} TY_NO_WATCH=1 PYTHONUNBUFFERED=1 {owner}"
                f"{code}nohup {runner} jobs.py bg {name} --wait -- {runner} restack.py "
                + " ".join(shlex.quote(f"../{there(s)[len(PLACE) + 1:]}") for s in sessions)
                + "".join(f" {shlex.quote(o)}" for o in options))

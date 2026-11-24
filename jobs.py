@@ -441,12 +441,17 @@ def _hostname():
 
 # ---------------------------------------------------------------- the launcher and the queue
 
-def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=False, cwd=None, log=None):
+def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=False, cwd=None, log=None, replaces=None):
     """Start COMMAND as a job; returns its ID (or its exit code with wait).
     `log`: a file of its own for its lines (a session's patrol.log, which
     others read), instead of the job's log.txt."""
     if not command:
         raise SystemExit("no command given after --")
+    if os.environ.get("CLAUDECODE") and not session():
+        # Started by an agent that did not say which session it is: the job
+        # would pass for the house's, and isolation would fail silently.
+        print("ty bg: this agent's session is not known (no CLAUDE_CODE_SESSION_ID): the job is kept "
+              "as the house's, shown to every session", file=sys.stderr)
     prune()
     job_id = new_id(name)
     folder(job_id).mkdir(parents=True, exist_ok=True)
@@ -455,7 +460,8 @@ def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=Fals
     if wait:
         return supervise(job_id, name, kind, list(after), list(needs), why, True, command, log)
     options = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
-               "cwd": str(cwd or os.getcwd()), "env": dict(os.environ, TY_JOB_LOG=str(log or ""))}
+               "cwd": str(cwd or os.getcwd()),
+               "env": dict(os.environ, TY_JOB_LOG=str(log or ""), TY_JOB_REPLACES=replaces or "")}
     if host.WINDOWS:
         options["creationflags"] = 0x00000008 | 0x00000200      # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
     else:
@@ -536,7 +542,8 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
               "parent": os.environ.get("TY_JOB"), "after": after, "needs": needs, "why": why or None,
               "pid": None, "pid_start": None, "queued": time.time(), "started": None,
               "phase": "queued", "exit_code": None, "ended": None, "blocked": None,
-              "log": str(log_path or d / "log.txt"), "session": session(), "cwd": os.getcwd()}
+              "log": str(log_path or d / "log.txt"), "session": session(), "cwd": os.getcwd(),
+              "replaces": os.environ.pop("TY_JOB_REPLACES", "") or None}
     log_path = Path(record["log"])
 
     def put(**fields):
@@ -567,8 +574,10 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
         # SSH does not carry the environment: the other computer's Python
         # would hold its output back, and the job here look stalled while
         # it worked (24 November 2026: clip12b, an hour "stalled" on the
-        # desktop at 100% of four cores).
-        command = [*command[:-1], f"export PYTHONUNBUFFERED=1; {command[-1]}"]
+        # desktop at 100% of four cores). The session goes too, so a job
+        # started there is the same session's.
+        owner = f" CLAUDE_CODE_SESSION_ID={session()}" if session() else ""
+        command = [*command[:-1], f"export PYTHONUNBUFFERED=1{owner}; {command[-1]}"]
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log = open(log_path, "ab", buffering=0)
     child = None
@@ -694,6 +703,12 @@ def after_ok(after):
         if other is None:
             return f"no job {word}"
         o = look(other)
+        if o["phase"] == "vanished":
+            # Lost with a restart and queued again (--requeue): its replacement
+            # stands in for it, so a chain rebuilt job by job carries on.
+            stand_in = replacement(other)
+            if stand_in != other:
+                o = look(stand_in)
         if what == "ended":
             if o["phase"] in ("done", "failed", "vanished", "blocked"):
                 continue
@@ -719,11 +734,8 @@ def ready(job_id, after, needs, queued_at):
         return waits
     if needs:
         listing = look_all()
-        held = holds_now(listing)
-        if any(n in held for n in needs if n in ("camera", "mount")):
-            return None
-        if "gpu" in needs and any(j["phase"] == "running" and "gpu" in (j.get("needs") or [])
-                                  and j["id"] != job_id for j in listing):
+        held = holds_now(listing)       # a running, waiting or stalled job keeps what it needs
+        if any(n in held for n in needs if n in EXCLUSIVE):
             return None
         if "cpu" in needs:
             try:
@@ -733,10 +745,12 @@ def ready(job_id, after, needs, queued_at):
                 pass
         # First come, first served among jobs queued for the same thing, of
         # those that could start now: one still waiting on its own
-        # dependencies never holds up a later one.
+        # dependencies, or on another thing it needs (a camera in use), never
+        # holds up a later one that could run.
         if any(j["phase"] == "queued" and j["id"] != job_id and (j.get("queued") or 0) < queued_at
                and set(j.get("needs") or []) & set(needs) & set(EXCLUSIVE)
-               and after_ok(j.get("after") or []) is True for j in listing):
+               and after_ok(j.get("after") or []) is True
+               and not any(n in held for n in (j.get("needs") or []) if n in EXCLUSIVE) for j in listing):
             return None
     return True
 
@@ -838,11 +852,14 @@ def stalled(j, now):
     if j["kind"] == "service":
         return None
     if g.get("deadline_s"):
-        since = j["last_progress"] or j.get("started") or now
+        # The operation's own deadline, from when expect() began it: new
+        # words or changing readings do not move it (a sensor wobbling round
+        # its target without reaching it is alive, and still overdue).
+        began = g.get("operation_since") or j.get("started") or now
         limit = g["deadline_s"] * DEADLINE_MARGIN[0] + DEADLINE_MARGIN[1]
-        if now - since > limit:
-            return f"no progress for {_ago(now - since)} on \"{g.get('operation')}\" (it said {_ago(g['deadline_s'])})"
-        return None
+        if now - began > limit:
+            return f"\"{g.get('operation')}\" has taken {_ago(now - began)}, past its {_ago(g['deadline_s'])}"
+    # Apart from any deadline: no output and no progress at all for QUIET_S.
     last = max(filter(None, (j["last_output"], j["last_progress"], j.get("started"))), default=now)
     if now - last > QUIET_S:
         return f"no output or progress for {_ago(now - last)}"
@@ -873,7 +890,7 @@ def wake_events(j, now=None):
                         "words": "; ".join(w for w in (words, result) if w) or "finished", "wake": True,
                         "at": j.get("ended") or j["last_output"] or now})
     if j["stall"]:
-        since = int(j["last_progress"] or j["last_output"] or 0)
+        since = int(j["progress"].get("operation_since") or j["last_progress"] or j["last_output"] or 0)
         out.append({"id": f"{j['id']}:stall:{since}", "job": j["id"], "name": j["name"], "kind": "stalled",
                     "words": j["stall"], "wake": True, "at": now})
     return out
@@ -961,6 +978,11 @@ def open_events(listing=None, now=None, sid=None, strict=False, acked_too=False)
     return sorted(out, key=lambda e: e.get("at") or 0)
 
 
+def canonical(event_id):
+    """An event's lasting ID: a reopened one (ID:still:N) is the same event."""
+    return event_id.split(":still:")[0]
+
+
 def ack(event, words, sid=None):
     """What was done about an event; only one this session can see (its own
     jobs' and the house's), "all" being every one of those open."""
@@ -970,8 +992,11 @@ def ack(event, words, sid=None):
     targets = seen if event == "all" else [event]
     if event != "all" and event not in seen:
         raise SystemExit(f"{event} is not an open event of this session's (./ty jobs)")
-    for t in targets:
-        _append(home() / "acks.jsonl", {"event": t, "words": words, "at": time.time(), "session": sid})
+    # Every session writes here: one at a time, under the file's lock.
+    with records.locked(home() / "acks.jsonl"):
+        for t in targets:
+            _append(home() / "acks.jsonl", {"event": canonical(t), "words": words, "at": time.time(),
+                                            "session": sid})
     return len(targets)
 
 
@@ -988,7 +1013,22 @@ def requeue(word):
     if not argv:
         raise SystemExit(f"{word}: its command was not kept, so it cannot be queued again")
     return launch(p.get("name") or word, argv, p.get("after") or [], p.get("needs") or [], p.get("kind", "finite"),
-                  p.get("why"), cwd=p.get("cwd"), log=p.get("log") if p.get("log", "").endswith("patrol.log") else None)
+                  p.get("why"), cwd=p.get("cwd"), log=p.get("log") if p.get("log", "").endswith("patrol.log") else None,
+                  replaces=job_id)
+
+
+def replacement(job_id):
+    """The job queued again in place of one lost (--requeue), newest first,
+    followed to the end of the chain."""
+    seen = set()
+    while job_id not in seen:
+        seen.add(job_id)
+        later = sorted((d.name for d in home().iterdir() if d.is_dir()
+                        and (_read(d / "process.json", {}) or {}).get("replaces") == job_id), reverse=True)
+        if not later:
+            return job_id
+        job_id = later[0]
+    return job_id
 
 
 def _last_line(path):
@@ -1043,6 +1083,21 @@ def computer():
     return out
 
 
+def underused(c, b, now=None):
+    """While the owner's busy-until stands: the CPU or GPU mostly idle, said
+    so the session can queue more. A note, not a scheduler: what runs where
+    is the session's (and desktopqueue's) to decide."""
+    now = now or time.time()
+    if not b or now > b.get("until", 0):
+        return []
+    out = []
+    if c.get("load") is not None and c.get("cores") and c["load"] < 0.25 * c["cores"]:
+        out.append(f"CPU: load {c['load']} on {c['cores']} cores")
+    if c.get("gpu_pct") is not None and c["gpu_pct"] < 10:
+        out.append(f"GPU: {c['gpu_pct']:.0f}%")
+    return out
+
+
 def camera_state(held):
     # From the keeper's own state file, never by asking it: a keeper warming
     # up answers nothing, and the report must not wait on it.
@@ -1094,7 +1149,7 @@ def report(now=None, sid=None):
             "camera": camera_state(held), "mount": {"by": held.get("mount"),
                                                     "words": f"held by {held['mount']}" if "mount" in held
                                                     else "free"},
-            "busy_until": busy(sid)}
+            "busy_until": busy(sid), "underused": underused(computer(), busy(sid), now)}
 
 
 def text(r, now=None):
@@ -1160,6 +1215,8 @@ def text(r, now=None):
     b = r["busy_until"]
     if b and b.get("until", 0) > now:
         lines.append(f"Busy until {_clock(b['until'])}: {b.get('why')}")
+    for word in r.get("underused") or []:
+        lines.append(f"Underused: {word}")
     if r.get("other_sessions"):
         lines.append(f"Other sessions have {r['other_sessions']} job{'s' if r['other_sessions'] != 1 else ''} "
                      "going (./ty jobs --all).")

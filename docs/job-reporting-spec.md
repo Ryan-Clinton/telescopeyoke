@@ -516,11 +516,32 @@ protections.
 - **Idle** means no work getting done: no finite or remote job of the
   session running, and nothing queued behind a running one. Waiting,
   stalled and blocked jobs do not count, however much they hold.
-- **Acks** record what was done. A waiting, stall or idle event that is
-  still there 30 minutes after its ack opens again, and the report lists
-  "acked, not resolved" apart.
-- **Deadlines**: only `expect()` sets or ends one; an activity line
-  changing the operation's words keeps it.
+- **Acks** record what was done, against the event's lasting ID (a
+  reopened `ID:still:N` is the same event), written under the file's lock
+  since every session writes there. A waiting, stall or idle event still
+  there 30 minutes after its ack opens again, and the report lists "acked,
+  not resolved" apart. (Seen on 24 November: before this, acking a reopened
+  event left it open.)
+- **Deadlines and timeouts** are apart: an operation's deadline runs from
+  when `expect()` began it, and new words or changing readings do not move
+  it; with or without one, a job with no output and no progress for 10
+  minutes has stalled; a live process with no heartbeat for 3 minutes is
+  not responding.
+- **Exclusive things** (camera, mount, GPU) are held by a job that is
+  running, waiting or stalled, until it ends or releases them. First come,
+  first served only among earlier jobs that could start now: their
+  dependencies met and everything they need free.
+- **Recovery keeps the chain**: a job queued again with `--requeue`
+  records the one it replaces, and a job queued behind the lost one
+  follows its replacement.
+- **Underused resources**: while a busy-until stands, the report says when
+  the CPU or GPU is mostly idle. A note for the session, not a scheduler.
+- **The session over SSH**: the launcher and `remote.py` pass the session
+  (and unbuffered output) to the other computer. Seen on 24 November: the
+  jobs this session launched, detached ones included, carry its session;
+  the timers carry none (the house's). An agent whose session is unknown is
+  told so when it starts a job, rather than its job passing silently for
+  the house's.
 - **Kept only once it runs a minute** (`jobs.run_as`): restack, starwatch,
   transits, variables, archive, brokers, realbogus, plant, difference,
   depth, precision, so a quick look leaves no event.
@@ -550,6 +571,9 @@ protections.
   drops. `desktopqueue.py` runs each of its jobs through the launcher.
 
 ### Partly done
+
+- **Windows**: process start times and the boot time are read on Windows,
+  but no job has yet run there.
 
 - **Progress inside the other long scripts**: starwatch, transits,
   variables, archive, brokers, realbogus, plant, difference, depth and
