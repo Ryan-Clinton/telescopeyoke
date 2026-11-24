@@ -761,6 +761,10 @@ to 3.5 px HFD binned through haze; the guide camera needs gain 400 % (at
 (0.48 and 0.67 px/s, about 0.42 expected), then the star was lost, once
 to a crowded field (the Double Cluster) and once to haze; not proven.
 
+### 24 November 2026: the 183M's cooler and its 12 V going in
+
+Indoors ([the record](nights/2026-11-24/cooler-runaway-test.md)). Not reproduced: with the set point 3 °C below a 22 °C room, the 12 V going out and back in mid-cooling, and the cooler started with no 12 V and then the 12 V in, each gave a 2 °C overshoot and control again, no runaway. So the 19 November runaway needs more than the 12 V going in with the cooler on; which of that night's other conditions matters is unknown.
+
 ### 24 November 2026: the SV241's USB ports switched from the laptop
 
 Indoors, the cooler off. Proven: each USB port's power switches from the laptop with `uhubctl -e` on each half (`docs/usb-hub.md`); the guide camera (port 1) and the 183M (port 3, with its own hub and the focuser's Nano) each dropped off and came back as new devices, the 183M at 5 Gb/s with a normal frame after, the focuser answering with its kept position unchanged. `./camera_test.py --power-cycle` does the 183M's port. Two faults found and fixed on the way: `usbpower.py` picked the guide camera (same vendor) as "the camera", and without `-e` only the USB 2 half was switched. Not proven: a power cycle with the cooler running, so `power_cycle_on_jam` stays off; the 12 V outputs cannot be switched. The same afternoon the focuser ran from one of the SV241's 12 V outputs on the owner's homemade lead (`./focuser.py test`: out a quarter turn and back, seen to turn).

@@ -609,6 +609,89 @@ def speed_ladder(exposure, gain, frames=3, keep=False, say=print, speeds=None):
             "kept": keep and best is not None}
 
 
+def cooler_on_test(setpoint=None, minutes=15, every=2, below=3.0, still_falling_s=20):
+    """Whether the cooler runs away when its 12 V goes in while it is on
+    (docs/nights/2026-11-19/cooler.md), safely indoors: the set point only a
+    few degrees below the room, so a runaway is seen as the sensor falling
+    past it while still far above freezing. Stopped the moment it does: the
+    cooler off at once; if the sensor goes on falling for still_falling_s,
+    the camera closed and its USB power cut (what cleared it on 19 November).
+    The cooler is always off at the end."""
+    import os
+    import jobs
+    import usbpower
+    os.environ["TY_COOLER_OFF"] = "1"            # open without the settings' ramp to -5 °C
+    job = jobs.current()
+    cam = Camera()
+    cam.__enter__()
+    lib = cam.lib
+    option = getattr(lib, "ALTAIRCAM_OPTION_TEC", None)
+    cut = False
+
+    def off():
+        if option is not None:
+            try:
+                cam.handle.put_Option(option, 0)
+            except Exception:
+                pass
+    try:
+        start = None
+        for _ in range(15):        # it reads 0.0 for a moment after opening
+            start = cam.temperature()
+            if start:
+                break
+            time.sleep(1)
+        if not start and setpoint is None:
+            raise SystemExit("no sensor reading: give --setpoint to start with the 12 V out")
+        start = start or setpoint + 4          # the 12 V out: the sensor may not say
+        setpoint = round(start - 4) if setpoint is None else setpoint
+        if setpoint < 10:
+            raise SystemExit("this test keeps the set point at 10 °C or warmer, indoors")
+        cam.cool(setpoint)
+        # Straight to the set point, not the ramp's first step (0.5 °C below
+        # the sensor drew nothing): 4 °C from a room is not a frosting jump.
+        cam._set_point(setpoint)
+        cam.level = setpoint
+        say = f"cooler ON, set point {setpoint:g} °C, sensor {start} °C: pull the 12 V out when told"
+        print(say, flush=True)
+        job.milestone(say, name="on")
+        until = time.time() + minutes * 60
+        tripped_at = None
+        lowest = start
+        while time.time() < until:
+            now = cam.temperature()
+            power = cam.tec_power()
+            draw = power[0] if power else None
+            if now:
+                lowest = min(lowest, now)
+            print(f"{time.strftime('%H:%M:%S')} sensor {now} °C, set point {setpoint:g}, cooler {draw} V",
+                  flush=True)
+            job.reading(f"sensor {now} °C, set point {setpoint:g}, cooler {draw} V")
+            if now and now < setpoint - below:
+                if tripped_at is None:
+                    tripped_at, at_trip = time.time(), now
+                    off()
+                    said = (f"RUNAWAY: sensor {now} °C, {setpoint - now:.1f} °C below its set point "
+                            f"{setpoint:g}: cooler sent OFF")
+                    print(said, flush=True)
+                    job.milestone(said, name="runaway")
+                elif time.time() - tripped_at > still_falling_s and now < at_trip - 0.5:
+                    said = "still falling with the cooler sent off: closing the camera and cutting its USB power"
+                    print(said, flush=True)
+                    job.milestone(said, name="cut")
+                    cut = True
+                    break
+            time.sleep(every)
+    finally:
+        off()
+        cam.close()
+    if cut:
+        result = usbpower.cycle()
+        print(f"USB power cut and given back: {result}", flush=True)
+    print(f"done: lowest {lowest} °C against a set point of {setpoint:g}; the cooler is off", flush=True)
+    return {"setpoint": setpoint, "lowest_c": lowest, "usb_cut": cut}
+
+
 def watch_cooler(every=10, drop=2.0):
     """The sensor's temperature and the cooler's draw, with the cooler held
     off: for plugging in the 12 V with the camera already on USB (24
@@ -703,6 +786,12 @@ def main():
                       help="open the camera with its cooler held off and say its temperature and the cooler's "
                            "draw every 10 s; an alarm if the sensor cools or the cooler draws power, as when its "
                            "12 V goes in (until stopped)")
+    what.add_argument("--cooler-on-test", action="store_true",
+                      help="the runaway test (24 November 2026): the cooler on at --setpoint (default 4 °C below "
+                           "the sensor), watched every 2 s for --minutes (default 15) while a person pulls the 12 V "
+                           "out and puts it back; off at once if the sensor falls 3 °C below the set point, and the "
+                           "camera's USB power cut if it goes on falling")
+    ap.add_argument("--setpoint", type=float, help="with --cooler-on-test: °C")
     what.add_argument("--cooldown", action="store_true",
                       help="cap on: the stripes, failed frames and timing every few minutes as the camera cools, "
                            "with the air temperature, dew point and USB port")
@@ -1272,6 +1361,8 @@ def run(args):
         return found
     if args.watch_cooler:
         return watch_cooler()
+    if args.cooler_on_test:
+        return cooler_on_test(args.setpoint, args.minutes or 15)
     if args.power_cycle:
         import usbpower
         try:

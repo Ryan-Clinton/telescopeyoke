@@ -80,7 +80,11 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
    it to ambient in software before the 12 V goes back in, then the normal
    slow ramp. Untried: TEC off, set point re-sent, TEC on, before failing
    safe; check whether one bad temperature reading can trip the runaway
-   check (18 November 20:40 looked like one).
+   check (18 November 20:40 looked like one). 24 November, indoors at a
+   19 °C set point: the 12 V out and back in with the cooler on, and the
+   cooler started with no 12 V then the 12 V in, both recovered with a
+   2 °C overshoot, no runaway (`docs/nights/2026-11-24/cooler-runaway-test.md`).
+   Still to try: the same nearer -5 °C, cap on, in a cold room.
 8. **Dew**: the guide scope's USB dew strap fitted when it comes (due
    4 December; from one of the SV241's USB ports; the plain SV241 has no
    dew outputs). The dew shields from
