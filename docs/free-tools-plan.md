@@ -56,20 +56,27 @@ Siril ran with automatic samples; placing them by hand might do better but is no
 
 ### Star removal
 
-Seti Astro Suite Pro 1.24.8's Dark Star (AI4 mono model) against our plain code on five
-stacks, in stretched brightness. "Blend" uses Dark Star only where it took off something
-compact and keeps the original elsewhere. Medians; a planted glow should stay at 1.00.
+Seti Astro Suite Pro 1.24.8's Dark Star (AI4 mono model) against our plain code, in stretched
+brightness. Dark Star alone also removed faint nebula, up to 72% of a planted glow on a galaxy
+stack, so it was tried as a blend: its result only on detected stars, and only the part
+standing above the broad change. Six stacks, medians:
 
-| Method | Star left | Brightest 20 left | Faint glow | Thin faint line kept (worst) |
-|---|---|---|---|---|
-| Our code | 0.016 | 0.032 | 1.003 | **0.47 (0.17)** |
-| Dark Star | 0.003 | 0.010 | 1.097 | 0.34 (0.12) |
-| **Dark Star, blended** | **-0.004** | **0.006** | 1.011 | 0.33 (0.20) |
+| Method | Star left | Brightest 20 left |
+|---|---|---|
+| Our code | 0.022 | 0.029 |
+| **Dark Star, blended** | **0.004** | **0.006** |
 
-Dark Star removes stars far better, and by eye ours leaves ghosts and a bright star's core.
-The blend takes out Dark Star's brightening of faint glow, but **neither keeps thin faint
-lines as well as ours on most stacks**, and a very bright star leaves a faint ring and
-spikes. So it is not wired in yet: the blend's mask must first stop costing thin filaments.
+The pass mark, set before the last check, was a thin faint line kept to within 5 points of our
+code on two stacks not used to tune the blend:
+
+| Unseen stack | Line kept, ours | Line kept, blend | Glow, blend (1.00 is perfect) |
+|---|---|---|---|
+| M33, 16 October | 0.977 | 0.991 | 1.037 |
+| M81 and M82, 2 November | 0.973 | **0.863** | 1.021 |
+
+**The blend failed that mark on M81 and M82, so it is not wired in.** By eye it removes stars
+much better and leaves no ghosts, but a very bright star keeps a faint ring and spikes, and a
+star on a filament can leave a soft patch.
 
 ## What each stage becomes
 
@@ -79,7 +86,7 @@ spikes. So it is not wired in yet: the blend's mask must first stop costing thin
 | Star-core clipping fault | Open | Fix in `stacking.py`, comparing with Siril's rejection | To do |
 | Noise reduction | Optional in pictures | **GraXpert**, on each filter's linear stack | Built |
 | Background and gradients | Our sky model | **Keep ours**: no tool did as well overall | Tested |
-| Star removal | Plain code | Seti Astro Suite Pro's Dark Star; StarNet if its terms allow | Tested: better on stars, loses thin lines; mask to fix |
+| Star removal | Plain code | Seti Astro Suite Pro's Dark Star; StarNet if its terms allow | Tested: far better on stars, missed the thin-line mark on one of two unseen stacks |
 | Sharpening and deconvolution | Our steps | GraXpert and Cosmic Clarity, with star and nebula checks | To test |
 | Stretch | Ours, with a GHS option | Siril GHS | To test |
 | Colour calibration, broadband | Star average | Siril SPCC | To test |

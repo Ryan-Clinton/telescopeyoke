@@ -13,7 +13,7 @@ from scipy import ndimage as N
 import colour, stacking
 
 F = Path.home() / "telescopeyoke-laptop/freetools"; W = F / "stars"; CC = F / "sas/bin/cosmicclarity"
-STEMS = ("IC405-Ha", "IC405-SII", "NGC2174-Ha", "NGC2174-OIII", "NGC2174-SII")
+STEMS = tuple(sys.argv[1:]) or ("IC405-Ha", "IC405-SII", "NGC2174-Ha", "NGC2174-OIII", "NGC2174-SII")
 
 
 def load(stem):
@@ -54,14 +54,39 @@ def plants(shape):
 
 
 def blended(u, ds):
-    """Dark Star's result only where it took off something compact; the original everywhere else."""
+    """Dark Star's result only round stars that were really found, so a thin filament is never replaced.
+    A disc grows with the star's brightness, for its halo and spikes, and only what Dark Star changed inside it is taken."""
     change = N.gaussian_filter(u - ds, 1.0); noise = 1.4826 * float(np.median(np.abs(change - np.median(change)))) + 1e-6
-    found = change > 4 * noise; labels, count = N.label(found); keep = np.zeros(count + 1, bool)
+    rows, cols = u.shape; discs = np.zeros(u.shape, bool)
+    for x, y, _, fwhm, round_ in stacking.find_stars(u, limit=4000):
+        if round_ < .45: continue
+        r0, c0 = int(round(y)), int(round(x))
+        if not (0 <= r0 < rows and 0 <= c0 < cols): continue
+        height = float(change[max(r0 - 2, 0):r0 + 3, max(c0 - 2, 0):c0 + 3].max())
+        radius = int(np.clip(1.6 * max(fwhm, 2.5) * (1 + 5 * max(height - .25, 0)), 5, 45))
+        top, left = max(r0 - radius, 0), max(c0 - radius, 0)
+        yy, xx = np.ogrid[top - r0:min(r0 + radius + 1, rows) - r0, left - c0:min(c0 + radius + 1, cols) - c0]
+        discs[top:r0 + radius + 1, left:c0 + radius + 1] |= yy ** 2 + xx ** 2 <= radius ** 2
+    # Stars the finder called not round (on a filament, or touching another): compact and solid, unlike a line.
+    labels, _ = N.label(change > 6 * noise)
     for n, box in enumerate(N.find_objects(labels), 1):
-        h, w = box[0].stop - box[0].start, box[1].stop - box[1].start; area = (labels[box] == n).sum()
-        keep[n] = area >= 6 and (max(h, w) / max(min(h, w), 1) < 3.5 or area / (h * w) < .35 and max(h, w) > 30)
-    mask = N.gaussian_filter(N.binary_dilation(keep[labels], iterations=3).astype(np.float32), 1.5)
-    return (mask * ds + (1 - mask) * u).astype(np.float32)
+        h, w = box[0].stop - box[0].start, box[1].stop - box[1].start; area = int((labels[box] == n).sum())
+        if area >= 6 and max(h, w) <= 40 and max(h, w) / max(min(h, w), 1) < 2.5 and area / (h * w) >= .5:
+            top, left = max(box[0].start - 5, 0), max(box[1].start - 5, 0)
+            discs[top:box[0].stop + 5, left:box[1].stop + 5] |= N.binary_dilation(labels[top:box[0].stop + 5, left:box[1].stop + 5] == n, iterations=4)
+    mask = N.gaussian_filter((discs & (change > 2 * noise)).astype(np.float32), 1.5)
+    mask = np.clip(mask * 1.6, 0, 1) * N.gaussian_filter(discs.astype(np.float32), 1.0)
+    # Dark Star also lowers the broad level on a noisy stack, which showed as dark discs:
+    # take off only what stands above the broad change.
+    small = N.median_filter((u - ds)[::4, ::4], 31)
+    broad = N.zoom(small, (rows / small.shape[0], cols / small.shape[1]), order=1)
+    return (u - mask * np.maximum(u - ds - broad, 0)).astype(np.float32)
+
+
+def dark_patches(out):
+    """How far the darkest smooth patch falls below its surroundings, in that smooth image's noise."""
+    soft = N.gaussian_filter(out, 6)[::4, ::4]; rest = soft - N.median_filter(soft, 23)
+    return round(float(np.percentile(rest, .1) / (1.4826 * np.median(np.abs(rest - np.median(rest))) + 1e-9)), 2)
 
 
 def star_scores(u, out):
@@ -78,7 +103,7 @@ def star_scores(u, out):
         if h > 5 * noise:
             left.append((np.mean(b[core]) - np.median(b[ring])) / h)
     return {"stars": len(left), "star_left": round(float(np.median(left)), 3), "brightest_20_left": round(float(np.median(left[:20])), 3),
-            "worst_tenth_left": round(float(np.percentile(left, 90)), 3)}
+            "worst_tenth_left": round(float(np.percentile(left, 90)), 3), "dark_patch": dark_patches(out)}
 
 
 results = {}
@@ -94,4 +119,4 @@ for stem in STEMS:
             d = N.gaussian_filter(out - o, 1.5); c = N.gaussian_filter(v - u, 1.5); w = mask > .3
             row[key] = round(float((d[w] * c[w]).sum() / (c[w] ** 2).sum()), 3)
         results[stem][name] = row; print(stem, name, row, flush=True)
-    json.dump(results, open(W / "scores.json", "w"), indent=1)
+    json.dump(results, open(W / ("held-out-scores.json" if sys.argv[1:] else "scores.json"), "w"), indent=1)
