@@ -25,9 +25,11 @@ import time
 
 import numpy as np
 
+import activity
 import calibrate
 import config
 import interface
+import jobs
 import keeper
 import records
 import testmode
@@ -44,7 +46,10 @@ FLAT_BELOW = 0.02       # a last step that lowers the noise by less than this sh
 CORNER = 300            # pixels: the box in each corner where amp glow shows
 HOT_ADU = 200           # a pixel this far above the zero level is hot: one fixed line for every temperature
 CLIP = 5.0              # spreads from the middle: hot pixels left out of the averages
-HOLD_MOST_S = 4 * 3600  # held cold after the last temperature, with nobody asking for more
+# Held cold after the last temperature, with nobody asking for more. Four
+# hours until 24 November 2026, when the darks ended at 03:18 and the hold
+# kept the camera from the video meant to follow until 07:28.
+HOLD_MOST_S = 30 * 60
 NEXT = config.DATA / "cache" / "darktest" / "next.json"     # the order a held run is waiting for
 
 
@@ -103,55 +108,72 @@ def plan(args):
           "with the cooling and warm-up. No frames kept.")
 
 
-def take(cam, args, target, start, rows, path):
+def take(cam, args, target, start, rows, path, job):
     """Cool to one temperature, measure it and keep the figures."""
     if target > start - START_MARGIN_C:
         print(f"{target:g} °C left out: the sensor started at {start:.1f} °C", flush=True)
         return
+    now = cam.temperature()
+    job.expect(abs((now if now is not None else start) - target) * 60 + 900, f"cooling to {target:g} °C")
     cam.cool(target)
     cam.settle(say=print)
+    job.expect(HOLD_S + 60, f"settling at {target:g} °C")
     until = time.monotonic() + HOLD_S
     while time.monotonic() < until:
         cam.ramp()
         time.sleep(5)
+    job.expect(args.frames * args.short + 120, f"{target:g} °C: {args.frames} zero-level frames")
     shorts = [cam.frame(args.short)[0] for _ in range(args.frames)]
     if np.median(shorts[0][::8, ::8]) > 0.2 * WHITE:
         raise SystemExit("Those frames are bright. This needs the cap on.")
     longs = []
     for n in range(args.frames):
+        job.expect(args.long * 1.5 + 60, f"{target:g} °C: {args.long:g} s dark {n + 1} of {args.frames}")
         longs.append(cam.frame(args.long)[0])
         print(f"  {target:g} °C: {args.long:g} s dark {n + 1} of {args.frames}", flush=True)
     row = {"target_c": target, "sensor_c": cam.temperature(), **measure(longs, shorts, args.long, args.short)}
     rows.append(row)
-    print(f"{row['sensor_c']:.1f} °C: dark {row['dark_adu_per_s']:.4f} ADU/s, noise {row['noise_adu']:.2f} "
-          f"ADU, {row['hot_pixels']} hot pixels, amp glow {row['amp_glow_adu']:.1f} ADU", flush=True)
+    said = (f"{row['sensor_c']:.1f} °C: dark {row['dark_adu_per_s']:.4f} ADU/s, noise {row['noise_adu']:.2f} "
+            f"ADU, {row['hot_pixels']} hot pixels, amp glow {row['amp_glow_adu']:.1f} ADU")
+    print(said, flush=True)
+    job.reading(said)
     records.write(path, {"gain": args.gain, "long_s": args.long, "short_s": args.short,
                          "frames": args.frames, "start_c": start, "rows": rows}, stamp=True)
 
 
-def hold(cam, args, start, rows, path):
+def hold(cam, args, start, rows, path, job):
     """Stay cold after the last temperature, so another can follow without a
     warm-up and a second cool-down. A plain kill ends it through run()'s
-    slow warm-up; so does HOLD_MOST_S with nobody asking for more."""
-    print(f"holding the sensor cold, up to {HOLD_MOST_S / 3600:g} h: ./darktest.py --more TEMPS for further "
-          "temperatures, ./darktest.py --finish to warm up slowly", flush=True)
+    slow warm-up; so does HOLD_MOST_S with nobody asking for more, and so
+    does a job queued for the camera (./ty bg ... --needs camera), which
+    starts once this has let it go."""
+    ask = "./darktest.py --more TEMPS for further temperatures, ./darktest.py --finish to warm up slowly"
+    print(f"holding the sensor cold, up to {HOLD_MOST_S / 60:g} min: {ask}", flush=True)
+    job.waiting(f"darks done; holding the sensor cold up to {HOLD_MOST_S / 60:g} min for more temperatures",
+                ask=ask, holds=["camera"], most_s=HOLD_MOST_S + 60)
     until = time.monotonic() + HOLD_MOST_S
     while time.monotonic() < until:
         cam.ramp()
+        if jobs.wanted("camera") and not NEXT.exists():
+            print("a job is queued for the camera: finishing, the slow warm-up", flush=True)
+            return
         if NEXT.exists():
             asked = json.loads(NEXT.read_text())["temperatures"]
             NEXT.unlink()
             if not asked:
                 print("finishing: the slow warm-up", flush=True)
                 return
+            job.resumed(f"more temperatures: {', '.join(f'{t:g}' for t in asked)} °C")
             for target in asked:
                 lowest = TEST_LOWEST if args.colder else TEC_LOWEST
                 if target < lowest:         # refused here: the cooler's own refusal would end the hold and warm it
                     print(f"{target:g} °C not taken: below the {lowest:g} °C limit", flush=True)
                     break
-                take(cam, args, target, start, rows, path)
+                take(cam, args, target, start, rows, path, job)
             until = time.monotonic() + HOLD_MOST_S
             print("holding the sensor cold again", flush=True)
+            job.waiting(f"holding the sensor cold again, up to {HOLD_MOST_S / 60:g} min", ask=ask,
+                        holds=["camera"], most_s=HOLD_MOST_S + 60)
         time.sleep(5)
 
 
@@ -162,7 +184,9 @@ def run(args):
     stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
     path = config.DATA / "cache" / "darktest" / f"{stamp}.json"
     rows = []
-    with Camera(gain=args.gain) as cam:
+    each = args.frames * (args.long + args.short) + HOLD_S + 15 * 60
+    with activity.job("darktest", steps=[f"{t:g} °C" for t in args.temperatures],
+                      expect_s=len(args.temperatures) * each + 20 * 60) as job, Camera(gain=args.gain) as cam:
         try:
             if args.colder:
                 cam.lowest = TEST_LOWEST    # this camera object only: every other command keeps -5 °C
@@ -171,14 +195,19 @@ def run(args):
                 raise SystemExit("The sensor will not say its temperature: no comparison can be made.")
             print(f"sensor at {start:.1f} °C", flush=True)
             NEXT.unlink(missing_ok=True)    # an order left from an earlier run is not for this one
-            for target in args.temperatures:
-                take(cam, args, target, start, rows, path)
+            for k, target in enumerate(args.temperatures, 1):
+                job.step(k, f"{target:g} °C")
+                take(cam, args, target, start, rows, path, job)
+            temps = ", ".join(f"{r['sensor_c']:.1f}" for r in rows)
+            job.milestone(f"darks done at {temps} °C", name="darks")
             if not args.warm_after:
-                hold(cam, args, start, rows, path)
+                hold(cam, args, start, rows, path, job)
         finally:
+            job.expect(15 * 60, "the slow warm-up")
             cam.warm_up(say=print)
-    said = verdict(rows)
-    print(said)
+        said = verdict(rows)
+        print(said)
+        job.result(said)
     records.write(path, {"gain": args.gain, "long_s": args.long, "short_s": args.short, "frames": args.frames,
                          "start_c": start, "rows": rows, "verdict": said}, stamp=True)
     print(f"kept {path}")
