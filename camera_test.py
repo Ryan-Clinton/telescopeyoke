@@ -609,6 +609,50 @@ def speed_ladder(exposure, gain, frames=3, keep=False, say=print, speeds=None):
             "kept": keep and best is not None}
 
 
+def watch_cooler(every=10, drop=2.0):
+    """The sensor's temperature and the cooler's draw, with the cooler held
+    off: for plugging in the 12 V with the camera already on USB (24
+    November 2026; on 19 November the 12 V went in with the cooler running
+    and it ran away to -7.3 °C). An alarm, also an event for the agent
+    (./ty jobs --watch), if the sensor falls `drop` °C below where it began
+    or the cooler draws power. The cooler is sent off again at every look."""
+    import os
+    import jobs
+    os.environ["TY_COOLER_OFF"] = "1"
+    job = jobs.current()
+    with Camera() as cam:
+        start = cam.temperature()
+        print(f"watching the cooler, held off: sensor at {start} °C", flush=True)
+        alarmed = False
+        while True:
+            now = cam.temperature()
+            if now == 0.0:
+                now = None          # 0.0: the 183M says nothing of its sensor without its 12 V
+            if start in (None, 0.0) and now is not None:
+                start = now         # the first real reading is where it began
+                print(f"first real reading: {start} °C (the 12 V is in)", flush=True)
+            power = cam.tec_power() if hasattr(cam, "tec_power") else None
+            draw = power[0] if power else None
+            line = f"{time.strftime('%H:%M:%S')} sensor {now} °C, cooler {draw} V"
+            print(line, flush=True)
+            job.reading(line)
+            fell = start is not None and now is not None and now < start - drop
+            drawing = draw is not None and draw > 0.2
+            if (fell or drawing) and not alarmed:
+                alarmed = True
+                said = (f"COOLER ALARM: sensor {now} °C (began {start} °C), cooler {draw} V with the cooler "
+                        "held off: take the camera's 12 V out")
+                print(said, flush=True)
+                job.milestone(said, name="alarm")
+            option = getattr(cam.lib, "ALTAIRCAM_OPTION_TEC", None)
+            if option is not None:
+                try:
+                    cam.handle.put_Option(option, 0)
+                except Exception:
+                    pass
+            time.sleep(every)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     what = ap.add_mutually_exclusive_group(required=True)
@@ -655,6 +699,10 @@ def main():
                       help="cut the camera's power at the powered hub's port for --off seconds (default 8) and "
                            "give it back, as pressing the hub's port button twice does: what clears the jam "
                            "(usbpower.py, through uhubctl)")
+    what.add_argument("--watch-cooler", action="store_true",
+                      help="open the camera with its cooler held off and say its temperature and the cooler's "
+                           "draw every 10 s; an alarm if the sensor cools or the cooler draws power, as when its "
+                           "12 V goes in (until stopped)")
     what.add_argument("--cooldown", action="store_true",
                       help="cap on: the stripes, failed frames and timing every few minutes as the camera cools, "
                            "with the air temperature, dew point and USB port")
@@ -1222,6 +1270,8 @@ def run(args):
         found = usb_report(lines, device)
         print(json.dumps(found, indent=1))
         return found
+    if args.watch_cooler:
+        return watch_cooler()
     if args.power_cycle:
         import usbpower
         try:

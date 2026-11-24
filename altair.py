@@ -13,6 +13,7 @@ project. Put altaircam.py, and on Windows the 64-bit altaircam.dll beside it,
 in vendor/altair/. On Windows the camera's driver comes with AltairCapture.
 """
 import ctypes
+import os
 import struct
 import sys
 import threading
@@ -407,6 +408,16 @@ class AltairCamera:
             # 4 November 2026, a reopen mid-test left no target, so the warm-up
             # had nothing to do and the cooler went off cold.
             cooling = self.target if getattr(self, "target", None) is not None else camera.get("tec_target")
+            if os.environ.get("TY_COOLER_OFF"):
+                # Opened only to watch (camera_test.py --watch-cooler): the
+                # cooler is held off, whatever the settings say.
+                cooling = None
+                option = getattr(lib, "ALTAIRCAM_OPTION_TEC", None)
+                if option is not None and self.flags & TEC:
+                    try:
+                        handle.put_Option(option, 0)
+                    except Exception:
+                        pass
             self.target = None
             if not hasattr(self, "ambient"):
                 # Before the cooler starts, the first time only (not when opened
