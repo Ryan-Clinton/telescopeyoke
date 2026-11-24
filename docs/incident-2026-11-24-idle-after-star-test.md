@@ -53,10 +53,22 @@ session was woken that way many times on 24 November.
 ## What the session does now, every time it leaves work running
 
 1. When the owner asks for work to go on: `./ty jobs --busy-until TIME "their words"` at once.
-2. For every job it starts: a background waiter that exits when the job ends
-   (`until ./ty jobs --state JOB | grep -qE '"phase": "(exited|failed|vanished|stopped)"'; do sleep 20; done`),
-   plus `./ty jobs --watch` as a Monitor, re-armed on expiry.
+2. For every job it starts: a background waiter that exits when the job ends, plus
+   `./ty jobs --watch` as a Monitor, re-armed on expiry. The waiter waits only while the job is live
+   (`while ./ty jobs --state JOB | grep -qE '"phase": "(running|waiting|stalled|queued)"'; do sleep 20; done`),
+   so any end state stops it. The first version listed end states instead and missed `done`, which
+   is what `--state` reports for a job that succeeded (`look()` derives it), and `blocked` and
+   `cancelled`: it would never have ended after a successful job. Found by review on 24 November and
+   corrected in the live waiter at once.
 3. A follow-on that can be named is queued with `--after JOB` instead of being kept in mind.
+
+## Still open
+
+Each of these steps rests on the session remembering it, which is what failed. The fix that does not
+depend on memory belongs in the shared job code (`jobs.py`, the Stop hook `keepgoing.py`), which the
+scheduling session built: a `--wait JOB` and a `--wait-event` command from the job state machine
+itself, and a Stop hook that will not let a turn end with work running and nothing armed to wake it.
+Those were put to the scheduling session on 24 November; they are not built yet.
 
 ## Proof on a real job
 
