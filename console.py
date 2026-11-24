@@ -35,6 +35,7 @@ from urllib.parse import unquote, urlparse
 import config
 import host
 import interface
+import jobs
 
 ROOT = Path(__file__).parent
 PAGE = ROOT / "console"
@@ -549,7 +550,11 @@ class Jobs:
             job = {"id": uuid.uuid4().hex, "action": action, "label": label(action, params),
                    "uses": using, "state": "running", "outcome": None, "started": time.time(),
                    "ended": None, "lines": [], "result": None, "error": None, "stopped": False}
-            job["child"] = self.start(cmd, env=surroundings(self.demo), **host.OWN_GROUP)
+            # A job in ./ty jobs too, started here as before so Stop kills the
+            # very process holding the mount (jobs.Recorded).
+            job["record"] = jobs.Recorded(f"console-{action}", cmd, why=job["label"])
+            job["child"] = self.start(cmd, env=job["record"].env(surroundings(self.demo)), **host.OWN_GROUP)
+            job["record"].started(job["child"].pid)
             if using:
                 self.current = job
             if action == "run":
@@ -565,12 +570,14 @@ class Jobs:
                 if line.strip():
                     job["lines"].append({"time": time.time(), "text": line.rstrip()})
                     del job["lines"][:-KEEP_LINES]
+                    job["record"].line(line)
 
         reader = threading.Thread(target=progress, daemon=True)
         reader.start()
         printed = child.stdout.read()
         child.wait()
         reader.join(timeout=2)
+        job["record"].ended(child.returncode)
         answer = envelope_from(printed)
         with self.lock:
             job["ended"] = time.time()

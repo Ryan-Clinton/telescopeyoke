@@ -418,6 +418,58 @@ def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=Fals
     return job_id
 
 
+class Recorded:
+    """A job whose process its parent starts itself, kept in the same
+    records: the console, whose Stop must kill the very process holding the
+    mount's port. The parent is the one writer of process.json; the child
+    adopts the job (its env()). Never raises: the record is a help."""
+
+    def __init__(self, name, command, kind="finite", why=None):
+        self.id = new_id(name)
+        self.dir = folder(self.id)
+        self.log = None
+        self.record = {"id": self.id, "name": name, "kind": kind, "own": False,
+                       "command": redact(" ".join(map(str, command))), "host": _hostname(), "boot": boot_id(),
+                       "supervisor": os.getpid(), "supervisor_start": started_at(os.getpid()),
+                       "parent": os.environ.get("TY_JOB"), "after": [], "needs": [], "why": why,
+                       "pid": None, "pid_start": None, "queued": time.time(), "started": None,
+                       "phase": "running", "exit_code": None, "ended": None, "blocked": None,
+                       "log": str(self.dir / "log.txt")}
+        try:
+            self.dir.mkdir(parents=True, exist_ok=True)
+            self.log = open(self.dir / "log.txt", "ab", buffering=0)
+        except OSError:
+            pass
+
+    def env(self, base=None):
+        return dict(base or os.environ, TY_JOB=self.id, TY_JOB_ADOPT=str(os.getpid()), PYTHONUNBUFFERED="1")
+
+    def _put(self, **fields):
+        self.record.update(fields)
+        try:
+            records.write(self.dir / "process.json", self.record, indent=None)
+        except Exception:
+            pass
+
+    def started(self, pid):
+        self._put(pid=pid, pid_start=started_at(pid), started=time.time())
+
+    def line(self, text):
+        try:
+            if self.log:
+                self.log.write((str(text).rstrip("\n") + "\n").encode("utf-8", "replace"))
+        except OSError:
+            pass
+
+    def ended(self, code):
+        self._put(phase="exited", exit_code=code, ended=time.time())
+        try:
+            if self.log:
+                self.log.close()
+        except OSError:
+            pass
+
+
 def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=None):
     """The launcher's own process: the one writer of process.json. Waits
     for what the job is queued behind, starts it, keeps its log, records
@@ -754,6 +806,13 @@ def open_events(listing=None, now=None):
     listing = look_all(now) if listing is None else listing
     acked = _acked()
     out = [e for j in listing for e in wake_events(j, now) if e["id"] not in acked]
+    # A timer's routine run that keeps failing is one event, its newest, not one every ten minutes.
+    routine = {j["id"] for j in listing if j["kind"] == "routine"}
+    newest = {}
+    for e in out:
+        if e.get("job") in routine:
+            newest[e["name"]] = e
+    out = [e for e in out if e.get("job") not in routine or newest.get(e["name"]) is e]
     idle = idle_event(listing, now)
     if idle and idle["id"] not in acked:
         out.append(idle)
@@ -858,6 +917,7 @@ def report(now=None):
     active = [brief(j) for j in listing if j["phase"] in ("running", "stalled", "waiting", "queued", "blocked")
               and not (j["phase"] == "blocked" and (j.get("ended") or 0) < now - 86400)]
     recent = [brief(j) for j in listing if j["phase"] in ("done", "failed", "vanished")
+              and not (j["kind"] == "routine" and j["phase"] == "done")
               and (j.get("ended") or j["last_output"] or 0) > now - 12 * 3600]
     return {"open_events": [{k: e.get(k) for k in ("id", "name", "kind", "words", "at", "ask")}
                             for e in open_events(listing, now)],

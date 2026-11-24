@@ -23,6 +23,7 @@ from pathlib import Path
 
 import config
 import interface
+import jobs
 import stacking
 
 STALLED = 180        # seconds with no new frame: the camera or the run has stopped
@@ -179,6 +180,9 @@ def run(args, say=print, sleep=time.sleep, clock=time.time):
         for line in watch.look(clock()):
             say(line)
             said.append(line)
+            # Run as a job (./ty bg watch-run --kind service -- ./ty watch-run),
+            # each line is an event that wakes the agent through ./ty jobs --watch.
+            jobs.current().milestone(line)
         sys.stdout.flush()
         if args.once or watch.ended:
             return {"session": str(session), "said": said, "ended": watch.ended}

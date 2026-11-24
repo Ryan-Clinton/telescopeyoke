@@ -1202,7 +1202,8 @@ def install(say=print, run=subprocess.run, home=None):
     (place / "ty-night-end.service").write_text(
         "[Unit]\nDescription=telescopeyoke: park and say so when the night is over\n\n"
         f"[Service]\nType=oneshot\nWorkingDirectory={root}\n"
-        f"ExecStart={sys.executable} {root / 'schedule.py'} guard\n", encoding="utf-8")
+        f"ExecStart={sys.executable} {root / 'jobs.py'} bg night-end-guard --wait --kind routine -- "
+        f"{sys.executable} {root / 'schedule.py'} guard\n", encoding="utf-8")
     (place / "ty-night-end.timer").write_text(
         "[Unit]\nDescription=telescopeyoke: check every 10 minutes whether the night is over\n\n"
         "[Timer]\nOnBootSec=10min\nOnUnitActiveSec=10min\n\n[Install]\nWantedBy=timers.target\n",
@@ -1217,7 +1218,8 @@ def install(say=print, run=subprocess.run, home=None):
     (place / "ty-satellite.service").write_text(
         "[Unit]\nDescription=telescopeyoke: keep the newest satellite picture and the cloud's approach\n\n"
         f"[Service]\nType=oneshot\nWorkingDirectory={root}\nTimeoutStartSec=8min\n"
-        f"ExecStart={sys.executable} {root / 'clouds.py'} --approach\n", encoding="utf-8")
+        f"ExecStart={sys.executable} {root / 'jobs.py'} bg satellite --wait --kind routine -- "
+        f"{sys.executable} {root / 'clouds.py'} --approach\n", encoding="utf-8")
     (place / "ty-satellite.timer").write_text(
         "[Unit]\nDescription=telescopeyoke: the satellite's pictures kept every 10 minutes\n\n"
         "[Timer]\nOnBootSec=2min\nOnUnitActiveSec=10min\n\n[Install]\nWantedBy=timers.target\n",

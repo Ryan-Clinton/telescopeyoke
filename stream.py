@@ -1597,7 +1597,8 @@ def unit(root=None, python=None, data=None):
     python = python or sys.executable
     env = f"Environment=TY_DATA={data}\n" if data else ""
     return (f"[Unit]\nDescription=telescopeyoke: stream the telescope live while it images\n\n"
-            f"[Service]\nWorkingDirectory={root}\n{env}ExecStart={python} -u {root / 'stream.py'} watch\n"
+            f"[Service]\nWorkingDirectory={root}\n{env}ExecStart={python} {root / 'jobs.py'} bg stream --wait --kind service "
+            f"-- {python} -u {root / 'stream.py'} watch\n"
             f"Restart=always\nRestartSec=30\nNice=10\n\n[Install]\nWantedBy=default.target\n")
 
 

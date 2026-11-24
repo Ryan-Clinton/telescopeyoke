@@ -70,7 +70,10 @@ def start(name, job):
     logs = HOME / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     exit_file(name).unlink(missing_ok=True)
-    wrapped = f'( {job["command"]} ); echo $? > "{exit_file(name)}"'
+    # A job in the desktop's own records too (jobs.py), its lines kept as they come.
+    tracked = f'{shlex.quote(sys.executable)} {shlex.quote(str(Path(__file__).with_name("jobs.py")))} bg ' \
+              f'{shlex.quote(name)} --wait -- bash -c {shlex.quote(job["command"])}'
+    wrapped = f'( {tracked} ); echo $? > "{exit_file(name)}"'
     with open(logs / f"{name}.log", "a") as log:
         return subprocess.Popen(["bash", "-c", wrapped], stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
                                 start_new_session=True)

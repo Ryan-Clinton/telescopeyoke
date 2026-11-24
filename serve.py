@@ -357,7 +357,8 @@ def unit(root=None, python=None, data=None, port=8080, bind="0.0.0.0"):
     extra = (f" --port {port}" if port != 8080 else "") + (f" --bind {bind}" if bind != "0.0.0.0" else "")
     return (f"[Unit]\nDescription=telescopeyoke: the status page on port {port}\n"
             f"After=network-online.target\n\n"
-            f"[Service]\nWorkingDirectory={root}\n{env}ExecStart={python} -u {root / 'serve.py'}{extra}\n"
+            f"[Service]\nWorkingDirectory={root}\n{env}ExecStart={python} {root / 'jobs.py'} bg serve --wait --kind service "
+            f"-- {python} -u {root / 'serve.py'}{extra}\n"
             f"Restart=always\nRestartSec=10\n\n[Install]\nWantedBy=default.target\n")
 
 

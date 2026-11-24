@@ -304,7 +304,8 @@ def install(say=print, run=None, home=None):
     root = Path(__file__).resolve().parent
     (place / "ty-newhardware.service").write_text(
         "[Unit]\nDescription=telescopeyoke: notice new hardware plugged in (reads only)\n\n"
-        f"[Service]\nWorkingDirectory={root}\nExecStart={sys.executable} {root / 'newhardware.py'} --watch\n"
+        f"[Service]\nWorkingDirectory={root}\nExecStart={sys.executable} {root / 'jobs.py'} bg newhardware --wait "
+        f"--kind service -- {sys.executable} {root / 'newhardware.py'} --watch\n"
         "Restart=on-failure\nRestartSec=30\nNice=10\n\n[Install]\nWantedBy=default.target\n", encoding="utf-8")
     run(["systemctl", "--user", "daemon-reload"], check=True)
     run(["systemctl", "--user", "enable", "--now", "ty-newhardware.service"], check=True)

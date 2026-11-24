@@ -167,7 +167,8 @@ def install(say=print):
     (place / "ty-archive.service").write_text(
         "[Unit]\nDescription=TelescopeYoke: stacked sessions' raw frames to the storage disk\n\n"
         f"[Service]\nType=oneshot\nWorkingDirectory={config.ROOT}\n"
-        f"ExecStart={sys.executable} {config.ROOT / 'storage.py'} --processed\nNice=15\nIOSchedulingClass=idle\n",
+        f"ExecStart={sys.executable} {config.ROOT / 'jobs.py'} bg archive-frames --wait --kind routine -- "
+        f"{sys.executable} {config.ROOT / 'storage.py'} --processed\nNice=15\nIOSchedulingClass=idle\n",
         encoding="utf-8")
     (place / "ty-archive.timer").write_text(
         "[Unit]\nDescription=TelescopeYoke: archive stacked sessions every hour\n\n"
