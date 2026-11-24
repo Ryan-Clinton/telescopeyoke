@@ -66,8 +66,11 @@ queue still needs the wheel moved and `./focus.py --auto` run in it (job 33).
    and the focuser. Two 1.5 m (5 ft) 5.5 × 2.1 male-to-male
    leads (a twin pack), ordered on 20 November, arrived on 24 November, for
    the mount and the camera (24 November: the SV241 is powered from the
-   mount's power supply, one new lead between the mount and the SV241); the focuser's (its socket is 5.5 × 2.5) is
-   still to make.
+   mount's power supply, one new lead between the mount and the SV241); the focuser's (its socket is 5.5 × 2.5) was
+   made by the owner on 24 November from two plugs that fit both 2.1 and
+   2.5 sockets, wired straight through, and turned the motor out and back
+   from the SV241 at the first try. Everything but the camera's 12 V is on
+   the SV241 from 24 November.
 7. **The 183M after a power cut**: a procedure that brings it back without
    the cooler running away. Gary: if the cooler ran with the 12 V out, warm
    it to ambient in software before the 12 V goes back in, then the normal
