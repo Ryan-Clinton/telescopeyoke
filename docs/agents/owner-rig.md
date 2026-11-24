@@ -80,6 +80,10 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
   about 02:00-02:50 on 20 November without one).
 - The motor check (`[mount] nudge_check`) has been off since 3 November
   2026.
+- No streaming on test nights: `./testmode.py on --why "..."` before any
+  indoor or daytime test that takes camera frames, and `off` after
+  (23 November 2026: a test video put the stream on air and sent YouTube
+  alerts to the owner's phone).
 
 ## Focus
 

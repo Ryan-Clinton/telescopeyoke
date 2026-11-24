@@ -52,6 +52,7 @@ from astropy.io import fits
 import config
 import interface
 import stacking
+import testmode
 from camera import WHITE, Camera
 
 
@@ -181,7 +182,13 @@ def main():
     args = ap.parse_args()
     if args.kind == "index":
         return interface.main("calibrate", lambda: write_index(show=not args.json), args.json)
-    return interface.main("calibrate", lambda: indexed(args), args.json)
+    return interface.main("calibrate", lambda: off_air(args), args.json)
+
+
+def off_air(args):
+    """Calibration frames are never streamed (testmode.py)."""
+    with testmode.during(f"{args.kind} frames"):
+        return indexed(args)
 
 
 def indexed(args):

@@ -127,6 +127,7 @@ COMMANDS = {
                                   "clear": "local_write", "end": "hardware", "guard": "hardware"}, {}),
     "serve.py": ("local_write", {}, {}),            # the status page: read-only to its visitors
     "shoot.py": ("hardware", {}, DRY),
+    "testmode.py": ("local_write", {"status": "read_only"}, {}),   # keeps the stream off air during tests
     "skywatch.py": ("hardware", {}, {}),
     "snap.py": ("hardware", {}, {}),
     "solve.py": ("local_write", {}, {}),

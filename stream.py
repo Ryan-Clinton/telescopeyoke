@@ -1282,6 +1282,8 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     tick = clock()
     hopes = Hopes()
     import director
+    import testmode
+    testing = None
     segment, segment_state, directed, looked_at, tones, voice = None, None, None, -1e9, None, None
     phones = None             # the 9:16 feed, while on air with a vertical key
     on_youtube = YouTubeKeeper(say=say) if youtube_on else None
@@ -1308,6 +1310,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 # only when nothing is happening, whatever the schedule says.
                 directed = director.update(st, now, segment)
                 looked_at = now
+                testing = testmode.active(now) if to is None else None
                 if tones is not None and segment == "focus" and s["tones"]:
                     tones.hear(segment_state)
                 if process is not None:
@@ -1319,6 +1322,8 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
             between = not surveying and not imaging(st) and runner_alive() and due_soon(st, now)
             ending = surveying or (directed["scene"] == "end" and not carded and night_ending(st, between, active))
             action, quiet_since = decide(process is not None, st, quiet_since, now, between, ending, active)
+            if testing:          # darks, flats and tests never go on air (testmode.py)
+                action, quiet_since = ("stop" if process is not None else "carry on"), None
             # What the telescope sees, in the usual layout: no card ever takes
             # its place (no night-opens plan, no between-targets steps; 30
             # October 2026).
@@ -1375,7 +1380,8 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                     phones = VerticalFeed(upright, device, say=say)
                     say(f"{time.strftime('%H:%M')} and the 9:16 picture to YouTube's vertical live")
             elif action == "stop":
-                say(f"{time.strftime('%H:%M')} " + ("the night is over" if ending else
+                say(f"{time.strftime('%H:%M')} " + (f"test mode ({testing})" if testing else
+                                                     "the night is over" if ending else
                                                      f"nothing new for {STOP_S // 60} minutes") + ": stream stopped")
                 process.stdin.close()
                 tones = quiet(tones)

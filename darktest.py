@@ -24,6 +24,7 @@ import config
 import interface
 import keeper
 import records
+import testmode
 from camera import WHITE, Camera
 
 TEMPERATURES = (5.0, 0.0, -2.5, -5.0)   # warm to cold: one slow way down
@@ -140,7 +141,8 @@ def main():
     if args.plan:
         plan(args)
     else:
-        run(args)
+        with testmode.during("the dark temperature test"):
+            run(args)
 
 
 if __name__ == "__main__":
