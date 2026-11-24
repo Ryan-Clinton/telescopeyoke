@@ -1490,6 +1490,25 @@ def text(r, now=None):
 
 
 TERMINAL = ("done", "failed", "vanished", "blocked", "cancelled")
+
+
+def _code_stamp():
+    try:
+        return Path(__file__).resolve().stat().st_mtime
+    except OSError:
+        return None
+
+
+def _code_changed(stamp, what):
+    """True, said, when this file has changed since the waiter started: an
+    old one goes on running the old code and may misread new records (24
+    November 2026: a watch from before "until done" raised on every pass).
+    Its ending wakes the session, which starts it again on the new code."""
+    if stamp is None or _code_stamp() == stamp:
+        return False
+    print(f"jobs {what}: the job system's code has changed since this started: start it again "
+          f"(./ty jobs {'--watch' if what == 'watch' else '--wait-event'})", flush=True)
+    return True
 WAITER_BEAT_S = 10
 
 
@@ -1563,7 +1582,10 @@ def wait_event(sid=None, every=10):
     the background, its ending is what wakes the session. One open already
     is printed at once."""
     _waiter("wait-event", sid)
+    stamp = _code_stamp()
     while True:
+        if _code_changed(stamp, "wait-event"):
+            return
         try:
             events = open_events(sid=sid)
         except Exception:
@@ -1580,8 +1602,11 @@ def watch(every=15, sid=None):
     """One line per event that needs this session, the ones open now first;
     nothing else, ever. It counts as armed while it runs (a Monitor)."""
     _waiter("watch", sid)
+    stamp = _code_stamp()
     shown = set()
     while True:
+        if _code_changed(stamp, "watch"):
+            return
         try:
             for e in open_events(sid=sid):
                 if e["id"] in shown:
