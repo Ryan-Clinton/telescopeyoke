@@ -931,16 +931,17 @@ def dawn_flats(popen=subprocess.Popen):
     except (OSError, ValueError):
         pass
     wanted = dawn_filters()
-    flats = ["calibrate.py", "flat", "--twilight", "--tell", "--filters", *wanted]
-    line = ("import subprocess, sys\n"
-            f"subprocess.run([sys.executable, *{flats!r}])\n"
-            "subprocess.run([sys.executable, 'keeper.py', 'stop'])\n")
+    flats = [sys.executable, str(here / "calibrate.py"), "flat", "--twilight", "--tell", "--filters", *wanted]
+    # Two jobs (jobs.py): the flats, then the keeper's warm-up once the flats
+    # have ended however they ended, so the sensor is always warmed slowly.
+    import jobs
     FLATS_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(FLATS_LOG, "w", encoding="utf-8") as log:
-        child = popen([sys.executable, "-c", line], stdout=log, stderr=subprocess.STDOUT, cwd=str(here),
-                      start_new_session=True)
-    if getattr(child, "pid", None):
-        FLATS_PID.write_text(str(child.pid), encoding="utf-8")
+    flats_job = jobs.launch("dawn-flats", flats, why="the night's dawn sky flats", cwd=here, log=FLATS_LOG)
+    jobs.launch("keeper-stop", [sys.executable, str(here / "keeper.py"), "stop"], after=[f"{flats_job}:ended"],
+                why="the night's one slow warm-up, after the flats", cwd=here)
+    supervisor = (jobs.look(flats_job).get("supervisor"))
+    if supervisor:
+        FLATS_PID.write_text(str(supervisor), encoding="utf-8")
     return (f"Dawn flats in {', '.join(wanted[:-1])} and {wanted[-1]} will be taken from where it is parked as the sky brightens, "
             "with nothing over the tube, and you will be told when they are kept or if they fail: "
             "leave the camera, wheel and focus as they are until then.")
@@ -952,8 +953,9 @@ def release_camera(popen=subprocess.Popen):
     import keeper
     if not keeper.running():
         return False
-    popen([sys.executable, str(Path(__file__).with_name("keeper.py")), "stop"], stdout=subprocess.DEVNULL,
-          stderr=subprocess.DEVNULL, cwd=str(Path(__file__).parent), start_new_session=True)
+    import jobs
+    jobs.launch("keeper-stop", [sys.executable, str(Path(__file__).with_name("keeper.py")), "stop"],
+                why="the camera let go: the slow warm-up", cwd=Path(__file__).parent)
     return True
 
 

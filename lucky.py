@@ -711,13 +711,15 @@ def main():
                         send=not args.no_send, mono=args.mono)
         return
     args.target = args.target[0]
-    if args.command == "capture":
-        path = capture(args.target, args.frames, args.exposure, args.gain, roi=args.roi, depth=args.depth,
-                       band=args.filter)
-        if args.then_stack:
-            stack_file(path, keeps=args.keep, in_colour=args.colour, pixels=args.pixels, flat=args.flat)
-    else:
-        stack_file(args.target, keeps=args.keep, in_colour=args.colour, pixels=args.pixels, flat=args.flat)
+    import activity
+    with activity.job(f"lucky-{args.command}"):
+        if args.command == "capture":
+            path = capture(args.target, args.frames, args.exposure, args.gain, roi=args.roi, depth=args.depth,
+                           band=args.filter)
+            if args.then_stack:
+                stack_file(path, keeps=args.keep, in_colour=args.colour, pixels=args.pixels, flat=args.flat)
+        else:
+            stack_file(args.target, keeps=args.keep, in_colour=args.colour, pixels=args.pixels, flat=args.flat)
 
 
 if __name__ == "__main__":

@@ -54,6 +54,7 @@ import activity
 import live
 import config
 import interface
+import jobs
 import records
 
 ROOT = Path(__file__).parent
@@ -723,10 +724,9 @@ def measured_costs(refresh=True):
     found = history.kept()
     if found is None and refresh and not config.DEMO:
         try:
-            import subprocess
-            subprocess.Popen([sys.executable, str(Path(__file__).with_name("history.py")), "--keep"],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-        except OSError:
+            jobs.launch("history-keep", [sys.executable, str(Path(__file__).with_name("history.py")), "--keep"],
+                        kind="routine", why="the depth history, for the next patrol", cwd=ROOT)
+        except (OSError, SystemExit):
             pass
     return found
 
@@ -1387,6 +1387,15 @@ def is_panel(field):
     return re.match(r".+-P\d+$", field) is not None
 
 
+def background(name, session, niceness):
+    """patrol.py --analyse SESSION as a job of its own (./ty jobs), at low
+    priority, its lines in the session's patrol.log as before."""
+    command = [sys.executable, str(ROOT / "patrol.py"), "--analyse", str(session)]
+    if os.name != "nt":
+        command = ["nice", "-n", str(niceness), *command]
+    jobs.launch(name, command, why="the search of a session just taken", cwd=ROOT, log=session / "patrol.log")
+
+
 def finish_later(session, say=print, start=None):
     """The final picture and the search of a session just taken, in the
     background at low priority (patrol.py --analyse, which makes the picture
@@ -1395,18 +1404,13 @@ def finish_later(session, say=print, start=None):
     session = Path(session)
     if config.DEMO:
         return None
-    start = start or subprocess.Popen
-    lowly = {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS} if os.name == "nt" else \
-        {"preexec_fn": lambda: os.nice(10), "start_new_session": True}
-    with open(session / "patrol.log", "w", encoding="utf-8") as log:
-        start([sys.executable, str(ROOT / "patrol.py"), "--analyse", str(session)], stdout=log,
-              stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **lowly)
+    background(f"finish-{session.parent.name}", session, 10)
     say(f"{session.parent.name}: the picture and the search go on in the background, the telescope is free: "
         f"{session / 'patrol.log'}")
     return str(session / "patrol.log")
 
 
-def search_later(session, say=print, start=subprocess.Popen):
+def search_later(session, say=print, start=None):
     """Search a session just stacked, in the background at low priority so
     the next target is not kept waiting: patrol.py --analyse, its lines in
     the session's patrol.log. Not in the demo, nor for a session the
@@ -1414,11 +1418,7 @@ def search_later(session, say=print, start=subprocess.Popen):
     session = Path(session)
     if config.DEMO or os.environ.get("TY_PATROL") or not searchable(session):
         return None
-    lowly = {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS} if os.name == "nt" else \
-        {"preexec_fn": lambda: os.nice(19), "start_new_session": True}
-    with open(session / "patrol.log", "w", encoding="utf-8") as log:
-        start([sys.executable, str(ROOT / "patrol.py"), "--analyse", str(session)], stdout=log,
-              stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **lowly)
+    background(f"search-{session.parent.name}", session, 19)
     say(f"Searching {session.parent.name} {session.name} for anything new, in the background: "
         f"{session / 'patrol.log'}")
     return str(session / "patrol.log")
@@ -1497,7 +1497,13 @@ def main():
         ap.error("name a programme, or --analyse SESSION, or --sweep")
     if args.all_history and not args.sweep:
         ap.error("--all-history goes with --sweep")
-    interface.main("patrol", lambda: run(args), args.json)
+    def work():
+        if args.plan or args.dry_run:
+            return run(args)
+        name = "patrol-" + (args.programme or ("sweep" if args.sweep else Path(args.analyse).parent.name))
+        with activity.job(name):
+            return run(args)
+    interface.main("patrol", work, args.json)
 
 
 if __name__ == "__main__":

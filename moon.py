@@ -380,7 +380,9 @@ def main(argv=None):
         out = plan(args, site)
         print(json.dumps(out, indent=1))
         return 0
-    run(args)
+    import activity
+    with activity.job("moon"):
+        run(args)
     return 0
 
 

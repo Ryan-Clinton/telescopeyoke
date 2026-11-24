@@ -353,8 +353,10 @@ def _hostname():
 
 # ---------------------------------------------------------------- the launcher and the queue
 
-def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=False, cwd=None):
-    """Start COMMAND as a job; returns its ID (or its exit code with wait)."""
+def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=False, cwd=None, log=None):
+    """Start COMMAND as a job; returns its ID (or its exit code with wait).
+    `log`: a file of its own for its lines (a session's patrol.log, which
+    others read), instead of the job's log.txt."""
     if not command:
         raise SystemExit("no command given after --")
     prune()
@@ -363,9 +365,9 @@ def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=Fals
     argv = [sys.executable, str(Path(__file__).resolve()), "_supervise", job_id, name, kind,
             ",".join(after), ",".join(needs), why or "", "1" if wait else "0", "--", *command]
     if wait:
-        return supervise(job_id, name, kind, list(after), list(needs), why, True, command)
+        return supervise(job_id, name, kind, list(after), list(needs), why, True, command, log)
     options = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
-               "cwd": str(cwd or os.getcwd())}
+               "cwd": str(cwd or os.getcwd()), "env": dict(os.environ, TY_JOB_LOG=str(log or ""))}
     if host.WINDOWS:
         options["creationflags"] = 0x00000008 | 0x00000200      # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
     else:
@@ -378,7 +380,7 @@ def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=Fals
     return job_id
 
 
-def supervise(job_id, name, kind, after, needs, why, wait, command):
+def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=None):
     """The launcher's own process: the one writer of process.json. Waits
     for what the job is queued behind, starts it, keeps its log, records
     how it ended."""
@@ -389,7 +391,9 @@ def supervise(job_id, name, kind, after, needs, why, wait, command):
               "supervisor": os.getpid(), "supervisor_start": started_at(os.getpid()),
               "parent": os.environ.get("TY_JOB"), "after": after, "needs": needs, "why": why or None,
               "pid": None, "pid_start": None, "queued": time.time(), "started": None,
-              "phase": "queued", "exit_code": None, "ended": None, "blocked": None}
+              "phase": "queued", "exit_code": None, "ended": None, "blocked": None,
+              "log": str(log_path or d / "log.txt")}
+    log_path = Path(record["log"])
 
     def put(**fields):
         record.update(fields)
@@ -409,7 +413,8 @@ def supervise(job_id, name, kind, after, needs, why, wait, command):
         time.sleep(QUEUE_EVERY_S)
 
     env = dict(os.environ, PYTHONUNBUFFERED="1", TY_JOB=job_id, TY_JOB_ADOPT=str(os.getpid()))
-    log = open(d / "log.txt", "ab", buffering=0)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log = open(log_path, "ab", buffering=0)
     try:
         child = subprocess.Popen(command, stdin=subprocess.DEVNULL, env=env,
                                  stdout=subprocess.PIPE if wait else log, stderr=subprocess.STDOUT)
@@ -439,7 +444,7 @@ def supervise(job_id, name, kind, after, needs, why, wait, command):
         child.wait()
     else:
         while _wait_for(child, 60) is None:
-            cap(d / "log.txt")
+            cap(log_path)
     log.close()
     put(phase="exited", exit_code=child.returncode, ended=time.time())
     return child.returncode
@@ -508,6 +513,10 @@ def ready(job_id, after, needs, queued_at):
         if other is None:
             return f"no job {word}"
         o = look(other)
+        if what == "ended":
+            if o["phase"] in ("done", "failed", "vanished", "blocked"):
+                continue
+            return None
         if what == "released":
             if o["phase"] == "done" or any(e["kind"] == "released" for e in o["events"]):
                 continue
@@ -592,12 +601,13 @@ def look(job_id, now=None):
     p = _read(d / "process.json", {}) or {}
     g = _read(d / "progress.json", {}) or {}
     events = _lines(d / "events.jsonl")
-    beat, logged = _mtime(d / "heartbeat"), _mtime(d / "log.txt")
+    log_path = Path(p.get("log") or d / "log.txt")
+    beat, logged = _mtime(d / "heartbeat"), _mtime(log_path)
     j = {**p, "id": job_id, "name": p.get("name") or g.get("name") or job_id, "kind": g.get("kind") or p.get("kind", "finite"),
          "progress": g, "events": events, "holds": g.get("holds") or [], "heartbeat": beat,
          "last_output": max(filter(None, (logged, g.get("last_output"))), default=None),
          "last_progress": max(filter(None, (g.get("last_progress"), g.get("operation_since"))), default=None),
-         "stall": None, "log": str(d / "log.txt")}
+         "stall": None, "log": str(log_path)}
     phase = p.get("phase")
     alive = running(p.get("pid"), p.get("pid_start"))
     if phase == "queued":
@@ -934,13 +944,15 @@ def main():
         cut = argv.index("--")
         job_id, name, kind, after, needs, why, wait = argv[1:cut]
         sys.exit(supervise(job_id, name, kind, [a for a in after.split(",") if a],
-                           [n for n in needs.split(",") if n], why, wait == "1", argv[cut + 1:]))
+                           [n for n in needs.split(",") if n], why, wait == "1", argv[cut + 1:],
+                           os.environ.pop("TY_JOB_LOG", "") or None))
     if argv[:1] == ["bg"]:
         cut = argv.index("--") if "--" in argv else len(argv)
         ap = argparse.ArgumentParser(prog="ty bg", description="Start a command as a job.")
         ap.add_argument("name")
         ap.add_argument("--after", action="append", default=[],
-                        help="JOB (done), JOB:released (it let go of what it held), JOB:MILESTONE")
+                        help="JOB (done), JOB:ended (however it ended), JOB:released (it let go of what "
+                             "it held), JOB:MILESTONE")
         ap.add_argument("--needs", default="", help=f"comma-separated: {', '.join(NEEDS)}")
         ap.add_argument("--kind", default="finite", choices=KINDS)
         ap.add_argument("--why", help="what it is for (the person's ask)")
