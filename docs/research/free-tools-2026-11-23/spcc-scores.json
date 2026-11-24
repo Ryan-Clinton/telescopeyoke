@@ -1,0 +1,47 @@
+{
+ "none": {
+  "sun_like_stars": 52,
+  "sun_b_minus_r": -0.005,
+  "sun_g_minus_r": 0.194,
+  "off_white": 0.195,
+  "scatter_mag": 0.075,
+  "stars": 135
+ },
+ "ours": {
+  "sun_like_stars": 52,
+  "sun_b_minus_r": 0.055,
+  "sun_g_minus_r": -0.049,
+  "off_white": 0.073,
+  "scatter_mag": 0.075,
+  "stars": 135,
+  "gains": [
+   0.952,
+   1.1911,
+   0.9009
+  ]
+ },
+ "spcc Antlia": {
+  "error": "rectory: filesystem error: directory iterator cannot open directory: No such file or directory [/home/facepipe/.local/share/siril/gaia_photometric.dat]\n\n** (siril-cli:2414234): WARNING **: 11:53:17.413: Failed to install Python module: Failed to open file \u201cpyproject.toml\u201d: No such file or directory\n"
+ },
+ "spcc Astronomik DeepSky": {
+  "error": "rectory: filesystem error: directory iterator cannot open directory: No such file or directory [/home/facepipe/.local/share/siril/gaia_photometric.dat]\n\n** (siril-cli:2414258): WARNING **: 11:53:19.714: Failed to install Python module: Failed to open file \u201cpyproject.toml\u201d: No such file or directory\n"
+ },
+ "spcc Astronomik 2c": {
+  "error": "rectory: filesystem error: directory iterator cannot open directory: No such file or directory [/home/facepipe/.local/share/siril/gaia_photometric.dat]\n\n** (siril-cli:2414308): WARNING **: 11:53:21.305: Failed to install Python module: Failed to open file \u201cpyproject.toml\u201d: No such file or directory\n"
+ },
+ "spcc Baader": {
+  "error": "rectory: filesystem error: directory iterator cannot open directory: No such file or directory [/home/facepipe/.local/share/siril/gaia_photometric.dat]\n\n** (siril-cli:2414345): WARNING **: 11:53:22.557: Failed to install Python module: Failed to open file \u201cpyproject.toml\u201d: No such file or directory\n"
+ },
+ "spcc Chroma": {
+  "error": "rectory: filesystem error: directory iterator cannot open directory: No such file or directory [/home/facepipe/.local/share/siril/gaia_photometric.dat]\n\n** (siril-cli:2414369): WARNING **: 11:53:23.851: Failed to install Python module: Failed to open file \u201cpyproject.toml\u201d: No such file or directory\n"
+ },
+ "spcc Optolong": {
+  "error": "rectory: filesystem error: directory iterator cannot open directory: No such file or directory [/home/facepipe/.local/share/siril/gaia_photometric.dat]\n\n** (siril-cli:2414392): WARNING **: 11:53:25.159: Failed to install Python module: Failed to open file \u201cpyproject.toml\u201d: No such file or directory\n"
+ },
+ "spcc ToupTek": {
+  "error": "rectory: filesystem error: directory iterator cannot open directory: No such file or directory [/home/facepipe/.local/share/siril/gaia_photometric.dat]\n\n** (siril-cli:2414415): WARNING **: 11:53:26.306: Failed to install Python module: Failed to open file \u201cpyproject.toml\u201d: No such file or directory\n"
+ },
+ "spcc ZWO": {
+  "error": "rectory: filesystem error: directory iterator cannot open directory: No such file or directory [/home/facepipe/.local/share/siril/gaia_photometric.dat]\n\n** (siril-cli:2414439): WARNING **: 11:53:28.372: Failed to install Python module: Failed to open file \u201cpyproject.toml\u201d: No such file or directory\n"
+ }
+}

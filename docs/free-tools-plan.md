@@ -1,6 +1,6 @@
 # Plan: use free tools for the picture pipeline
 
-Status: **noise reduction is built (`colour.py --denoise graxpert`), the stacking's star-core fault is fixed, star removal is built (Dark Star), and sharpening, stretch, background and palette stay ours after testing; only colour calibration (SPCC) waits.**
+Status: **noise reduction is built (`colour.py --denoise graxpert`), the stacking's star-core fault is fixed, star removal is built (Dark Star), and sharpening, stretch, background and palette stay ours after testing; colour calibration stays ours after Siril's SPCC crashed.**
 Written 23 November 2026. `final.fits` and every other kept stack were only read.
 
 **The aim:** TelescopeYoke does the best possible job of automating the freely available
@@ -196,8 +196,14 @@ rgbcomp and autostretch, the suite's SCNR; `palette.py`) left a purple gradient 
 flatter nebula and an edge artefact beside `colour.py`'s picture, which fits the sky and balances
 the filters itself. **`colour.py` keeps the palette.**
 
-Siril's SPCC was not tried: its sensor and filter database is a separate download not yet agreed,
-and it needs the make of this rig's R, G and B filters, which is not recorded.
+**Colour calibration, 24 November 2026.** M33's R, G and B of 5 November, lined up as `colour.py` lines
+them up and plate-solved by ASTAP, judged on 135 Gaia DR3 stars in the frame (`spcc.py`). With no
+balance, Sun-like stars (BP-RP 0.72 to 0.92) came out 0.195 magnitudes off white; with our
+star-average balance, 0.073. **Siril 1.4.5's SPCC crashed** (a segmentation fault) every time, just
+after its aperture photometry, with each of the eight RGB filter sets in its database, with fewer stars,
+and with its Python module working; its own plate solve could not run either, as the CDS catalogue
+service it uses did not answer. So it could not be compared, and **our balance stays**. The filters'
+make is still not recorded; SPCC would need it.
 
 ### The star-core clipping fault (in the science stack)
 
@@ -246,7 +252,7 @@ made are not changed until they are restacked.
 | Star removal | Plain code | **Seti Astro Suite Pro's Dark Star, blended**, each star decided once for all filters | Built |
 | Sharpening and deconvolution | Our steps, off unless asked | Siril RL and the suite's sharpen tried; none passed, and none adds real detail | Tested |
 | Stretch | Ours, with a GHS option | **Keep ours**: Siril's autostretch and the suite's statistical stretch lifted the grain, Siril's GHS flattened the nebula | Tested |
-| Colour calibration, broadband | Star average | Siril SPCC | Waiting: its database to be agreed, and the filters' make |
+| Colour calibration, broadband | Star average | **Keep ours**: Siril's SPCC crashed on every run here | Tested |
 | Palette combination | `colour.py` | **Keep ours**: neither tool automates it; the plain free route looked worse | Tested |
 
 A tool replaces our code only if it does at least as well on the measures for that stage
