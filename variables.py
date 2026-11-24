@@ -44,6 +44,7 @@ from scipy.spatial import cKDTree
 
 import config
 import interface
+import jobs
 import records
 
 BIN = 10             # frames in each point of a light curve
@@ -636,7 +637,7 @@ def main():
     ap.add_argument("--offline", action="store_true", help="do not ask VSX which stars are known")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
-    interface.main("variables", lambda: run(args), args.json)
+    interface.main("variables", lambda: jobs.run_as("variables", lambda: run(args)), args.json)
 
 
 if __name__ == "__main__":

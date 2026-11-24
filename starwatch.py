@@ -44,6 +44,7 @@ import numpy as np
 
 import config
 import interface
+import jobs
 import records
 
 STARS = {
@@ -565,7 +566,7 @@ def main():
     ap.add_argument("--bin", type=int, default=BIN, help=f"frames in each point (default {BIN})")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
-    interface.main("starwatch", lambda: run(args), args.json)
+    interface.main("starwatch", lambda: jobs.run_as("starwatch", lambda: run(args)), args.json)
 
 
 if __name__ == "__main__":

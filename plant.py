@@ -45,6 +45,7 @@ import config
 import depth
 import difference
 import interface
+import jobs
 import records
 import stacking
 from camera import luminance
@@ -298,7 +299,7 @@ def main():
     ap.add_argument("--near", help="the object to plate-solve near, if the folder does not say")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
-    interface.main("plant", lambda: run(args), args.json)
+    interface.main("plant", lambda: jobs.run_as("plant", lambda: run(args)), args.json)
 
 
 if __name__ == "__main__":

@@ -16,13 +16,16 @@ frames already sent are not sent again (rsync), so a second stack of the
 same sessions starts at once.
 """
 import json
+import secrets
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import config
 import interface
+import jobs
 import records
 import stacking
 
@@ -114,11 +117,20 @@ def restack(host, sessions, options, say=print):
     # records' provenance names the code that really ran.
     sha, changed = records.commit()
     code = f"TY_CODE_COMMIT={sha}{'+changed' if changed else ''} " if sha else ""
-    command = (f"cd ~/{PLACE}/code && TY_DATA=~/{PLACE}/data TY_CAMERA={shlex.quote(camera)} TY_NO_WATCH=1 {code}{runner} restack.py "
+    # A job of its own there (jobs.py, in the foreground under nohup): its
+    # lines come back as they are printed, and if the connection drops it
+    # carries on there and is followed until it ends (docs/job-reporting-spec.md).
+    name = f"restack-remote-{secrets.token_hex(3)}"
+    data = f"TY_DATA=~/{PLACE}/data"
+    command = (f"cd ~/{PLACE}/code && {data} TY_CAMERA={shlex.quote(camera)} TY_NO_WATCH=1 PYTHONUNBUFFERED=1 "
+               f"{code}nohup {runner} jobs.py bg {name} --wait -- {runner} restack.py "
                + " ".join(shlex.quote(f"../{there(s)[len(PLACE) + 1:]}") for s in sessions)
                + "".join(f" {shlex.quote(o)}" for o in options))
-    say(f"stacking on {host}")
+    say(f"stacking on {host} (its job there: {name})")
+    jobs.current().expect(6 * 3600, f"stacking on {host}")
     ran = ssh(host, command)
+    if ran.returncode == 255:          # the connection, not the stack: follow the job there
+        ran = follow(host, f"cd ~/{PLACE}/code && {data} {runner} jobs.py --state {name}", say)
     if ran.returncode:
         raise interface.Refusal("REMOTE_FAILED", f"restack.py failed on {host} (exit {ran.returncode}).")
     folder = sessions[0]
@@ -143,6 +155,29 @@ def restack(host, sessions, options, say=print):
         record.write_text(text, encoding="utf-8")
     say(f"brought back to {folder}")
     return folder
+
+
+def follow(host, ask, say, every=120):
+    """The job on HOST after the connection dropped: asked every two minutes
+    until it ends, however long HOST cannot be reached."""
+    say(f"the connection to {host} dropped; the stack goes on there, asked every {every // 60} minutes")
+    jobs.current().reading(f"{host} unreachable; its stack goes on there")
+    while True:
+        time.sleep(every)
+        try:
+            got = ssh(host, ask, capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            continue
+        if got.returncode:
+            continue
+        try:
+            state = json.loads(got.stdout)
+        except ValueError:
+            continue
+        jobs.current().reading(f"on {host}: {state.get('phase')}, {state.get('last_line') or ''}"[:200])
+        if state.get("phase") in ("done", "failed", "vanished", "blocked"):
+            say(f"the stack on {host} ended: {state.get('phase')}")
+            return subprocess.CompletedProcess(ask, 0 if state["phase"] == "done" else 1)
 
 
 if __name__ == "__main__":

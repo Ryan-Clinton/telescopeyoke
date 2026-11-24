@@ -47,6 +47,7 @@ from scipy.spatial import cKDTree
 
 import config
 import interface
+import jobs
 import records
 
 FEATURES = ("score", "width", "elongation", "sharpness", "dark_lobe", "ring", "on_reference", "offset")
@@ -357,7 +358,7 @@ def main():
     args = ap.parse_args()
     if args.action == "score" and not args.session:
         ap.error("score needs a session")
-    interface.main("realbogus", lambda: run(args), args.json)
+    interface.main("realbogus", lambda: jobs.run_as("realbogus", lambda: run(args)), args.json)
 
 
 if __name__ == "__main__":

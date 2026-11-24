@@ -40,6 +40,7 @@ import requests
 
 import config
 import interface
+import jobs
 import records
 
 ARCHIVE = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
@@ -656,7 +657,7 @@ def main():
     ap.add_argument("--demo", action="store_true", help="the example site instead of config.toml")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
-    interface.main("transits", lambda: run(args), args.json)
+    interface.main("transits", lambda: jobs.run_as("transits", lambda: run(args)), args.json)
 
 
 if __name__ == "__main__":

@@ -141,7 +141,7 @@ class Job:
     call from the main thread; none raises (a record lost is never the
     work's failure)."""
 
-    def __init__(self, name, steps=None, expect_s=None, kind="finite", hold_s=None):
+    def __init__(self, name, steps=None, expect_s=None, kind="finite", lazy_s=None):
         launcher = os.environ.get("TY_JOB_ADOPT")
         adopt = launcher and launcher == str(os.getppid()) and os.environ.get("TY_JOB")
         os.environ.pop("TY_JOB_ADOPT", None)
@@ -161,20 +161,22 @@ class Job:
                          "expect_end": now + expect_s if expect_s else None}
         self._beating = None
         self._ended = False
+        # lazy_s: kept only once it has run this long, so a quick look run by
+        # hand leaves no record and no event (a launched job is always kept).
+        self._shown = not (lazy_s and not adopt)
+        self._lazy_s = lazy_s or 0
+        self._buffered = []
 
     # -- starting and ending
     def __enter__(self):
         global CURRENT
         try:
-            self.dir.mkdir(parents=True, exist_ok=True)
             for stream in (sys.stdout, sys.stderr):
                 if hasattr(stream, "reconfigure"):
                     stream.reconfigure(line_buffering=True)
             os.environ["TY_JOB"] = self.id          # what this starts is this job's child
-            if not self.launched:
-                self._process(phase="running", exit_code=None)
-            self._save()
-            self._beat()
+            if self._shown:
+                self._show(first=True)
             self._beating = threading.Thread(target=self._heart, daemon=True)
             self._beating.start()
             atexit.register(self._at_exit)
@@ -200,10 +202,26 @@ class Job:
     def _at_exit(self):
         self._end(0, self.progress.get("result") or "done")
 
+    def _show(self, first=False):
+        """Write the job's record for the first time (at once, or once a
+        lazy job has run long enough)."""
+        with self._lock:
+            self.dir.mkdir(parents=True, exist_ok=True)
+            if not self.launched:
+                self._process(phase="running", exit_code=None)
+            self._shown = True
+            for row in self._buffered:
+                _append(self.dir / "events.jsonl", row)
+            self._buffered = []
+        self._save()
+        self._beat()
+
     def _end(self, code, result):
         if self._ended:
             return
         self._ended = True
+        if not self._shown:
+            return              # a quick run: nothing was kept, nothing to end
         self.progress["result"] = result
         self.progress["waiting"] = None
         self.progress["holds"] = []
@@ -227,16 +245,25 @@ class Job:
 
     def _heart(self):
         while not self._ended:
+            if not self._shown and time.time() - self.progress["started"] >= self._lazy_s:
+                try:
+                    self._show()
+                except Exception:
+                    pass
             self._beat()
-            time.sleep(HEARTBEAT_S)
+            time.sleep(HEARTBEAT_S if self._shown else min(HEARTBEAT_S, max(1, self._lazy_s / 4)))
 
     def _beat(self):
+        if not self._shown:
+            return
         try:
             (self.dir / "heartbeat").touch()
         except OSError:
             pass
 
     def _save(self):
+        if not self._shown:
+            return
         try:
             with self._lock:
                 records.write(self.dir / "progress.json", self.progress, indent=None)
@@ -247,9 +274,12 @@ class Job:
         try:
             with self._lock:
                 self.count += 1
-                _append(self.dir / "events.jsonl", {"id": f"{self.id}:{self.count}", "job": self.id,
-                                                    "kind": kind, "words": str(words), "wake": wake,
-                                                    "at": time.time(), **extra})
+                row = {"id": f"{self.id}:{self.count}", "job": self.id, "kind": kind, "words": str(words),
+                       "wake": wake, "at": time.time(), **extra}
+                if self._shown:
+                    _append(self.dir / "events.jsonl", row)
+                else:
+                    self._buffered.append(row)
         except Exception:
             pass
 
@@ -325,9 +355,17 @@ class Job:
         self._save()
 
 
-def job(name, steps=None, expect_s=None, kind="finite"):
+def job(name, steps=None, expect_s=None, kind="finite", lazy_s=None):
     """This process's job (the one already open, if any)."""
-    return CURRENT if CURRENT is not None else Job(name, steps, expect_s, kind)
+    return CURRENT if CURRENT is not None else Job(name, steps, expect_s, kind, lazy_s)
+
+
+def run_as(name, work, lazy_s=60):
+    """work() as this process's job, kept only if it runs a minute or more:
+    for scripts whose long runs said nothing until the end, without a
+    record for every quick look at them."""
+    with job(name, lazy_s=lazy_s):
+        return work()
 
 
 class _NoJob:
@@ -429,7 +467,9 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
         # sent to this launcher goes on to the command, as if it were the
         # command itself (a schedule's step stopped by its runner).
         for sig in (signal.SIGTERM, signal.SIGINT, getattr(signal, "SIGHUP", None)):
-            if sig is not None:
+            # One ignored already (nohup: a job on another computer that must
+            # outlive its SSH connection) stays ignored.
+            if sig is not None and signal.getsignal(sig) is not signal.SIG_IGN:
                 try:
                     signal.signal(sig, lambda number, _frame: child.send_signal(number))
                 except (OSError, ValueError):
@@ -669,7 +709,7 @@ def wake_events(j, now=None):
     now = now or time.time()
     out = [dict(e, name=j["name"]) for e in j["events"] if e.get("wake")]
     if j["phase"] in ("done", "failed", "vanished", "blocked"):
-        if not (j["phase"] == "done" and j["kind"] == "routine"):
+        if not (j["phase"] == "done" and (j["kind"] == "routine" or j.get("parent"))):
             result = j["progress"].get("result") or j.get("blocked") or _last_line(j["log"]) or ""
             words = {"done": "", "failed": f"exit {j.get('exit_code')}",
                      "vanished": "its process is gone and no ending was recorded",
@@ -975,6 +1015,7 @@ def main():
     ap.add_argument("--ack", nargs=2, metavar=("EVENT", "WORDS"))
     ap.add_argument("--busy-until", nargs=2, metavar=("TIME", "WORDS"))
     ap.add_argument("--stop", metavar="JOB")
+    ap.add_argument("--state", metavar="JOB", help="one job's phase and last line, as JSON (remote.py asks it)")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     if args.watch:
@@ -991,6 +1032,11 @@ def main():
         return
     if args.stop:
         print(stop(args.stop))
+        return
+    if args.state:
+        found = find(args.state)
+        j = look(found) if found else {"phase": "unknown", "log": ""}
+        print(json.dumps({"phase": j["phase"], "last_line": _last_line(j["log"]) if j["log"] else None}))
         return
     if args.name:
         return tail(args.name, args.tail or 20)

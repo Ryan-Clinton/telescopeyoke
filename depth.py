@@ -48,6 +48,7 @@ from scipy.spatial import cKDTree
 
 import config
 import interface
+import jobs
 import records
 import stacking
 from camera import luminance
@@ -1000,11 +1001,11 @@ def main():
         interface.main("depth-destripe-check", lambda: destripe_check(args.target), args.json)
         return
     if args.model or args.predict:
-        interface.main("depth-model", lambda: run_model(args), args.json)
+        interface.main("depth-model", lambda: jobs.run_as("depth-model", lambda: run_model(args)), args.json)
         return
     if not args.target:
         ap.error("name a stack, or use --model or --predict")
-    interface.main("depth", lambda: run(args), args.json)
+    interface.main("depth", lambda: jobs.run_as("depth", lambda: run(args)), args.json)
 
 
 if __name__ == "__main__":

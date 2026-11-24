@@ -39,6 +39,7 @@ import numpy as np
 
 import config
 import interface
+import jobs
 import records
 
 RADII = (1.0, 1.5, 2.0, 2.5, 3.0)     # aperture radii, times the stars' width (FWHM)
@@ -439,7 +440,7 @@ def main():
         return
     if not args.session or not args.planet:
         ap.error("name a session and --planet, or --compare FIELD")
-    interface.main("precision", lambda: run(args), False)
+    interface.main("precision", lambda: jobs.run_as("precision", lambda: run(args)), False)
 
 
 if __name__ == "__main__":

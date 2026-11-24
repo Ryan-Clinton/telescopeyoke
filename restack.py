@@ -39,6 +39,7 @@ import numpy as np
 from PIL import Image
 
 import interface
+import jobs
 import records
 import process
 import stacking
@@ -349,7 +350,7 @@ def main():
         tell(picture.parent, summary)
         return summary
 
-    interface.main("restack", work, args.json)
+    interface.main("restack", lambda: jobs.run_as("restack", work), args.json)
 
 
 if __name__ == "__main__":

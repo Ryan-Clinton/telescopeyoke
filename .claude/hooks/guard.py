@@ -73,6 +73,12 @@ def lock_path():
     return (PROJECT / LOCK).resolve()
 
 
+def without_heredocs(command):
+    """The line with each here-document's text taken out: what a command
+    reads (a commit message, a script's source), not commands."""
+    return re.sub(r"<<-?\s*(['\"]?)(\w+)\1([^\n]*)\n.*?\n\s*\2\s*(\n|$)", r"<< HEREDOC\3\n", command, flags=re.S)
+
+
 def tokens(command):
     """The command line's words and operators. A line the shell's rules
     cannot split (an unmatched quote) is split more loosely instead, so it
@@ -81,8 +87,7 @@ def tokens(command):
     # A here-document's text is what a command reads, not commands: a commit
     # message or a script's source. Rules that care what it says (inline
     # code naming the lock, importing the mount) read the raw line instead.
-    command = re.sub(r"<<-?\s*(['\"]?)(\w+)\1([^\n]*)\n.*?\n\s*\2\s*(\n|$)", r"<< HEREDOC\3\n", command,
-                     flags=re.S)
+    command = without_heredocs(command)
     command = command.replace("\\", "/").replace("\n", " ;\n")    # each line its own command
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>")
@@ -374,7 +379,7 @@ def tracked_jobs(payload):
     if payload.get("tool_name") not in SHELL_TOOLS:
         return
     data = payload.get("tool_input") or {}
-    command = data.get("command", "")
+    command = without_heredocs(data.get("command", ""))
     if not (data.get("run_in_background") or BACKGROUND.search(command)):
         return
     try:

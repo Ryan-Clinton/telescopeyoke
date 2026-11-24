@@ -70,6 +70,7 @@ from astropy.time import Time
 
 import config
 import interface
+import jobs
 import records
 
 ALERCE = "https://api.alerce.online/ztf/v1/objects"
@@ -390,7 +391,7 @@ def main():
     ap.add_argument("--demo", action="store_true", help="the example site instead of config.toml")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
-    interface.main("brokers", lambda: run(args), args.json)
+    interface.main("brokers", lambda: jobs.run_as("brokers", lambda: run(args)), args.json)
 
 
 if __name__ == "__main__":

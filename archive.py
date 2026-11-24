@@ -73,6 +73,7 @@ import requests
 
 import config
 import interface
+import jobs
 
 MAST = "https://archive.stsci.edu/missions/kepler/lightcurves/{group}/{kic}/"
 BKJD = 2454833.0     # Kepler's times are BJD minus this
@@ -979,7 +980,7 @@ def main():
     ap.add_argument("star", nargs="*", help="dips: the star (KIC 8462852, Tabby); search: a file or a comma list")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
-    interface.main("archive", lambda: run(args), args.json)
+    interface.main("archive", lambda: jobs.run_as("archive", lambda: run(args)), args.json)
 
 
 if __name__ == "__main__":
