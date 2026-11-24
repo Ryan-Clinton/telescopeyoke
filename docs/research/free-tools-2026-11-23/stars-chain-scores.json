@@ -1,0 +1,192 @@
+{
+ "IC1848-chain": {
+  "ours-after-graxpert": {
+   "stars": 280,
+   "star_left": 0.023,
+   "brightest_20_left": 0.047,
+   "worst_tenth_left": 0.046,
+   "dark_patch": -6.29,
+   "glow_kept": 1.023,
+   "line_kept": 0.523
+  },
+  "graxpert-darkstar-unscreen": {
+   "stars": 280,
+   "star_left": 0.003,
+   "brightest_20_left": -0.006,
+   "worst_tenth_left": 0.027,
+   "dark_patch": -7.35,
+   "glow_kept": 1.129,
+   "line_kept": 0.444
+  },
+  "graxpert-darkstar-additive": {
+   "stars": 280,
+   "star_left": 0.003,
+   "brightest_20_left": -0.006,
+   "worst_tenth_left": 0.027,
+   "dark_patch": -7.35,
+   "glow_kept": 1.129,
+   "line_kept": 0.444
+  },
+  "graxpert-darkstar-blend": {
+   "stars": 280,
+   "star_left": 0.005,
+   "brightest_20_left": 1.0,
+   "worst_tenth_left": 0.041,
+   "dark_patch": -7.37,
+   "glow_kept": 1.029,
+   "line_kept": 1.011
+  }
+ },
+ "M1-chain": {
+  "ours-after-graxpert": {
+   "stars": 285,
+   "star_left": 0.014,
+   "brightest_20_left": 0.026,
+   "worst_tenth_left": 0.029,
+   "dark_patch": -3.96,
+   "glow_kept": 1.028,
+   "line_kept": 0.603
+  },
+  "graxpert-darkstar-unscreen": {
+   "stars": 285,
+   "star_left": -0.003,
+   "brightest_20_left": -0.001,
+   "worst_tenth_left": 0.008,
+   "dark_patch": -4.56,
+   "glow_kept": 1.129,
+   "line_kept": 0.629
+  },
+  "graxpert-darkstar-additive": {
+   "stars": 285,
+   "star_left": -0.003,
+   "brightest_20_left": -0.001,
+   "worst_tenth_left": 0.008,
+   "dark_patch": -4.56,
+   "glow_kept": 1.129,
+   "line_kept": 0.629
+  },
+  "graxpert-darkstar-blend": {
+   "stars": 285,
+   "star_left": -0.001,
+   "brightest_20_left": -0.0,
+   "worst_tenth_left": 0.011,
+   "dark_patch": -4.5,
+   "glow_kept": 1.039,
+   "line_kept": 1.012
+  }
+ },
+ "M27-chain": {
+  "ours-after-graxpert": {
+   "stars": 289,
+   "star_left": 0.026,
+   "brightest_20_left": 0.034,
+   "worst_tenth_left": 0.05,
+   "dark_patch": -2.46,
+   "glow_kept": 1.029,
+   "line_kept": 0.646
+  },
+  "graxpert-darkstar-unscreen": {
+   "stars": 289,
+   "star_left": -0.012,
+   "brightest_20_left": -0.01,
+   "worst_tenth_left": 0.031,
+   "dark_patch": -3.61,
+   "glow_kept": 1.197,
+   "line_kept": 0.247
+  },
+  "graxpert-darkstar-additive": {
+   "stars": 289,
+   "star_left": -0.012,
+   "brightest_20_left": -0.01,
+   "worst_tenth_left": 0.031,
+   "dark_patch": -3.61,
+   "glow_kept": 1.197,
+   "line_kept": 0.247
+  },
+  "graxpert-darkstar-blend": {
+   "stars": 289,
+   "star_left": -0.005,
+   "brightest_20_left": -0.007,
+   "worst_tenth_left": 0.043,
+   "dark_patch": -3.39,
+   "glow_kept": 1.052,
+   "line_kept": 0.935
+  }
+ },
+ "IC405x-chain": {
+  "ours-after-graxpert": {
+   "stars": 130,
+   "star_left": 0.033,
+   "brightest_20_left": 0.022,
+   "worst_tenth_left": 0.092,
+   "dark_patch": -3.05,
+   "glow_kept": 1.022,
+   "line_kept": 0.566
+  },
+  "graxpert-darkstar-unscreen": {
+   "stars": 130,
+   "star_left": -0.004,
+   "brightest_20_left": 0.004,
+   "worst_tenth_left": 0.011,
+   "dark_patch": -3.25,
+   "glow_kept": 1.049,
+   "line_kept": 0.455
+  },
+  "graxpert-darkstar-additive": {
+   "stars": 130,
+   "star_left": -0.004,
+   "brightest_20_left": 0.004,
+   "worst_tenth_left": 0.011,
+   "dark_patch": -3.25,
+   "glow_kept": 1.049,
+   "line_kept": 0.455
+  },
+  "graxpert-darkstar-blend": {
+   "stars": 130,
+   "star_left": -0.004,
+   "brightest_20_left": 0.004,
+   "worst_tenth_left": 0.013,
+   "dark_patch": -3.18,
+   "glow_kept": 1.022,
+   "line_kept": 1.02
+  }
+ },
+ "M31x-chain": {
+  "ours-after-graxpert": {
+   "stars": 226,
+   "star_left": 0.021,
+   "brightest_20_left": 0.019,
+   "worst_tenth_left": 0.093,
+   "dark_patch": -3.24,
+   "glow_kept": 1.025,
+   "line_kept": 0.638
+  },
+  "graxpert-darkstar-unscreen": {
+   "stars": 226,
+   "star_left": 0.009,
+   "brightest_20_left": 0.008,
+   "worst_tenth_left": 0.03,
+   "dark_patch": -3.43,
+   "glow_kept": 1.054,
+   "line_kept": 0.642
+  },
+  "graxpert-darkstar-additive": {
+   "stars": 226,
+   "star_left": 0.009,
+   "brightest_20_left": 0.008,
+   "worst_tenth_left": 0.03,
+   "dark_patch": -3.43,
+   "glow_kept": 1.054,
+   "line_kept": 0.642
+  },
+  "graxpert-darkstar-blend": {
+   "stars": 226,
+   "star_left": 0.01,
+   "brightest_20_left": 0.008,
+   "worst_tenth_left": 0.031,
+   "dark_patch": -3.36,
+   "glow_kept": 1.025,
+   "line_kept": 1.012
+  }
+ }
+}

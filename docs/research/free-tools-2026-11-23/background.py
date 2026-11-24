@@ -58,6 +58,18 @@ def siril(a, how):
         return np.squeeze(fits.getdata(f"{d}/b.fits")).astype(np.float32) * (high - low) + low
 
 
+def abe(a, *options):
+    """Seti Astro Suite Pro's Automatic Background Extraction through its own command."""
+    u, low, high = to_unit(a)
+    with tempfile.TemporaryDirectory(dir=W) as d:
+        fits.PrimaryHDU(u).writeto(f"{d}/in.fits")
+        r = subprocess.run([str(F / "sas/bin/setiastrosuitepro"), "process", "abe", "-i", f"{d}/in.fits", "-o", f"{d}/out.fits",
+                            "--seed", "0", "-q", *options], env=dict(os.environ, QT_QPA_PLATFORM="offscreen"),
+                           capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        if not Path(f"{d}/out.fits").exists(): sys.exit("ABE: " + (r.stdout + r.stderr)[-800:])
+        return np.squeeze(fits.getdata(f"{d}/out.fits")).astype(np.float32) * (high - low) + low
+
+
 def ours(a, guide):
     clear = colour.clear_of_nebula(guide)
     if clear.mean() >= colour.MIN_CLEAR:
@@ -66,7 +78,10 @@ def ours(a, guide):
 
 
 METHODS = {"ours": ours, "graxpert-0.1": lambda a, g: graxpert(a, .1), "graxpert-0.5": lambda a, g: graxpert(a, .5),
-           "siril-rbf": lambda a, g: siril(a, "-rbf"), "siril-poly2": lambda a, g: siril(a, "2")}
+           "siril-rbf": lambda a, g: siril(a, "-rbf"), "siril-poly2": lambda a, g: siril(a, "2"),
+           "abe": lambda a, g: abe(a), "abe-poly2": lambda a, g: abe(a, "--rbf", "false")}
+# TY_METHODS names a few to run (24 November 2026: ABE added after the others had been scored).
+METHODS = {k: v for k, v in METHODS.items() if k in os.environ.get("TY_METHODS", k).split(",")}
 
 
 def load(stem):
@@ -113,4 +128,4 @@ for stem in STEMS:
             else:
                 row[case] = round(float(np.sqrt(np.mean(d ** 2) / np.mean(c ** 2))), 3)
         results[stem][name] = row; print(stem, name, row, flush=True)
-        json.dump(results, open(W / "scores.json", "w"), indent=1)
+        json.dump(results, open(W / os.environ.get("TY_SCORES", "scores.json"), "w"), indent=1)

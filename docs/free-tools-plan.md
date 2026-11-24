@@ -20,11 +20,17 @@ blur's error at that grain; lower is better.
 |---|---|---|
 | Plain blur | 98.2 / 96.4 / 92.0 | 1.000 |
 | **GraXpert 3.0.2 denoise** | **93.0 / 88.5 / 84.0** | **0.989 / 0.971 / 0.932** |
+| DeepSNR 1.3.2 | 93.5 / 89.1 / 84.9 | 0.990 / 0.974 / 0.943 |
 | Cosmic Clarity (AI3.6) | 91.5 / 85.9 / 80.2 | 0.994 / 0.985 / 0.975 |
 | Our best model | 90.3 / 84.1 / 78.0 | 0.994 / 0.984 / 0.960 |
 | Siril 1.4.5 NL-Bayes, defaults | 85.3 / 76.0 / 66.9 | 1.007 / 1.017 / 1.039 |
+| Seti Astro Suite Pro 1.24.8, AI4 denoise | 78.8 / 65.3 / 51.7 | 1.001 / 1.027 / 1.135 |
 
 - **GraXpert beat every model we trained on both measures, at every noise level.**
+- **DeepSNR came closest and does not replace it:** it kept slightly more of the line at every
+  grain but was slightly further from the independent stack at every grain, so it is not at
+  least as good on both. The faintest 5% of stars in its worst stack read 28% low (GraXpert 21%).
+  The suite's newer AI4 denoise did worse than its own older AI3.6 on both measures here.
 - A plain blur still keeps more of a thin planted line, so no AI tool here is free of
   smoothing. GraXpert gets closer to the independent stack, and looks cleaner.
 - Median star flux through GraXpert was 0.999 of the input, but the faintest 5% of the
@@ -53,6 +59,18 @@ is better; "glow kept" should be near 1. Medians of the five, with the worst sta
 SII it took off 44 to 58% of a faint glow where ours took 15%, and losing nebula is the worse
 fault. Our model is also told where the nebula is from the Ha stack, which the tools are not.
 Siril ran with automatic samples; placing them by hand might do better but is not automation.
+
+Added on 24 November 2026, the same five stacks and measures, the tool's own defaults:
+
+| Method | Tilt left | Bowl left | Corner left | Glow kept |
+|---|---|---|---|---|
+| Seti Astro Suite Pro ABE (polynomial 2 and RBF) | 0.26 (0.30) | 0.27 (0.33) | 0.30 (0.38) | 0.86 (0.84) |
+| Seti Astro Suite Pro ABE, polynomial 2 only | 0.10 (0.12) | 0.31 (0.54) | 0.38 (0.54) | 0.95 (0.90) |
+
+Neither replaces ours. The polynomial alone keeps more of a faint glow and takes off more of a
+tilt, but leaves about twice as much of a bowl or a corner glow. GraXpert's non-AI methods
+(RBF, splines, kriging) were not tried: from its command line they need sample points saved
+from its window, so they cannot run on their own.
 
 ### Star removal
 
@@ -84,8 +102,8 @@ star on a filament can leave a soft patch.
 |---|---|---|---|
 | Calibration, alignment, science stack | `stacking.py` | **Keep.** Photometry and discovery depend on its checks and records | Stays |
 | Star-core clipping fault | Open | Fix in `stacking.py`, comparing with Siril's rejection | To do |
-| Noise reduction | Optional in pictures | **GraXpert**, on each filter's linear stack | Built |
-| Background and gradients | Our sky model | **Keep ours**: no tool did as well overall | Tested |
+| Noise reduction | Optional in pictures | **GraXpert**, on each filter's linear stack; DeepSNR and the suite's AI4 tried and not better | Built |
+| Background and gradients | Our sky model | **Keep ours**: no tool did as well overall (GraXpert AI, Siril, Seti Astro ABE) | Tested |
 | Star removal | Plain code | Seti Astro Suite Pro's Dark Star; StarNet if its terms allow | Tested: far better on stars, missed the thin-line mark on one of two unseen stacks |
 | Sharpening and deconvolution | Our steps | GraXpert and Cosmic Clarity, with star and nebula checks | To test |
 | Stretch | Ours, with a GHS option | Siril GHS | To test |

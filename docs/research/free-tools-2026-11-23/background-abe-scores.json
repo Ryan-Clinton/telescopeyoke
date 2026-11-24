@@ -1,0 +1,72 @@
+{
+ "IC405-Ha": {
+  "abe": {
+   "tilt": 0.3,
+   "bowl": 0.269,
+   "corner": 0.221,
+   "glow_kept": 0.835
+  },
+  "abe-poly2": {
+   "tilt": 0.12,
+   "bowl": 0.409,
+   "corner": 0.328,
+   "glow_kept": 0.901
+  }
+ },
+ "IC405-SII": {
+  "abe": {
+   "tilt": 0.24,
+   "bowl": 0.232,
+   "corner": 0.219,
+   "glow_kept": 0.878
+  },
+  "abe-poly2": {
+   "tilt": 0.041,
+   "bowl": 0.308,
+   "corner": 0.335,
+   "glow_kept": 0.978
+  }
+ },
+ "NGC2174-Ha": {
+  "abe": {
+   "tilt": 0.286,
+   "bowl": 0.305,
+   "corner": 0.358,
+   "glow_kept": 0.841
+  },
+  "abe-poly2": {
+   "tilt": 0.096,
+   "bowl": 0.535,
+   "corner": 0.539,
+   "glow_kept": 0.955
+  }
+ },
+ "NGC2174-OIII": {
+  "abe": {
+   "tilt": 0.246,
+   "bowl": 0.239,
+   "corner": 0.297,
+   "glow_kept": 0.864
+  },
+  "abe-poly2": {
+   "tilt": 0.096,
+   "bowl": 0.218,
+   "corner": 0.38,
+   "glow_kept": 0.95
+  }
+ },
+ "NGC2174-SII": {
+  "abe": {
+   "tilt": 0.261,
+   "bowl": 0.332,
+   "corner": 0.377,
+   "glow_kept": 0.923
+  },
+  "abe-poly2": {
+   "tilt": 0.04,
+   "bowl": 0.245,
+   "corner": 0.415,
+   "glow_kept": 0.954
+  }
+ }
+}

@@ -1,0 +1,102 @@
+{
+ "IC1848-chain": {
+  "graxpert-starnet": {
+   "stars": 280,
+   "star_left": 0.0,
+   "brightest_20_left": -0.001,
+   "worst_tenth_left": 0.027,
+   "dark_patch": -6.94,
+   "glow_kept": 1.025,
+   "line_kept": 0.334
+  },
+  "graxpert-starnet-blend": {
+   "stars": 280,
+   "star_left": 0.004,
+   "brightest_20_left": 1.0,
+   "worst_tenth_left": 1.0,
+   "dark_patch": -6.81,
+   "glow_kept": 1.02,
+   "line_kept": 1.012
+  }
+ },
+ "M1-chain": {
+  "graxpert-starnet": {
+   "stars": 285,
+   "star_left": -0.008,
+   "brightest_20_left": -0.002,
+   "worst_tenth_left": 0.004,
+   "dark_patch": -4.48,
+   "glow_kept": 1.032,
+   "line_kept": 0.283
+  },
+  "graxpert-starnet-blend": {
+   "stars": 285,
+   "star_left": -0.008,
+   "brightest_20_left": -0.002,
+   "worst_tenth_left": 0.004,
+   "dark_patch": -4.5,
+   "glow_kept": 1.032,
+   "line_kept": 1.022
+  }
+ },
+ "M27-chain": {
+  "graxpert-starnet": {
+   "stars": 289,
+   "star_left": -0.018,
+   "brightest_20_left": -0.001,
+   "worst_tenth_left": 0.001,
+   "dark_patch": -4.5,
+   "glow_kept": 1.046,
+   "line_kept": -0.037
+  },
+  "graxpert-starnet-blend": {
+   "stars": 289,
+   "star_left": -0.017,
+   "brightest_20_left": -0.001,
+   "worst_tenth_left": 0.002,
+   "dark_patch": -3.86,
+   "glow_kept": 1.04,
+   "line_kept": 0.884
+  }
+ },
+ "IC405x-chain": {
+  "graxpert-starnet": {
+   "stars": 130,
+   "star_left": 0.001,
+   "brightest_20_left": -0.007,
+   "worst_tenth_left": 0.031,
+   "dark_patch": -3.14,
+   "glow_kept": 1.022,
+   "line_kept": 0.52
+  },
+  "graxpert-starnet-blend": {
+   "stars": 130,
+   "star_left": 0.001,
+   "brightest_20_left": -0.007,
+   "worst_tenth_left": 0.031,
+   "dark_patch": -3.14,
+   "glow_kept": 1.022,
+   "line_kept": 1.019
+  }
+ },
+ "M31x-chain": {
+  "graxpert-starnet": {
+   "stars": 226,
+   "star_left": 0.01,
+   "brightest_20_left": -0.003,
+   "worst_tenth_left": 0.048,
+   "dark_patch": -3.34,
+   "glow_kept": 1.026,
+   "line_kept": 0.596
+  },
+  "graxpert-starnet-blend": {
+   "stars": 226,
+   "star_left": 0.01,
+   "brightest_20_left": -0.003,
+   "worst_tenth_left": 0.048,
+   "dark_patch": -3.34,
+   "glow_kept": 1.026,
+   "line_kept": 1.012
+  }
+ }
+}
