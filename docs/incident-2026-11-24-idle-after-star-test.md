@@ -20,7 +20,7 @@ leaves the brightest stars on 6 of the sets.
 1. **Registered under the right session?** Yes: `session` in its record is this session's id.
 2. **Completion event made?** Yes, at 20:37, shown later by the hook.
 3. **A watcher running at 20:37?** No. The session never started `./ty jobs --watch`, though the
-   scheduling session asked every session to at 12:16. Its earlier Monitors were all before noon.
+   scheduling session asked every session to around midday. None of its Monitors was after that.
 4. **Did the event reach the session?** Only at 23:31, through the hook on the owner's message.
 5. **Could anything wake the ended turn?** Not as set up. A turn that has ended is resumed only by a
    harness notification: a background command exiting, a Monitor line, a scheduled check-in, or a
