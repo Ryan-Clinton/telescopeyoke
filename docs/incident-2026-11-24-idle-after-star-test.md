@@ -72,6 +72,17 @@ Those were put to the scheduling session on 24 November; they are not built yet.
 
 ## Proof on a real job
 
-Armed at about 23:40 on the bright-star diagnosis (`brightdiag2`): busy-until 06:00, a background
-waiter on that job, and the watcher. The turn then ended. The result, whether the session resumed
-by itself when the job finished, is recorded below once it happens.
+On the night of 24 November, after the scheduling session shipped `./ty jobs --wait-event`, the
+tracked waiters and `--busy-until done`:
+
+| UT | What happened |
+|---|---|
+| 23:42 | The bright-star check (`bright20`) ended; the pictures job (`ampictures`), queued with `--after bright20:ended`, started by itself |
+| about 23:44 | The Stop hook refused to let the turn end while a job ran with nothing armed; the session armed `--wait-event` |
+| about 23:50 | The session answered the owner and its turn ended, with `ampictures2` running and `--wait-event` armed |
+| 23:53 | `ampictures2` was reported stalled and the session idle; `--wait-event` exited and the session resumed with no message from the owner |
+| about 23:55 | It found the cause (the stopped `ampictures` had left its remote `colour.py` running on the desktop, sharing the GPU), stopped that, acked both events, re-armed `--wait-event` and reported `--stop`'s gap to the scheduling session |
+
+So the chain worked once without the owner: an ended turn, an event, the session woken, the cause
+found and acted on, the waiter armed again. A job ending in success has not yet woken an ended turn;
+that is the pictures job's end, still to come.
