@@ -761,6 +761,10 @@ to 3.5 px HFD binned through haze; the guide camera needs gain 400 % (at
 (0.48 and 0.67 px/s, about 0.42 expected), then the star was lost, once
 to a crowded field (the Double Cluster) and once to haze; not proven.
 
+### 24 November 2026: the guide camera through the SV241 hub
+
+Indoors, no sky ([the record](nights/2026-11-23/guide-camera-driver.md)). Proven: through the hub, the guider's binned 640 x 480 mode and a full-resolution 512 x 960 window each kept 149 of 150 2 s frames over 5 minutes, with no USB error. Full-width frames still fail in every mode tried, and delivery falls off from 544 pixels wide. Not proven: that a window guides better than binned, or that any driver could fix full width.
+
 ### 6 November 2026: the guide camera
 
 Indoors, no sky ([the record](nights/2026-11-06/guide-camera.md)). Proven: the GPCAM's ST4 lead moves the mount north, south, east and west, about 7.1"/s (`./guidecam.py pulse`). Failed: the guide camera and the filter wheel together on the unpowered Trust hub; and, with the wheel unplugged, a steady supply of frames: gaps of about 3 s even at 0.1 s and no 2 s frame at all, in video and in software trigger mode (`./guidecam.py probe`). Later that evening: raising `usbfs_memory_mb` to 200 MB and raw mode changed nothing, and the library reported no errors; 2 x 2 binned (640 x 480) at USB speed 0 it sent 149 of 150 2 s frames in 5 minutes, no gap over 2.08 s (`./guidecam.py probe --size 1 --speed 0`). Built, not proven: the guider's first three stages (`./guidecam.py star`, `calibrate`, `guide`), dry runs only. Overnight the guide camera sent 14,399 of 14,400 2 s frames in 8 hours, no gap over 2.08 s, no library error. That night the 183M's 120 s and 300 s darks at -5 °C: dark current at most about 0.002 ADU/s, about 0.3 % of the R sky in the M33 frames, so colder gains nothing for LRGB and at most a few per cent for narrowband ([record](nights/2026-11-06/darks-183m.md)).

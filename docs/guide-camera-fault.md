@@ -192,6 +192,16 @@ binned and windowed on the sky, then (not built) a guider that finds the
 star binned and guides on a window round it, with its limits in
 arcseconds.
 
+## 24 November 2026: would a better driver help?
+
+25 probe runs through the SV241 hub ([the record](nights/2026-11-23/guide-camera-driver.md)).
+The guider's binned mode and a 512 x 960 full-resolution window each kept 149
+of 150 2 s frames over 5 minutes. Delivery falls off from 544 pixels wide,
+while a full frame at 2 s fails at about a tenth of the data rate that
+512 x 960 sustains, so USB bandwidth is not the limit. A driver could only
+help full-width frames, and whether it could is not known without a USB
+capture.
+
 ## Still to do
 
 1. **The guider on the sky.** Since 79a2f2d `star`, `calibrate` and
