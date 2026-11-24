@@ -63,7 +63,7 @@ SCHEMA = 1                  # the shape of the records; readers accept older one
 # The generic core this carries: Ryan-Clinton/common's jobs/jobs.py is its
 # authoritative copy for every other project (private); a fix there is
 # carried here, and this names the revision (docs/job-reporting-spec.md).
-CORE = "2026-11-24.3"
+CORE = "2026-11-24.4"
 
 
 def home():
@@ -1164,12 +1164,23 @@ def productive(listing):
                for j in listing)
 
 
+def committed(b, now=None):
+    """Whether a busy-until stands: until a time, or until done (ended
+    only by `./ty jobs --busy-until off`)."""
+    now = now or time.time()
+    return bool(b) and (bool(b.get("done")) or now <= (b.get("until") or 0))
+
+
+def until_words(b):
+    return "until it is all done" if b.get("done") else f"until {_clock(b.get('until'))}"
+
+
 def idle_event(listing, now=None, sid=None):
     """An idle event while the owner's busy-until stands and none of this
     session's work is getting done."""
     now = now or time.time()
     b = busy(sid)
-    if not b or now > b.get("until", 0):
+    if not committed(b, now):
         return None
     own = [j for j in listing if mine(j, sid, strict=True)]
     if productive(own):
@@ -1181,8 +1192,8 @@ def idle_event(listing, now=None, sid=None):
     held = f"; {len(stuck)} job{'s' if len(stuck) != 1 else ''} waiting, stalled or queued, none moving" if stuck else ""
     return {"id": f"idle:{sid or 'owner'}:{int(since)}", "job": None, "name": "idle", "kind": "idle", "wake": True,
             "at": now, "condition": True,
-            "words": f"no work getting done for {_ago(now - since)}{held}, and the owner asked for work until "
-                     f"{_clock(b['until'])} ({b.get('why') or 'no reason given'})"}
+            "words": f"no work getting done for {_ago(now - since)}{held}, and the owner asked for work "
+                     f"{until_words(b)} ({b.get('why') or 'no reason given'})"}
 
 
 def _acked():
@@ -1336,7 +1347,7 @@ def underused(c, b, now=None):
     so the session can queue more. A note, not a scheduler: what runs where
     is the session's (and desktopqueue's) to decide."""
     now = now or time.time()
-    if not b or now > b.get("until", 0):
+    if not committed(b, now):
         return []
     out = []
     if c.get("load") is not None and c.get("cores") and c["load"] < 0.25 * c["cores"]:
@@ -1397,7 +1408,9 @@ def report(now=None, sid=None):
             "camera": camera_state(held), "mount": {"by": held.get("mount"),
                                                     "words": f"held by {held['mount']}" if "mount" in held
                                                     else "free"},
-            "busy_until": busy(sid), "underused": underused(computer(), busy(sid), now)}
+            "busy_until": busy(sid), "underused": underused(computer(), busy(sid), now),
+            "unarmed": (len(active_own(everything, sid)) if sid and active_own(everything, sid)
+                        and not armed(sid, now) else 0)}
 
 
 def text(r, now=None):
@@ -1461,8 +1474,11 @@ def text(r, now=None):
         lines.append("Computer: " + ", ".join(parts))
     lines.append(f"Camera: {r['camera']['words']}. Mount: {r['mount']['words']}.")
     b = r["busy_until"]
-    if b and b.get("until", 0) > now:
-        lines.append(f"Busy until {_clock(b['until'])}: {b.get('why')}")
+    if committed(b, now):
+        lines.append(f"Busy {until_words(b)}: {b.get('why')}")
+    if r.get("unarmed"):
+        lines.append(f"NOTHING ARMED to wake this session for its {r['unarmed']} job(s) going: run "
+                     f"`./ty jobs --wait-event` in the background (or a Monitor on `./ty jobs --watch`)")
     for word in r.get("underused") or []:
         lines.append(f"Underused: {word}")
     if r.get("other_sessions"):
@@ -1473,9 +1489,97 @@ def text(r, now=None):
     return "\n".join(lines)
 
 
+TERMINAL = ("done", "failed", "vanished", "blocked", "cancelled")
+WAITER_BEAT_S = 10
+
+
+def _waiter(kind, sid):
+    """Mark this process as something armed to wake the session (a
+    --wait, --wait-event or --watch that the harness is tracking): a file
+    with its process, beaten every WAITER_BEAT_S, gone when it ends."""
+    folder = home() / "waiters"
+    folder.mkdir(parents=True, exist_ok=True)
+    f = folder / f"{sid or 'owner'}-{os.getpid()}.json"
+    record = {"session": sid, "kind": kind, "pid": os.getpid(), "start": started_at(os.getpid()), "boot": boot_id(),
+              "since": time.time()}
+
+    def beat():
+        while True:
+            try:
+                records.write(f, dict(record, beat=time.time()), indent=None)
+            except OSError:
+                pass
+            time.sleep(WAITER_BEAT_S)
+    threading.Thread(target=beat, daemon=True).start()
+    atexit.register(lambda: f.unlink(missing_ok=True))
+    return f
+
+
+def armed(sid, now=None):
+    """Whether something tracked by the harness is waiting to wake this
+    session: a --wait, --wait-event or --watch of its own still beating."""
+    now = now or time.time()
+    try:
+        files = list((home() / "waiters").glob("*.json"))
+    except OSError:
+        return False
+    for f in files:
+        w = _read(f, {}) or {}
+        if not running(w.get("pid"), w.get("start"), w.get("boot")) or now - (w.get("beat") or 0) > 3 * WAITER_BEAT_S:
+            try:
+                f.unlink()
+            except OSError:
+                pass
+            continue
+        if w.get("session") == sid:
+            return True
+    return False
+
+
+def active_own(listing, sid):
+    """This session's jobs still going (running, waiting, stalled, queued)."""
+    return [j for j in listing if mine(j, sid, strict=True) and j["phase"] in ("running", "waiting", "stalled", "queued")]
+
+
+def wait_job(word, every=5):
+    """Block until the job has ended, by the reader's own phases (a finished
+    job is "done": 24 November 2026, a waiter grepping for "exited" never
+    ended on a success); print its ending; exit 0 only for done."""
+    job_id = find(word)
+    if not job_id:
+        raise SystemExit(f"no job {word}")
+    _waiter("wait", session())
+    while True:
+        j = look(job_id)
+        if j["phase"] in TERMINAL:
+            said = j["progress"].get("result") or j.get("blocked") or _last_line(j["log"]) or ""
+            print(f"{j['name']} {j['phase']}" + (f": {said}" if said else ""), flush=True)
+            sys.exit(0 if j["phase"] == "done" else 1)
+        time.sleep(every)
+
+
+def wait_event(sid=None, every=10):
+    """Block until an event needs this session, print it and exit: run in
+    the background, its ending is what wakes the session. One open already
+    is printed at once."""
+    _waiter("wait-event", sid)
+    while True:
+        try:
+            events = open_events(sid=sid)
+        except Exception:
+            events = []
+        if events:
+            for e in events:
+                ask = f" Ends with: {e['ask']}" if e.get("ask") else ""
+                print(f"{_clock(e.get('at'))} {e['name']} {e['kind']}: {e['words']}{ask} [{e['id']}]", flush=True)
+            return
+        time.sleep(every)
+
+
 def watch(every=15, sid=None):
     """One line per event that needs this session, the ones open now first;
-    nothing else, ever."""
+    nothing else, ever. It counts as armed while it runs (a Monitor)."""
+    _waiter("watch", sid)
     shown = set()
     while True:
         try:
@@ -1551,6 +1655,11 @@ def main():
     ap.add_argument("name", nargs="?", help="a job, for --tail")
     ap.add_argument("--tail", type=int)
     ap.add_argument("--watch", action="store_true")
+    ap.add_argument("--wait", metavar="JOB", help="block until the job has ended (done, failed, vanished, blocked, "
+                                                  "cancelled); exit 0 only for done")
+    ap.add_argument("--wait-event", action="store_true",
+                    help="block until an event needs this session, print it and exit: run it in the background "
+                         "so its ending wakes the session")
     ap.add_argument("--ack", nargs=2, metavar=("EVENT", "WORDS"))
     ap.add_argument("--busy-until", nargs=2, metavar=("TIME", "WORDS"))
     ap.add_argument("--stop", metavar="JOB")
@@ -1570,6 +1679,21 @@ def main():
         n = ack(*args.ack, sid=session())       # an ack is always this session's, --all or not
         print(f"{n} event{'s' if n != 1 else ''} marked dealt with")
         return
+    if args.busy_until and args.busy_until[0] == "off":
+        busy_file(sid).unlink(missing_ok=True)
+        print("the commitment is ended: " + args.busy_until[1])
+        return
+    if args.busy_until and args.busy_until[0] == "done":
+        home().mkdir(parents=True, exist_ok=True)
+        records.write(busy_file(sid), {"until": None, "done": True, "why": args.busy_until[1], "set": time.time(),
+                                       "session": sid})
+        print("busy until it is all done: an idle event whenever no work is getting done, until "
+              "./ty jobs --busy-until off WORDS")
+        return
+    if args.wait:
+        return wait_job(args.wait)
+    if args.wait_event:
+        return wait_event(sid=session())
     if args.busy_until:
         until = until_time(args.busy_until[0])
         home().mkdir(parents=True, exist_ok=True)

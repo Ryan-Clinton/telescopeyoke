@@ -15,9 +15,12 @@ what is specific to Claude.
   carry on with the next task: through `./ty bg NAME -- COMMAND`, never a
   bare background shell (the guard refuses one), with what follows it
   queued by `--after`. Keep `./ty jobs --watch` running as a Monitor from
-  the start of the session; answer "progress report" from `./ty jobs`; act
+  the start of the session, and never end a turn with jobs going and
+  nothing armed: `./ty jobs --wait-event` in the background (its exit wakes
+  you; the Stop hook checks), or `./ty jobs --wait JOB` for one job; answer "progress report" from `./ty jobs`; act
   on and ack each event it raises. Asked to keep going until the work is
-  done, record it with `./ty jobs --busy-until`, and ask any question the
+  done, record it with `./ty jobs --busy-until` (a time, or `done`, ended by
+  `--busy-until off`), and ask any question the
   moment it arises while the rest goes on (docs/job-reporting-spec.md).
 - There are no tests and no CI, by the maintainer's choice: do not write,
   run or restore them, add CI, or make a commit wait on anything. Before a

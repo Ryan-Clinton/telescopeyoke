@@ -570,6 +570,19 @@ protections.
   laptop follows `jobs.py --state` every two minutes if the connection
   drops. `desktopqueue.py` runs each of its jobs through the launcher.
 
+- **Waiters** (24 November 2026, after
+  `docs/incident-2026-11-24-idle-after-star-test.md`: a session's job ended
+  at 20:37 with nothing armed to wake its ended turn, and it sat idle until
+  23:31). `./ty jobs --wait JOB` blocks until the job ends, by the reader's
+  own phases; `--wait-event` blocks until an event needs the session,
+  prints it and exits, so run in the background its exit wakes the session.
+  Each of them, and `--watch`, keeps a beating file while it runs
+  (`cache/jobs/waiters/`), and the Stop hook sends a session back when it
+  has jobs going and none of its own beating: a detached process is not
+  enough, it must be one the harness is waiting on. The report says
+  "NOTHING ARMED" in the same case. `--busy-until done` keeps the
+  commitment until `--busy-until off`, not to a time.
+
 ### A copy for every other project
 
 On 24 November 2026 the job system was copied, made general, into

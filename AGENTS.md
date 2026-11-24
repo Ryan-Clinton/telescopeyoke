@@ -218,7 +218,10 @@ a motor's creep rate. `mount.py stop` is always allowed.
 - A job that runs more than a minute is started with `./ty bg NAME --
   COMMAND` (the guard refuses a project command left in the background
   any other way), and what must follow it is queued with `--after`, so it
-  starts by itself. `./ty jobs --watch` runs as the one Monitor for jobs;
+  starts by itself. `./ty jobs --watch` runs as the one Monitor for jobs,
+  and a turn never ends with jobs going and nothing armed to wake the
+  agent (`./ty jobs --wait-event` in the background, or `--wait JOB`; the
+  Stop hook checks);
   a progress report is `./ty jobs`; each event that needs the agent is
   acted on and acked (`./ty jobs --ack EVENT "what was done"`). When the
   person asks for work to go on ("keep going until they are all done",

@@ -40,11 +40,18 @@ def reason(sid, now=None):
     # session's work, or the house's, never does.
     events = jobs.open_events(listing, now, sid=sid, strict=True)
     said = []
+    going = jobs.active_own(listing, sid) if sid else []
+    if going and not jobs.armed(sid, now):
+        # 24 November 2026: a session's job ended at 20:37 with nothing armed
+        # to wake its ended turn, and it sat idle until 23:31.
+        said.append(f"{len(going)} job(s) of this session's are going ({', '.join(j['name'] for j in going[:4])}) "
+                    "and nothing is armed to wake you when they need you: run `./ty jobs --wait-event` in the "
+                    "background (or a Monitor on `./ty jobs --watch`) before ending the turn.")
     idle = [e for e in events if e["kind"] == "idle"]
     others = [e for e in events if e["kind"] != "idle"]
     if idle:
         b = jobs.busy(sid) or {}
-        said.append(f"The owner asked for work until {jobs._clock(b.get('until'))} ({b.get('why')}), and none of "
+        said.append(f"The owner asked for work {jobs.until_words(b)} ({b.get('why')}), and none of "
                     "this session's work is getting done. Start or queue the next piece of work (./ty bg NAME [--after JOB] -- "
                     "COMMAND). A question for the owner is asked now, in one line, while the work that does not "
                     "need the answer goes on: never saved for the end.")
