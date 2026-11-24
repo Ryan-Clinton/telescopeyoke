@@ -4,6 +4,7 @@ temperatures, from warm to the -5 °C it runs at, measured and compared.
 
     ./darktest.py --plan             what it would take, and how long; opens nothing
     ./darktest.py                    +5, 0, -2.5 and -5 °C, cap on, then stays cold
+    ./darktest.py --colder --temperatures -5 -7.5 -10   this one test below -5 °C
     ./darktest.py --more -5          the held run measures these next, without warming
     ./darktest.py --finish           the held run warms up slowly and ends
     ./darktest.py --warm-after       warm up by itself after the last temperature
@@ -29,7 +30,7 @@ import interface
 import keeper
 import records
 import testmode
-from altair import TEC_LOWEST
+from altair import TEC_LOWEST, TEST_LOWEST
 from camera import WHITE, Camera
 
 TEMPERATURES = (5.0, 0.0, -2.5, -5.0)   # warm to cold: one slow way down
@@ -40,6 +41,8 @@ GAIN = 1500
 START_MARGIN_C = 1.0    # a temperature this close to the room's, or above it, cannot be held by a cooler
 FLAT_BELOW = 0.02       # a last step that lowers the noise by less than this share: flattening
 CORNER = 300            # pixels: the box in each corner where amp glow shows
+HOT_ADU = 200           # a pixel this far above the zero level is hot: one fixed line for every temperature
+CLIP = 5.0              # spreads from the middle: hot pixels left out of the averages
 HOLD_MOST_S = 4 * 3600  # held cold after the last temperature, with nobody asking for more
 NEXT = config.DATA / "cache" / "darktest" / "next.json"     # the order a held run is waiting for
 
@@ -48,11 +51,23 @@ def robust(values):
     return 1.4826 * float(np.median(np.abs(values - np.median(values))))
 
 
+def clipped(values):
+    """The values without hot pixels. Means and spreads of these, as a median
+    of whole-number levels moves in steps too coarse for a few ADU of dark."""
+    values = np.asarray(values, dtype=np.float32).ravel()
+    middle = float(np.median(values))
+    return values[np.abs(values - middle) <= CLIP * max(robust(values), 1.0)]
+
+
+def typical(values):
+    return float(clipped(values).mean())
+
+
 def measure(longs, shorts, long_s=LONG_S, short_s=SHORT_S):
     """The figures for one temperature, in ADU, from its frames."""
     long_master = calibrate.master(longs)
-    zero = float(np.median(calibrate.master(shorts)[::4, ::4]))
-    level = float(np.median(long_master[::4, ::4]))
+    zero = typical(calibrate.master(shorts)[::4, ::4])
+    level = typical(long_master[::4, ::4])
     h, w = long_master.shape
     centre = long_master[h // 2 - CORNER:h // 2 + CORNER, w // 2 - CORNER:w // 2 + CORNER]
     corners = [long_master[:CORNER, :CORNER], long_master[:CORNER, -CORNER:],
@@ -62,9 +77,9 @@ def measure(longs, shorts, long_s=LONG_S, short_s=SHORT_S):
     difference = longs[0][::2, ::2].astype(np.float32) - longs[1][::2, ::2].astype(np.float32)
     return {"zero_adu": round(zero, 2), "level_adu": round(level, 2),
             "dark_adu_per_s": round((level - zero) / (long_s - short_s), 5),
-            "noise_adu": round(robust(difference) / np.sqrt(2), 3),
-            "hot_pixels": int(calibrate.bad_pixels(long_master).sum()),
-            "amp_glow_adu": round(max(float(np.median(c)) for c in corners) - float(np.median(centre)), 2)}
+            "noise_adu": round(float(clipped(difference).std()) / np.sqrt(2), 3),
+            "hot_pixels": int((long_master > zero + HOT_ADU).sum()),
+            "amp_glow_adu": round(max(typical(c) for c in corners) - typical(centre), 2)}
 
 
 def verdict(rows):
@@ -129,8 +144,9 @@ def hold(cam, args, start, rows, path):
                 print("finishing: the slow warm-up", flush=True)
                 return
             for target in asked:
-                if target < TEC_LOWEST:     # refused here: the cooler's own refusal would end the hold and warm it
-                    print(f"{target:g} °C not taken: below the {TEC_LOWEST:g} °C limit", flush=True)
+                lowest = TEST_LOWEST if args.colder else TEC_LOWEST
+                if target < lowest:         # refused here: the cooler's own refusal would end the hold and warm it
+                    print(f"{target:g} °C not taken: below the {lowest:g} °C limit", flush=True)
                     break
                 take(cam, args, target, start, rows, path)
             until = time.monotonic() + HOLD_MOST_S
@@ -147,6 +163,8 @@ def run(args):
     rows = []
     with Camera(gain=args.gain) as cam:
         try:
+            if args.colder:
+                cam.lowest = TEST_LOWEST    # this camera object only: every other command keeps -5 °C
             start = cam.temperature()
             if start is None:
                 raise SystemExit("The sensor will not say its temperature: no comparison can be made.")
@@ -174,6 +192,7 @@ def main():
     ap.add_argument("--long", type=float, default=LONG_S, help=f"seconds (default {LONG_S:g})")
     ap.add_argument("--short", type=float, default=SHORT_S, help=f"seconds, for the zero level (default {SHORT_S:g})")
     ap.add_argument("--gain", type=int, default=GAIN)
+    ap.add_argument("--colder", action="store_true", help=f"this test may go down to {TEST_LOWEST:g} °C")
     ap.add_argument("--more", type=float, nargs="+", metavar="C", help="further temperatures for the run holding cold")
     ap.add_argument("--finish", action="store_true", help="tell the run holding cold to warm up slowly and end")
     ap.add_argument("--warm-after", action="store_true", help="warm up after the last temperature instead of holding")
@@ -185,6 +204,9 @@ def main():
     if args.frames < 2 or args.long <= args.short:
         ap.error("needs at least 2 frames, and --long longer than --short")
     args.temperatures = sorted(args.temperatures, reverse=True)
+    lowest = TEST_LOWEST if args.colder else TEC_LOWEST
+    if args.temperatures[-1] < lowest:
+        ap.error(f"{args.temperatures[-1]:g} °C is below the {lowest:g} °C limit" + ("" if args.colder else " (--colder)"))
     if args.plan:
         plan(args)
     else:

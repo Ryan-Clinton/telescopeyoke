@@ -50,6 +50,7 @@ COOL_WAIT_S = 900      # the longest a run waits for the sensor to get there, af
 # or the sensor's window can frost: 0.5 °C every 30 s, 1 °C a minute, so
 # about 20 minutes from a sensor at 15 °C to -5 °C.
 TEC_LOWEST = -5.0
+TEST_LOWEST = -10.0    # only darktest.py --colder, on the owner's word (24 November 2026); nothing else
 RAMP_STEP_C, RAMP_EVERY_S = 0.5, 30.0
 RAMP_LEAD_C = 2.0      # the set point never runs more than this below the sensor (10 November 2026)
 COOL_POLL_S = 5.0
@@ -527,8 +528,9 @@ class AltairCamera:
             raise CameraError(f"the cooler failed safe ({fault.get('reason')}): not cooled again until "
                               "./keeper.py start --after-fault, with the 12 V lead secure")
         degrees = float(degrees)
-        if degrees < TEC_LOWEST:
-            raise CameraError(f"a cooler target of {degrees:g} °C is below {TEC_LOWEST:g} °C, the lowest this "
+        lowest = getattr(self, "lowest", TEC_LOWEST)    # raised only by darktest.py --colder, on its own camera
+        if degrees < lowest:
+            raise CameraError(f"a cooler target of {degrees:g} °C is below {lowest:g} °C, the lowest this "
                               "sensor is ever set to (no gain below it): set tec_target to -5 or warmer")
         lib, handle = self.lib, self.handle
         option = getattr(lib, "ALTAIRCAM_OPTION_TEC", None)
