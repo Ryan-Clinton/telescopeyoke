@@ -203,8 +203,13 @@ its job comes off this list.
     keeper, and a normal frame worked after. **Longer videos stall**: "no video
     frame within 5 s" after 1 to 284 frames in all six 600-frame runs with the
     keeper stopped, and once through it, with no USB error in the kernel log.
-    So not the keeper. Next: the same run with the camera's lead straight
-    into the laptop, to tell the hub from the camera. Not yet held at -5 °C.
+    Straight into the laptop, six of six finished, and three of three through
+    the keeper. With the owner's shorter lead to the SV241, six of six, then
+    three 2,400-frame videos (82-88 a second, none dropped) while the guide
+    camera took 12 frames each and the wheel turned, with no USB error. So the
+    longer lead was the fault. The guide frames (0.5 s) came 1 to 5 s apart:
+    look at that with the new lead. **Still owed: video with the sensor held
+    at -5 °C**, then this job comes off and goes in `docs/validation.md`.
     **`./ty moon`'s centring** also lost the Moon that night, probably on the
     test moves in Dec (job 2): the disc had to be centred by `--aim-off`.
 35. **Mineral Moon from B, G and R** (`./ty lucky capture --filter`, stack
