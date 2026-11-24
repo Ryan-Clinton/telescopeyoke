@@ -54,6 +54,11 @@ EXCLUSIVE = ("camera", "mount", "gpu")
 KINDS = ("finite", "service", "routine", "remote")
 NEEDS = ("camera", "mount", "cpu", "gpu")
 CURRENT = None              # this process's job, once it has one
+SCHEMA = 1                  # the shape of the records; readers accept older ones
+# The generic core this carries: Ryan-Clinton/common's jobs/jobs.py is its
+# authoritative copy for every other project (private); a fix there is
+# carried here, and this names the revision (docs/job-reporting-spec.md).
+CORE = "2026-11-24.2"
 
 
 def home():
@@ -286,7 +291,7 @@ class Job:
                       "command": redact(" ".join(sys.argv)), "host": _hostname(), "pid": os.getpid(),
                       "pid_start": started_at(os.getpid()), "boot": boot_id(), "parent": self.parent,
                       "after": [], "needs": [], "why": None, "queued": None, "started": time.time(),
-                      "session": session()}
+                      "session": session(), "schema": SCHEMA, "core": CORE}
         record.update(fields)
         try:
             records.write(self.dir / "process.json", record, indent=None)
@@ -490,7 +495,7 @@ class Recorded:
                        "parent": os.environ.get("TY_JOB"), "after": [], "needs": [], "why": why,
                        "pid": None, "pid_start": None, "queued": time.time(), "started": None,
                        "phase": "running", "exit_code": None, "ended": None, "blocked": None,
-                       "log": str(self.dir / "log.txt"), "session": session()}
+                       "log": str(self.dir / "log.txt"), "session": session(), "schema": SCHEMA, "core": CORE}
         self.lines = 0
         try:
             self.dir.mkdir(parents=True, exist_ok=True)
@@ -542,7 +547,7 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
               "parent": os.environ.get("TY_JOB"), "after": after, "needs": needs, "why": why or None,
               "pid": None, "pid_start": None, "queued": time.time(), "started": None,
               "phase": "queued", "exit_code": None, "ended": None, "blocked": None,
-              "log": str(log_path or d / "log.txt"), "session": session(), "cwd": os.getcwd(),
+              "log": str(log_path or d / "log.txt"), "session": session(), "cwd": os.getcwd(), "schema": SCHEMA, "core": CORE,
               "replaces": os.environ.pop("TY_JOB_REPLACES", "") or None}
     log_path = Path(record["log"])
 
@@ -710,7 +715,7 @@ def after_ok(after):
             if stand_in != other:
                 o = look(stand_in)
         if what == "ended":
-            if o["phase"] in ("done", "failed", "vanished", "blocked"):
+            if o["phase"] in ("done", "failed", "vanished", "blocked", "cancelled"):
                 continue
             return None
         if what == "released":
@@ -721,7 +726,7 @@ def after_ok(after):
                 continue
         elif o["phase"] == "done":
             continue
-        if o["phase"] in ("failed", "vanished", "blocked") or (o["phase"] == "done" and what):
+        if o["phase"] in ("failed", "vanished", "blocked", "cancelled") or (o["phase"] == "done" and what):
             return f"{o['name']} {o['phase']} before {condition}"
         return None
     return True
@@ -760,11 +765,22 @@ def wanted(need):
     return any(j["phase"] == "queued" and need in (j.get("needs") or []) for j in look_all())
 
 
-def stop(word):
+def owned(j, force=False):
+    """A job this session may stop or queue again: its own or the house's;
+    another session's only with --force (the person's say)."""
+    sid = session()
+    if force or sid is None or j.get("session") in (None, sid):
+        return
+    raise SystemExit(f"{j['name']} is another session's job ({str(j.get('session'))[:8]}): "
+                     "leave it to that session, or --force if the person says so")
+
+
+def stop(word, force=False):
     job_id = find(word)
     if not job_id:
         raise SystemExit(f"no job {word}")
     j = look(job_id)
+    owned(j, force)
     if j["phase"] == "queued" and j.get("supervisor"):
         os.kill(int(j["supervisor"]), signal.SIGTERM)
         return f"{j['name']} taken off the queue"
@@ -1000,7 +1016,7 @@ def ack(event, words, sid=None):
     return len(targets)
 
 
-def requeue(word):
+def requeue(word, force=False):
     """A job lost with a restart (or ended), queued again as it was asked:
     the same command, conditions and needs. A person's or the agent's
     choice, never done by itself: a command for the camera or the mount
@@ -1008,6 +1024,7 @@ def requeue(word):
     job_id = find(word)
     if not job_id:
         raise SystemExit(f"no job {word}")
+    owned(look(job_id), force)
     p = _read(folder(job_id) / "process.json", {}) or {}
     argv = (_read(folder(job_id) / "argv.json", {}) or {}).get("argv")
     if not argv:
@@ -1309,13 +1326,14 @@ def main():
     ap.add_argument("--state", metavar="JOB", help="one job's phase and last line, as JSON (remote.py asks it)")
     ap.add_argument("--requeue", metavar="JOB", help="queue a job lost with a restart again, as it was asked")
     ap.add_argument("--all", action="store_true", help="every session's jobs and events, not only this one's")
+    ap.add_argument("--force", action="store_true", help="with --stop or --requeue: another session's job, on the person's say")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     sid = None if args.all else session()
     if args.watch:
         return watch(sid=sid)
     if args.requeue:
-        print(f"queued again as {requeue(args.requeue)}")
+        print(f"queued again as {requeue(args.requeue, args.force)}")
         return
     if args.ack:
         n = ack(*args.ack, sid=sid)
@@ -1328,7 +1346,7 @@ def main():
         print(f"busy until {_clock(until)}: an idle event whenever nothing runs or is queued before then")
         return
     if args.stop:
-        print(stop(args.stop))
+        print(stop(args.stop, args.force))
         return
     if args.state:
         found = find(args.state)
