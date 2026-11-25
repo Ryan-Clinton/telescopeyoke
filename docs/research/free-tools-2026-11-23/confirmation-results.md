@@ -56,3 +56,25 @@ The rest, from their XISF headers or the owners' stated rigs (their TIFFs are no
 | 65 (D7000 on a Z73 at 440 mm, 2x drizzle, stated) | about 1.1 | about 3.1 | level |
 | 41 (2600MC on a 90 mm at 540 mm, stated) | about 1.4 | about 2.5 | auto |
 | 78 (533MC at 249 mm) | 3.1 | 2.6 | auto |
+
+## Step 1 on a colour camera (raw 2600MC Pro at 1000 mm, Bortle 2, no darks)
+
+| Session | Brightest-third flux, new / old cleaning | Peak, new / old | Stack star width (px) | Verdict |
+|---|---|---|---|---|
+| Abell 1656 | 0.943 / 0.573 | 0.819 / 0.361 | 3.47 | **fail** (flux, peak) |
+| LBN 552 | 0.970 / 0.498 | 0.926 / 0.364 | 3.12 | **fail** (flux, peak, cosmic) |
+| M81 | 0.997 / 0.673 | 0.978 / 0.470 | 3.65 | **fail** (peak) |
+| NGC 7293 | 1.000 / 0.738 | 1.000 / 0.542 | 3.71 | **pass** |
+
+Three of four fail. The losses are real: leaving out every measured star whose centre is a lone
+spike in the uncleaned stack (deviations 5 and 6) left out none, so the measured stars are stars, not
+the sensor's hot pixels. The stars are 3.1 to 3.7 px wide in the stack, but the cleaning judges each
+frame alone, and a single frame at 1.56"/px (0.78"/px in 2x2 colour pixels) from a Bortle 2 site holds
+stars near 1.5 px wide: the same undersampling as set 76's, frame by frame. The old cleaning cut a
+quarter to a half of the brightest stars' light on every session.
+
+**So step 1 fails on both other cameras, and the cause found in both is undersampled frames.** The
+per-frame lone-pixel test cannot tell a 1.5 px star core from a cosmic ray by its neighbours. The fix
+to test next, on data not yet read: leave the per-frame test out when a session's single-frame stars
+are under about 2 px wide, and rely on the defect map for fixed defects and the stack's own rejection
+for cosmic rays. This project's 183M at 750 mm (1.3"/px binned) passed all 11 of its sessions.
