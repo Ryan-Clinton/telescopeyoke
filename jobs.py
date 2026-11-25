@@ -27,7 +27,6 @@ import argparse
 import atexit
 import contextlib
 import json
-import math
 import os
 import secrets
 import signal
@@ -65,7 +64,7 @@ SCHEMA = 1                  # the shape of the records; readers accept older one
 # The generic core this carries: Ryan-Clinton/common's jobs/jobs.py is its
 # authoritative copy for every other project (private); a fix there is
 # carried here, and this names the revision (docs/job-reporting-spec.md).
-CORE = "2026-11-25.1"
+CORE = "2026-11-25.2"
 
 
 def home():
@@ -626,7 +625,8 @@ def _hostname():
 
 # ---------------------------------------------------------------- the launcher and the queue
 
-def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=False, cwd=None, log=None, replaces=None):
+def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=False, cwd=None, log=None, replaces=None,
+           quiet_s=None):
     """Start COMMAND as a job; returns its ID (or its exit code with wait).
     `log`: a file of its own for its lines (a session's patrol.log, which
     others read), instead of the job's log.txt."""
@@ -640,6 +640,10 @@ def launch(name, command, after=(), needs=(), kind="finite", why=None, wait=Fals
     prune()
     job_id = new_id(name)
     folder(job_id).mkdir(parents=True, exist_ok=True)
+    if quiet_s:
+        # How long it may run without a line (--quiet), written before it
+        # starts, so a foreground (--wait) or queued-again job keeps it too.
+        records.write(folder(job_id) / "quiet.json", {"seconds": float(quiet_s)})
     argv = [sys.executable, str(Path(__file__).resolve()), "_supervise", job_id, name, kind,
             ",".join(after), ",".join(needs), why or "", "1" if wait else "0", "--", *command]
     if wait:
@@ -1212,7 +1216,13 @@ def idle_event(listing, now=None, sid=None):
 
 
 def _acked():
-    return {a.get("event"): a for a in _lines(home() / "acks.jsonl")}
+    """The latest ack of each event, with how many times it has been acked:
+    each ack of a condition still there doubles the wait before it reopens."""
+    out = {}
+    for a in _lines(home() / "acks.jsonl"):
+        e = a.get("event")
+        out[e] = dict(a, count=(out.get(e) or {}).get("count", 0) + 1)
+    return out
 
 
 def _condition(e, listing):
@@ -1236,9 +1246,12 @@ def open_events(listing=None, now=None, sid=None, strict=False, acked_too=False)
         a = acked.get(e["id"])
         if a is None:
             out.append(e)
-        elif _condition(e, listing) and now - a.get("at", now) > REOPEN_S:
-            # Reopened after REOPEN_S, then after twice as long each time.
-            n = int(math.log2((now - a["at"]) / REOPEN_S)) + 1
+        elif _condition(e, listing) and now - a.get("at", now) > REOPEN_S * 2 ** (a.get("count", 1) - 1):
+            # Reopened REOPEN_S after the first ack, then twice as long after
+            # each ack after it (30, 60, 120 min...): counted by acks, since an
+            # ack resets the time (25 November 2026: by the time alone, a
+            # session acking each reminder still had one every 30 minutes).
+            n = a.get("count", 1)
             out.append(dict(e, id=f"{e['id']}:still:{n}",
                             words=f"still, {_ago(now - a['at'])} after it was acked ({a.get('words')}): {e['words']}"))
         elif acked_too and _condition(e, listing):
@@ -1290,7 +1303,7 @@ def requeue(word, force=False):
         raise SystemExit(f"{word}: its command was not kept, so it cannot be queued again")
     return launch(p.get("name") or word, argv, p.get("after") or [], p.get("needs") or [], p.get("kind", "finite"),
                   p.get("why"), cwd=p.get("cwd"), log=p.get("log") if p.get("log", "").endswith("patrol.log") else None,
-                  replaces=job_id)
+                  replaces=job_id, quiet_s=(_read(folder(job_id) / "quiet.json", {}) or {}).get("seconds"))
 
 
 def replacement(job_id):
@@ -1690,9 +1703,8 @@ def main():
         unknown = [n for n in needs if n not in NEEDS]
         if unknown:
             ap.error(f"unknown needs: {', '.join(unknown)}")
-        result = launch(args.name, argv[cut + 1:], args.after, needs, args.kind, args.why, args.wait)
-        if args.quiet and not args.wait:
-            records.write(folder(result) / "quiet.json", {"seconds": args.quiet * 60})
+        result = launch(args.name, argv[cut + 1:], args.after, needs, args.kind, args.why, args.wait,
+                        quiet_s=args.quiet * 60 if args.quiet else None)
         if args.wait:
             sys.exit(result)
         j = look(result)
