@@ -39,3 +39,9 @@ Each change made after the protocol was fixed, with its reason. Nothing here cha
   the harness marked star cores as defects and cut them, which `restack.py` does not. The harness's map
   now has that guard; both cameras' sessions are run again with it. Scripts: `clip13g.py`,
   `clip533g.py`, `clip76g.py`.
+- **25 November 2026, step 3 on finished stacks.** `stretch.py` measures against an independent
+  half-stack, which the shared sets do not have. `ds_stretch.py` keeps its methods, measures and pass
+  mark, and takes the regions (sky, faint, bright) from the same stack smoothed; the planted lines go
+  into the stack before GraXpert, the pair being the stack denoised without and with them, scaled to
+  its 99.995th percentile for the tools. Step 2 on the shared sets takes every filter's stack
+  (`ds_real.py`), as the protocol says, where the AstrophotoMarket run took one per set.
