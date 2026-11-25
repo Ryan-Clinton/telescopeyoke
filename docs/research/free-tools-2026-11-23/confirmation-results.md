@@ -45,5 +45,14 @@ focal length where the header has neither. Wider than 3 degrees gets `--backgrou
 | 29, 31, 37, 74 (533MC, 400 to 750 mm) | 0.55 to 1.1 | 0.9 to 1.7 | auto |
 | 28 (8" Dobson, 1200 mm, stated) | about 0.6 | about 0.5 | auto |
 
-Sets 41 (a zip), 43, 49 and 78 (XISF), 56 and 65 (TIFF) and 57 (no image in the primary HDU) are
-decided the same way once their files are read.
+The rest, from their XISF headers or the owners' stated rigs (their TIFFs are not read by Pillow):
+
+| Set | Scale ("/px) | Field (deg) | Background |
+|---|---|---|---|
+| 43 (533MC, RedCat 51, 2x drizzle, 10350 px) | about 1.55 | about 4.5 | level |
+| 49 (2600MC at 370 mm) | 2.1 | 3.6 | level |
+| 56 (D750 at 360 mm, stated) | about 3.4 | about 5.7 | level |
+| 57 (D5300 at 300 mm, stated) | about 2.7 | about 4.5 | level |
+| 65 (D7000 on a Z73 at 440 mm, 2x drizzle, stated) | about 1.1 | about 3.1 | level |
+| 41 (2600MC on a 90 mm at 540 mm, stated) | about 1.4 | about 2.5 | auto |
+| 78 (533MC at 249 mm) | 3.1 | 2.6 | auto |
