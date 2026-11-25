@@ -76,3 +76,22 @@ and all fail, its OIII of 10 October at 3.6 losing 83%; the colour camera's run 
 and this project's does not is no dark frame; whether that, the flats, or something in the frames
 themselves is the cause is the next thing measured, pixel by pixel in single frames.
 This project's 183M at 750 mm (1.3"/px binned) passed all 11 of its sessions.
+
+## Step 4: artefacts in the 17 pictures (colour.py's defaults, read by eye on 25 November 2026)
+
+Every run ended with exit 0. Each picture was looked at whole for tiles, edges, rings and gradients.
+
+| Set | Verdict | What is wrong |
+|---|---|---|
+| 07, 18, 29, 37, 40, 43, 49, 56, 74 | **pass** | nothing seen |
+| 78 | **pass** (no artefact) | M42's core burnt out: needs HDR, a known gap |
+| 31, 44 | pass, just | a thin red line down the left edge; 44 also a lighter band along the top |
+| 28 | **fail** | the stack's footprint left in: dark wedges at the four corners, a green gradient along the bottom |
+| 41 | **fail** | a purple gradient in the bottom-right corner, and an arc along the bottom edge (the Foraxx stretch of the same stacks has neither) |
+| 57 | **fail** | a diagonal band down the left third, and an orange glow in the bottom-right corner |
+| 65 | **fail** | a strip along the top with another background level from the rest |
+| 72 | **fail** | dark round holes in the sky (two plainly, more faintly), and the Rosette hardly shows |
+
+Five of 17 fail, all at the edges or in the sky model: the background step (28, 41, 57, 65, and 72's holes
+round what may be dust motes) rather than the colour or the stars. Next: the sky model's edge handling and
+what it does with a stack whose frames did not all cover the field.
