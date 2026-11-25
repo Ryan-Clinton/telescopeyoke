@@ -26,9 +26,9 @@ filaments, then were scored at equal grain against a blur and an independent sta
 - `sharpen.py` compares sharpening on the ten held-out pairs after GraXpert; `sharpen-scores-cpu.json` (ours, Siril) and `sharpen-scores-gpu.json` (the suite's sharpen) hold its results.
 - `confirmation-protocol.md` fixes the rules for other people's data before it is read;
   `deviations.md` lists every change made after, and `confirmation-results.md` the results
-  (25 November 2026). Their test scripts are on the desktop under `training/stackexp/code`
-  (`clip76*.py`, `clip533*.py`, `clipmean.py`) and `freetools/code` (`ds_sessions.py`,
-  `ds-pictures.sh`, `foraxx.py`).
+  (25 November 2026). Their scripts are here (`clip76.py`, `clip533.py`, `clipmean.py`,
+  `clip_m3.py`, `clip13g.py`, `corecut.py`, `framewidth.py`, `ds_sessions.py`, `ds-pictures.sh`,
+  `foraxx.py`); they run on the desktop beside the harness in `training/stackexp/code`.
 - `scores.json` holds every measurement; `sites.json` holds the strength that gave half the grain.
 
 `prep.py` and `score.py` read the held-out pairs under `~/telescopeyoke-laptop/training/pairs3`
