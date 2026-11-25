@@ -26,3 +26,7 @@ Each change made after the protocol was fixed, with its reason. Nothing here cha
   lone spikes; all 171 in set 76's first). Measure 2 leaves out "stars" narrower than 1.5 px in the
   uncleaned stack; nothing else changes. The first verdicts stand as recorded; measure 2 is reported
   beside them, on the same sessions. Scripts: `clip_m2.py`, `clip533m2.py`, `clip76m2.py`, `clip76um2.py`.
+- **25 November 2026, step 1's measure again.** Measure 2 left nothing out: to the star finder the
+  hot pixels measure wider than 1.5 px, so its first session scored exactly as before, and it was
+  stopped. Measure 3 leaves out a star whose centre is a lone spike in the uncleaned stack, by the
+  lone-spike test the measure already used to count them. Scripts: `clip_m3.py`, `clip533m3.py`, `clip76m3.py`.
