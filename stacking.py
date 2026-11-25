@@ -1295,6 +1295,11 @@ def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0
         registered = warp(rgb, r, t) * scale
     with timings.phase("write registered"):
         frames = np.memmap(store, dtype=store_dtype(shape), mode="r+", shape=shape)
+        if frames.dtype == np.float16:
+            # float16 tops out at 65504: a saturated 16-bit pixel over its flat would be kept as inf,
+            # which spreads through the stack's sums (1,100 per plane in a 2600MC session, 25 November
+            # 2026). Kept at the ceiling instead; NaN (no data) stays NaN.
+            registered = np.minimum(registered, 65504)
         frames[slot] = registered
         frames.flush()
     info = {"shift": [float(t[0]), float(t[1])],

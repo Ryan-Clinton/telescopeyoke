@@ -95,3 +95,16 @@ Every run ended with exit 0. Each picture was looked at whole for tiles, edges, 
 Five of 17 fail, all at the edges or in the sky model: the background step (28, 41, 57, 65, and 72's holes
 round what may be dust motes) rather than the colour or the stars. Next: the sky model's edge handling and
 what it does with a stack whose frames did not all cover the field.
+
+### The stack's rejection is not the cause (clipmean, 25 November 2026)
+
+Diagnostic, not a verdict: Abell 1656's 40 frames with each layer a plain mean (no rejection). The new
+cleaning against none: brightest-third flux 0.945, peak 0.819, the same as through the clipped stack
+(0.943, 0.819). So the light is lost before stacking, in each frame's cleaning as the harness applies it,
+although the shipped rule alone touches only 9 pixels in a frame's 60 brightest stars. Next: one frame cleaned
+and not, star by star, through the harness's own per-frame path (`clip3.frame`).
+
+Found on the way: the harness keeps colour frames as float16, as `stacking.store_dtype` does, and 1,100
+pixels per plane passed float16's 65504 and became inf (saturated stars over their flat). The plain mean
+spread them until the stars could not be measured. The shipped store had the same hole; `register_file` now
+keeps such a pixel at 65504. Not yet seen in a real restack.
