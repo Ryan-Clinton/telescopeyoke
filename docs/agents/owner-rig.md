@@ -51,9 +51,10 @@ library runs on it as on the laptop. Not yet tried with any device.
   network: it needs a screen and keyboard to see where it stopped.
 - No Wi-Fi: the M.2 WLAN slot (A/E key, 2230) is empty and there are no
   aerial leads. The plan is an Intel card inside with MHF4-to-SMA
-  pigtails and aerials at the back, the card chosen when the new hub is
-  known (AX210 for an EE Smart Hub 7, AX200 for a BT Smart Hub 3, 8265 or
-  9260 for the Smart Hub 2). Never a CNVi card (9560, AX201, AX211).
+  pigtails and aerials at the back. The card is an Intel AX200 (the owner,
+  25 November 2026: the house goes to Wi-Fi 6 at some point; it works on
+  the present Wi-Fi 5 hub meanwhile). Never a CNVi card (9560, AX201,
+  AX211).
 - 25 November 2026: a friend got the owner a 65 W adapter, a case and an
   extra RAM stick for it; not yet fitted.
 
