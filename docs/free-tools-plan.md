@@ -258,6 +258,18 @@ with it, Tabby's 85 frames of 21 November 20:05 kept 12% more starlight than the
 (26% more for the brightest third) with the same grain and no lone spikes left. Stacks already
 made are not changed until they are restacked.
 
+### Local contrast on star-cloud fields (open, 25 November 2026)
+
+The LMC (an AstrophotoMarket set at 135 mm, SHO) came out pock-marked: dark rims round every bright
+knot of its star clouds. Taken apart step by step on the same stacks: the photographer's Ha stack has
+none; with Dark Star off they stay; with GraXpert off too they stay; with `--no-contrast` as well they
+go. So it is `colour.contrast_gain`, which lifts structure 3 to 24 px across: in a galaxy of
+unresolved star clouds each knot reads as a ridge and gets a dark rim, and star removal leaves the
+clouds. It was tuned on nebulae (NGC 2174), where ridges and lanes are few and real. Not changed yet:
+the code is frozen for the confirmation run, and a fix (contrast only on extended structure, or none
+where the field is a mass of small peaks) needs its own test on galaxy fields not yet used, with its
+mark fixed first.
+
 ## What each stage becomes
 
 | Stage | Today | Plan | State |
