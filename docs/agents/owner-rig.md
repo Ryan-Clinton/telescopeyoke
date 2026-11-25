@@ -28,6 +28,35 @@ adapter on the house router (`[mount] link = "wifi"`), the handset kept in
 the box as a fallback. The router's Wi-Fi is sketchy at louie-side and
 fine at ralphie-side (the owner, 16 November); an extender if it has to be.
 
+## The Dell OptiPlex 3050 Micro (planned computer at the scope)
+
+Found in the attic, 21 November 2026, to sit on the tripod and drive the
+night instead of the laptop; the heavy stacking stays indoors
+(`restack.py --on`). An ordinary PC, so the GPCAM's x86-only legacy
+library runs on it as on the laptop. Not yet tried with any device.
+
+- i3-6100T (2 cores, 4 threads, 35 W), B250 board, BIOS 1.6.5 of
+  September 2017, booted in legacy mode (no firmware setup or updates
+  from Ubuntu). Takes up to a 35 W 7th-gen T chip (i5-7500T, i7-7700T);
+  not 8th gen.
+- One 8 GB SK Hynix PC4-2400 SODIMM (running at 2133), one slot free.
+- 119 GB OCZ Vertex 4 SATA SSD; Ubuntu's volume uses 58 GB of it.
+- Ubuntu 26.04.1, host `telescopeyoke`, 192.168.1.231 on the router's
+  cable; SSH from the laptop works. TelescopeYoke installed and updated
+  22 November 2026 (`~/telescopeyoke`, planner ready); still to do: the
+  owner's settings, the ASTAP D20 database, the Altair camera setup.
+- Its 45 W brick held the processor at 800 MHz (min and max) and the
+  BIOS warned about it; the owner turned the warning off in the BIOS.
+  The reboot for the new kernel on 22 November did not come back on the
+  network: it needs a screen and keyboard to see where it stopped.
+- No Wi-Fi: the M.2 WLAN slot (A/E key, 2230) is empty and there are no
+  aerial leads. The plan is an Intel card inside with MHF4-to-SMA
+  pigtails and aerials at the back, the card chosen when the new hub is
+  known (AX210 for an EE Smart Hub 7, AX200 for a BT Smart Hub 3, 8265 or
+  9260 for the Smart Hub 2). Never a CNVi card (9560, AX201, AX211).
+- 25 November 2026: a friend got the owner a 65 W adapter, a case and an
+  extra RAM stick for it; not yet fitted.
+
 ## On USB
 
 | USB ID      | What it is                           |
