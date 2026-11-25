@@ -84,5 +84,11 @@ tracked waiters and `--busy-until done`:
 | about 23:55 | It found the cause (the stopped `ampictures` had left its remote `colour.py` running on the desktop, sharing the GPU), stopped that, acked both events, re-armed `--wait-event` and reported `--stop`'s gap to the scheduling session |
 
 So the chain worked once without the owner: an ended turn, an event, the session woken, the cause
-found and acted on, the waiter armed again. A job ending in success has not yet woken an ended turn;
-that is the pictures job's end, still to come.
+found and acted on, the waiter armed again.
+
+**A job ending in success, 25 November 2026.** The session's turn ended at about 04:44 UT with the
+pictures job (`ampictures2`) running and `--wait-event` armed. At 04:45 the job exited 0; the waiter
+exited, the session resumed with no message from the owner, acked the `done` event, saw the queued
+`amwide` had started by itself (`--after ampictures2:ended`), found the one picture whose denoise had
+failed (a CUDNN error at 03:43) and queued it again with `--after amwide:ended`, and armed the waiter
+again. The successful end of a job now wakes an ended turn too.
