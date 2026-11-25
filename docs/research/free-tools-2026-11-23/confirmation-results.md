@@ -68,13 +68,11 @@ The rest, from their XISF headers or the owners' stated rigs (their TIFFs are no
 
 Three of four fail. The losses are real: leaving out every measured star whose centre is a lone
 spike in the uncleaned stack (deviations 5 and 6) left out none, so the measured stars are stars, not
-the sensor's hot pixels. The stars are 3.1 to 3.7 px wide in the stack, but the cleaning judges each
-frame alone, and a single frame at 1.56"/px (0.78"/px in 2x2 colour pixels) from a Bortle 2 site holds
-stars near 1.5 px wide: the same undersampling as set 76's, frame by frame. The old cleaning cut a
-quarter to a half of the brightest stars' light on every session.
-
-**So step 1 fails on both other cameras, and the cause found in both is undersampled frames.** The
-per-frame lone-pixel test cannot tell a 1.5 px star core from a cosmic ray by its neighbours. The fix
-to test next, on data not yet read: leave the per-frame test out when a session's single-frame stars
-are under about 2 px wide, and rely on the defect map for fixed defects and the stack's own rejection
-for cosmic rays. This project's 183M at 750 mm (1.3"/px binned) passed all 11 of its sessions.
+the sensor's hot pixels. **The cause is not found.** Undersampled single frames were the first guess, and they do not fit:
+measured in single frames (median width of the stars found, px at the stacking scale), this
+project's sessions run 2.5 to 4.9 and all pass, M33's R at 2.5 among them; set 76's run 2.7 to 3.6
+and all fail, its OIII of 10 October at 3.6 losing 83%; the colour camera's run 3.2 to 4.1, M81 at
+4.1 failing. So frame width does not separate passes from fails. What both other cameras' data has
+and this project's does not is no dark frame; whether that, the flats, or something in the frames
+themselves is the cause is the next thing measured, pixel by pixel in single frames.
+This project's 183M at 750 mm (1.3"/px binned) passed all 11 of its sessions.
