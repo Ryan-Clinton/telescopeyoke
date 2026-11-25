@@ -30,3 +30,12 @@ Each change made after the protocol was fixed, with its reason. Nothing here cha
   hot pixels measure wider than 1.5 px, so its first session scored exactly as before, and it was
   stopped. Measure 3 leaves out a star whose centre is a lone spike in the uncleaned stack, by the
   lone-spike test the measure already used to count them. Scripts: `clip_m3.py`, `clip533m3.py`, `clip76m3.py`.
+- **25 November 2026, step 1's harness made to match the shipped code.** Looking pixel by pixel at
+  a failing colour frame, the new lone-pixel test replaced 9 pixels in its 60 brightest stars (the old
+  test 1,182), so the stack's losses came from the defect map. The harness built its map as every
+  pixel scoring over 5 in the frames' median, without the guard `stacking.defect_map` has (a pixel
+  whose third-brightest neighbour stands out too is a star that did not move, and is left). On
+  dithered frames, as all this project's are, stars move and the two agree; on frames not dithered,
+  the harness marked star cores as defects and cut them, which `restack.py` does not. The harness's map
+  now has that guard; both cameras' sessions are run again with it. Scripts: `clip13g.py`,
+  `clip533g.py`, `clip76g.py`.
