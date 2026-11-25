@@ -235,11 +235,20 @@ worse than today, visible cosmic-ray pixels at most today's plus 10.
   sessions it threw out 18% of all pixels, taking the sky's drift between frames for outliers. With Siril's own normalisation
   its stack was on a different scale from the frames and could not be compared fairly.
 
-**The cosmic-ray shortfall is open.** The 3 sessions above failed the pass mark's cosmic-ray part,
-and the mark stands as set. A pair-aware test (a pixel is cleaned when its third-brightest neighbour,
-not its second, is dark, so a cosmic ray across two pixels goes) is running on the same harness and
-mark on all 11 sessions; the stack changes again only if it passes. Sparing blobs of 9 pixels or more
+**The cosmic-ray shortfall, closed on 25 November 2026.** The 3 sessions above failed the pass mark's
+cosmic-ray part. The pair-aware test (a pixel is cleaned when its third-brightest neighbour, not its
+second, is dark) then passed 10 of the 11 sessions, restacked as `restack.py` stacks; M33's L of
+5 November 00:12 still kept 16 visible cosmic-ray pixels against the old cleaning's 1. All 16 sat on
+star wings, in 5 groups of 1 to 5 pixels: on a wing even the third neighbour is bright, so the hit was
+spared. Raising the third neighbour's limit from 20% to 40% of the pixel's height catches them, and a
+star's core is safe, its neighbours sitting at half its height or more. With 40% all 11 sessions
+pass the mark as set: every star's light, peak and grain kept (0.9996 to 1.0001), fewer defects
+left than the old cleaning in every session, and visible cosmic-ray pixels at most the old
+cleaning's plus 10 (M33 L: 5 against 1, was 16; Tabby L of 22 November: 8 against 10). Three of the
+11 sessions were never used to make any version of the rule. Sparing blobs of 9 pixels or more had
 instead left 15 to 99 visible cosmic-ray pixels where the old cleaning left 0 to 22, far worse.
+Adopted in `stacking.clean` for a stack with a defect map (every restack); a live stack, which has
+no map, keeps the second-neighbour test at 20%, the one it was measured with.
 
 **Adopted on 24 November 2026** in `stacking.clean`, with the map made by `restack.py` from up to
 24 of the session's kept frames. A map pixel whose third-brightest neighbour also stands out is

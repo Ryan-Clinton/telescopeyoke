@@ -497,7 +497,14 @@ def clean(rgb, defects=None):
     in Tabby's frames stars lost 11% to 23% in a tight aperture and the light
     curves' scatter rose by 40% (24 November 2026). A core has a bright
     second neighbour; a lone hot pixel or cosmic ray hit does not. Without a
-    map, defects in pairs are left (in a live stack)."""
+    map, defects in pairs are left (in a live stack).
+
+    With a map (restack), the defects in pairs are already gone, so the test
+    is on the third-brightest neighbour at 40% of the pixel's height: that
+    also catches cosmic rays on a star's wing, which the second-neighbour
+    test at 20% spared (M33's L of 5 November kept 16 visible hits). On 11
+    sessions it kept every star's light, peak and grain, and left no more
+    visible hits than the old cleaning plus 10 in any (25 November 2026)."""
     out = rgb.copy()
     for c in range(3):
         plane = rgb[..., c].copy()
@@ -507,8 +514,9 @@ def clean(rgb, defects=None):
         spread = 1.4826 * np.median(np.abs(plane - local)) + 1e-6
         hot = plane - local > 8 * spread
         back = ndimage.median_filter(plane, 7)
-        second = ndimage.rank_filter(plane, rank=-2, footprint=RING) - back
-        hot &= second < np.maximum(0.2 * (plane - back), 3 * spread)
+        rank, share = (-3, 0.4) if defects is not None else (-2, 0.2)
+        neighbour = ndimage.rank_filter(plane, rank=rank, footprint=RING) - back
+        hot &= neighbour < np.maximum(share * (plane - back), 3 * spread)
         plane[hot] = local[hot]
         out[..., c] = plane
     return out
