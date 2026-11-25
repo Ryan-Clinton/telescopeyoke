@@ -20,3 +20,9 @@ Each change made after the protocol was fixed, with its reason. Nothing here cha
   pixels as `camera.colour` does, and the green channel tested, as the restack cleans each channel.
   Sessions fixed before any was measured: for each target the first night with at least 20 lights, up
   to 40 frames (Abell 1656, LBN 552, M81, NGC 7293). Script: `clip533.py` on the desktop.
+- **25 November 2026, step 1's measure, before any re-scoring.** Neither set 76 nor the colour
+  archive has darks, so the sensor's fixed hot pixels survive the stack wherever the frames were not
+  dithered, and the measure took them for stars (149 of 237 "stars" in the first colour session were
+  lone spikes; all 171 in set 76's first). Measure 2 leaves out "stars" narrower than 1.5 px in the
+  uncleaned stack; nothing else changes. The first verdicts stand as recorded; measure 2 is reported
+  beside them, on the same sessions. Scripts: `clip_m2.py`, `clip533m2.py`, `clip76m2.py`, `clip76um2.py`.
