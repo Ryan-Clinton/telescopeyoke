@@ -256,6 +256,11 @@ with no progress, however often it prints or beats. A healthy 300 s
 exposure is not a stall. A camera library that hangs while the heartbeat
 goes on is. A command not yet changed, which sets no deadlines, is stalled
 after 10 minutes with no output.
+A command known to run longer than that without a line is started with
+`--quiet MINUTES` (`ty bg NAME --quiet 40 -- ...`), and is stalled only after that. A live job
+that has gone quiet raises its stall and no idle besides; an acked stall or idle still there
+opens again after 30 minutes, then 60, 120 and so on (25 November 2026: of 101 events in one
+night, 71 were quiet jobs still working, each waking the session).
 
 ### 3. The calls a job makes
 

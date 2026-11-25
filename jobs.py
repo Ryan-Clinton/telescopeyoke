@@ -27,6 +27,7 @@ import argparse
 import atexit
 import contextlib
 import json
+import math
 import os
 import secrets
 import signal
@@ -50,7 +51,8 @@ QUEUE_EVERY_S = 5           # a queued job looks this often whether it can start
 KEEP_DAYS = {"routine": 2}  # a finished job's folder is kept this long (30 days otherwise)
 LOG_CAP_MB, LOG_CAP_LOW_MB, LOW_DISK_GB = 20, 2, 5
 IDLE_AFTER_S = 120          # nothing running for this long, while busy-until stands: idle
-REOPEN_S = 1800             # an acked waiting, stall or idle still there this long after: open again
+REOPEN_S = 1800             # an acked waiting, stall or idle still there this long after: open again,
+                            # then after twice as long each time (30, 60, 120 min...)
 EXCLUSIVE = ("camera", "mount", "gpu")
 
 
@@ -63,7 +65,7 @@ SCHEMA = 1                  # the shape of the records; readers accept older one
 # The generic core this carries: Ryan-Clinton/common's jobs/jobs.py is its
 # authoritative copy for every other project (private); a fix there is
 # carried here, and this names the revision (docs/job-reporting-spec.md).
-CORE = "2026-11-24.4"
+CORE = "2026-11-25.1"
 
 
 def home():
@@ -1067,7 +1069,7 @@ def look(job_id, now=None):
          "progress": g, "events": events, "holds": g.get("holds") or [], "heartbeat": beat,
          "last_output": max(filter(None, (logged, g.get("last_output"))), default=None),
          "last_progress": max(filter(None, (g.get("last_progress"), g.get("operation_since"))), default=None),
-         "stall": None, "log": str(log_path)}
+         "stall": None, "log": str(log_path), "quiet_s": (_read(d / "quiet.json", {}) or {}).get("seconds")}
     phase = p.get("phase")
     alive = running(p.get("pid"), p.get("pid_start"), p.get("boot"))
     if phase == "queued":
@@ -1113,9 +1115,11 @@ def stalled(j, now):
         limit = g["deadline_s"] * DEADLINE_MARGIN[0] + DEADLINE_MARGIN[1]
         if now - began > limit:
             return f"\"{g.get('operation')}\" has taken {_ago(now - began)}, past its {_ago(g['deadline_s'])}"
-    # Apart from any deadline: no output and no progress at all for QUIET_S.
+    # Apart from any deadline: no output and no progress at all for QUIET_S,
+    # or the quiet the job was started with (cj bg --quiet: a step known to
+    # run that long without a line), so a quiet job does not wake its session.
     last = max(filter(None, (j["last_output"], j["last_progress"], j.get("started"))), default=now)
-    if now - last > QUIET_S:
+    if now - last > (j.get("quiet_s") or QUIET_S):
         return f"no output or progress for {_ago(now - last)}"
     return None
 
@@ -1195,6 +1199,10 @@ def idle_event(listing, now=None, sid=None):
     since = max([b.get("set", 0)] + [j.get("ended") or 0 for j in own])
     if now - since < IDLE_AFTER_S:
         return None
+    # A live job that has gone quiet already has its own stall event: idle
+    # is for nothing running at all, not a second alarm for the same quiet.
+    if any(j["phase"] == "stalled" for j in own):
+        return None
     stuck = [j for j in own if j["phase"] in ("waiting", "stalled", "queued", "blocked")]
     held = f"; {len(stuck)} job{'s' if len(stuck) != 1 else ''} waiting, stalled or queued, none moving" if stuck else ""
     return {"id": f"idle:{sid or 'owner'}:{int(since)}", "job": None, "name": "idle", "kind": "idle", "wake": True,
@@ -1229,7 +1237,9 @@ def open_events(listing=None, now=None, sid=None, strict=False, acked_too=False)
         if a is None:
             out.append(e)
         elif _condition(e, listing) and now - a.get("at", now) > REOPEN_S:
-            out.append(dict(e, id=f"{e['id']}:still:{int((now - a['at']) // REOPEN_S)}",
+            # Reopened after REOPEN_S, then after twice as long each time.
+            n = int(math.log2((now - a["at"]) / REOPEN_S)) + 1
+            out.append(dict(e, id=f"{e['id']}:still:{n}",
                             words=f"still, {_ago(now - a['at'])} after it was acked ({a.get('words')}): {e['words']}"))
         elif acked_too and _condition(e, listing):
             out.append(dict(e, acked=a.get("words")))
@@ -1671,6 +1681,9 @@ def main():
         ap.add_argument("--needs", default="", help=f"comma-separated: {', '.join(NEEDS)}")
         ap.add_argument("--kind", default="finite", choices=KINDS)
         ap.add_argument("--why", help="what it is for (the person's ask)")
+        ap.add_argument("--quiet", type=float, metavar="MINUTES",
+                        help="how long a step may run without a line before it counts as stalled (default "
+                             f"{QUIET_S // 60} min)")
         ap.add_argument("--wait", action="store_true", help="run in the foreground, its output passed on too")
         args = ap.parse_args(argv[1:cut])
         needs = [n for n in args.needs.split(",") if n]
@@ -1678,6 +1691,8 @@ def main():
         if unknown:
             ap.error(f"unknown needs: {', '.join(unknown)}")
         result = launch(args.name, argv[cut + 1:], args.after, needs, args.kind, args.why, args.wait)
+        if args.quiet and not args.wait:
+            records.write(folder(result) / "quiet.json", {"seconds": args.quiet * 60})
         if args.wait:
             sys.exit(result)
         j = look(result)
