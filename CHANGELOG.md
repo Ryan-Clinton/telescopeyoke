@@ -9,6 +9,19 @@ proven is `docs/validation.md` ("Current conclusions").
 What is left of the eighteen reviews' plan, done on 20 November 2026
 (`telescopeyokeaudits.md`), and that night's Dec drive work.
 
+- **Free image-processing tools** (`freetools.py`, `colour.py`, 23 to 25 November
+  2026; `docs/free-tools-plan.md`): GraXpert's denoise and Seti Astro Suite Pro's
+  Dark Star are used in pictures when installed (`--denoise none`,
+  `--star-removal none`), each recorded with its tool, version and model;
+  `--background level` for a target larger than the field's sky.
+- **Hot-pixel cleaning keeps star cores** (`stacking.py`): a session's defect map
+  from its frames, then a lone-pixel test; restacking also catches cosmic rays on
+  star wings. Starlight kept on all 11 of this rig's tested sessions; on two other
+  cameras the test still fails, cause being found
+  (`docs/research/free-tools-2026-11-23/confirmation-results.md`).
+- **Jobs**: `ty bg NAME --quiet MIN` for a job with long silent steps; a quiet live
+  job raises its stall and no idle event besides; reminders of an acked event back
+  off (30, 60, 120 minutes).
 - **One command moves the mount at a time** (`mount.py`): the first to
   move it holds it, with the commands it starts; another's move is refused
   with `MOUNT_IN_USE`; stop always goes through.

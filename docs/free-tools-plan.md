@@ -275,7 +275,7 @@ mark fixed first.
 | Stage | Today | Plan | State |
 |---|---|---|---|
 | Calibration, alignment, science stack | `stacking.py` | **Keep.** Photometry and discovery depend on its checks and records | Stays |
-| Star-core clipping fault | Old cleaning cut star cores | A defect map and the lone-pixel test; Siril's rejection failed | Built |
+| Star-core clipping fault | Old cleaning cut star cores | A defect map and the lone-pixel test (third neighbour at 40% when restacking); Siril's rejection failed | Built; fails on two other cameras, cause open |
 | Noise reduction | Optional in pictures | **GraXpert**, on each filter's linear stack; DeepSNR and the suite's AI4 tried and not better | Built |
 | Background and gradients | Our sky model | **Keep ours**: no tool did as well overall (GraXpert AI, Siril, Seti Astro ABE) | Tested |
 | Star removal | Plain code | **Seti Astro Suite Pro's Dark Star, blended**, each star decided once for all filters | Built |
