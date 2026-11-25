@@ -420,7 +420,7 @@ def contrast_gain(nebula, where):
 
 
 def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=False, contrast=True,
-                      star_power=1.0, sharpen=0, ghs=False, grains=None, star_removal=True):
+                      star_power=1.0, sharpen=0, ghs=False, grains=None, star_removal=True, sky="auto"):
     """The narrowband picture made in the light's own units: sky off, star
     widths matched, the palette mixed, and one stretch at the very end.
     Nebula and stars are balanced apart: the nebula on its own strength, so
@@ -444,7 +444,14 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print, quiet=
     guide = "Ha" if channels[1] == "SII" else max(planes, key=lambda b: nebula_level(planes[b]))
     clear = clear_of_nebula(planes[guide])
     open_sky = float(clear.mean())
-    if open_sky >= MIN_CLEAR:
+    if sky == "level":
+        # Asked for: the level alone. This rig's field decides when a target
+        # fills the frame; through an 85 mm lens the Large Magellanic Cloud
+        # left enough star field to look like sky, and the map took the
+        # galaxy away (AstrophotoMarket's data, 24 November 2026).
+        open_sky = 0.0
+        say("  the sky's level only (--background level): no sky map, no tilt")
+    elif open_sky >= MIN_CLEAR:
         planes = {b: p - sky_model(p, clear) for b, p in planes.items()}
         say(f"  sky fitted outside the nebula as {guide} shows it ({open_sky:.0%} of the frame is clear)")
     else:
@@ -563,7 +570,7 @@ def narrowband(rgb, channels, saturation, background=2):
 
 def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette="LRGB", background=2,
             stretched=False, quiet=False, contrast=True, linear_background=None, star_power=1.0, sharpen=0,
-            ghs=False, denoise=None, denoise_strength=freetools.STRENGTH, star_removal=True):
+            ghs=False, denoise=None, denoise_strength=freetools.STRENGTH, star_removal=True, sky="auto"):
     """The colour picture (8-bit RGB array) and what went into it."""
     channels, base, detail_band = PALETTES[palette]
     needed = tuple(dict.fromkeys(channels))
@@ -628,7 +635,7 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
     else:
         colour, linear, done = linear_narrowband(rgb, channels, saturation,
                                                  background if linear_background is None else linear_background,
-                                                 say, quiet, contrast, star_power, sharpen, ghs, grains, star_removal)
+                                                 say, quiet, contrast, star_power, sharpen, ghs, grains, star_removal, sky)
         used.update(done)
     if detail_band in images:
         grey = np.where(valid, images[detail_band], 0)
@@ -690,6 +697,9 @@ def main():
     ap.add_argument("--denoise", choices=("graxpert", "none"),
                     help="noise reduction by GraXpert, for the picture only (the stacks are not touched): used by "
                          "default when it is installed (./freetools.py status); none leaves it out")
+    ap.add_argument("--background", choices=("auto", "level"), default="auto",
+                    help="narrowband: auto fits the sky outside the nebula when there is enough of it; level takes "
+                         "off only the sky's level, for a target that fills the frame of a wider field than this rig's")
     ap.add_argument("--star-removal", choices=("darkstar", "none"),
                     help="narrowband: stars taken off the nebula by Seti Astro Suite Pro's Dark Star, used by default "
                          "when it is installed; none leaves the stars in the nebula")
@@ -821,7 +831,7 @@ def run(args):
                             contrast=not args.no_contrast, linear_background=process.sky_for(args.name),
                             star_power=args.star_reduction, sharpen=args.sharpen, ghs=args.ghs,
                             denoise=denoise, denoise_strength=args.denoise_strength,
-                            star_removal=args.star_removal != "none")
+                            star_removal=args.star_removal != "none", sky=args.background)
     suffix = "colour" if args.palette == "LRGB" else args.palette
     # A comparison keeps its own files, so it never replaces the picture.
     if args.stretched:
@@ -835,6 +845,8 @@ def run(args):
         suffix += f"-graxpert{args.denoise_strength:g}"
     if args.star_removal == "none":
         suffix += "-nostarremoval"
+    if args.background == "level":
+        suffix += "-skylevel"
     if args.no_contrast:
         suffix += "-nocontrast"
     if args.star_reduction != 1:
@@ -858,7 +870,7 @@ def run(args):
     print(f"saved {out}")
     settings = {"saturation": saturation, "background": background, "stretched": args.stretched,
                 "noise_reduction": args.noise_reduction, "local_contrast": not args.no_contrast, "star_power": args.star_reduction, "ghs": args.ghs, "sharpen_steps": args.sharpen, "night": args.night,
-                "any_coverage": args.any_coverage}
+                "any_coverage": args.any_coverage, "background_choice": args.background}
     if used.get("denoise"):
         settings["denoise"] = used["denoise"]
     if used.get("star_removal"):
