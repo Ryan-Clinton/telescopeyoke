@@ -7,11 +7,9 @@ fixed in advance tests a search.
 
 ## The data
 
-Data sets shared by their owners in an astrophotography community's datasets forum for anyone to
-process, from about 80 owners' rigs: colour and mono cameras, DSLRs, a Seestar and a Dwarf, lenses
-from 55 mm to an 8" SCT at 2032 mm, Bortle 1 to 9. They are named here by number and rig only; the
-owners' links stay private, as some asked. Pictures made from them, and the owners' own, are shown
-only with each owner's permission; numbers are published.
+Data sets from about 80 other rigs: colour and mono cameras, DSLRs, smart telescopes, lenses from
+55 mm to an 8" SCT at 2032 mm, Bortle 1 to 9. Their sources are not named, and no picture made
+from them is published: results are reported as numbers, by kind of rig.
 
 Fields held out of all tuning (IC 405, IC 410, NGC 2174, within 5 degrees) stay held out: a set on
 one is used here, as a test, and never for any later change.
@@ -53,9 +51,8 @@ and for that set both are measured as on 23 November.
 
 ## What is not a verdict
 
-Side-by-side pictures against the owners' and the community's own versions, and the owners'
-comments on what went wrong for them (gradients, colour, dust, flats), are reported as they are.
-They show where the chain helps and where it does not; no rule is drawn from them.
+Comparisons by eye against other processing of the same data are for our own guidance only; no
+rule is drawn from them and none is published.
 
 ## Reporting
 
