@@ -8,3 +8,9 @@ Each change made after the protocol was fixed, with its reason. Nothing here cha
   as the harness always has. Only the 600 s frames, as the protocol states (some nights mix in 300 s). The sessions, chosen before any was measured: for each filter the first
   and the last night with at least 20 frames of 600 s, up to 40 frames each (Ha 10 October and 2 November 2025,
   OIII 10 and 29 October 2025). A first start failed before measuring anything, on a list index, with the 300 s frames mixed in. The harness reads the frames from the file's primary HDU, where this camera keeps them (ours keep theirs in the second). Script: `clip76.py` on the desktop, beside the other cleaning tests.
+- **25 November 2026, steps 2 to 4, the input only.** `colour.py` takes one mono stack per filter and
+  most of the shared sets are single colour stacks, so each is split into its channels before the
+  run: through a dual-band filter (by the owner's stated filter, decided before any stack was read) red
+  as Ha and the mean of green and blue as OIII, with palette HOO; otherwise red, green and blue with
+  their mean as L, palette LRGB; set 41's two dual-band stacks give SHO. Nothing in `colour.py`
+  changes. Script: `ds_sessions.py` on the desktop.
