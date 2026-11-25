@@ -108,3 +108,12 @@ Found on the way: the harness keeps colour frames as float16, as `stacking.store
 pixels per plane passed float16's 65504 and became inf (saturated stars over their flat). The plain mean
 spread them until the stars could not be measured. The shipped store had the same hole; `register_file` now
 keeps such a pixel at 65504. Not yet seen in a real restack.
+
+### The rule, not the defect map, and only on some frames (cleanparts, 25 November 2026)
+
+Diagnostic, not a verdict: five single frames of Abell 1656 (every eighth), each part of the cleaning
+against the frame uncleaned, brightest-third stars. The defect map (2,893 pixels, 22 to 28 of them on
+stars) takes nothing in any frame. The lone-pixel rule takes nothing in four frames and, in light-0008,
+17% of the flux and 35% of the peak. So the stack's loss is the rule on a few frames, the brightest stars'
+cores taken for lone spikes there. Next: what light-0008 has that the others do not (its star width first:
+the sharpest frames are where a core is most nearly one pixel).
