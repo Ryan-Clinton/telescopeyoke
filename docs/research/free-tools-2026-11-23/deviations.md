@@ -14,3 +14,9 @@ Each change made after the protocol was fixed, with its reason. Nothing here cha
   as Ha and the mean of green and blue as OIII, with palette HOO; otherwise red, green and blue with
   their mean as L, palette LRGB; set 41's two dual-band stacks give SHO. Nothing in `colour.py`
   changes. Script: `ds_sessions.py` on the desktop.
+- **25 November 2026, step 1 on a colour camera, the harness only.** Raw 2600MC Pro frames at
+  1000 mm from a public Bortle 2 archive: each frame's night's flat (median of its 20, each Bayer site
+  normalised on its own) divided out, with no dark or bias (none in the archive), split into colour
+  pixels as `camera.colour` does, and the green channel tested, as the restack cleans each channel.
+  Sessions fixed before any was measured: for each target the first night with at least 20 lights, up
+  to 40 frames (Abell 1656, LBN 552, M81, NGC 7293). Script: `clip533.py` on the desktop.
