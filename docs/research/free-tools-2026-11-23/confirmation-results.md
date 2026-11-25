@@ -117,3 +117,22 @@ stars) takes nothing in any frame. The lone-pixel rule takes nothing in four fra
 17% of the flux and 35% of the peak. So the stack's loss is the rule on a few frames, the brightest stars'
 cores taken for lone spikes there. Next: what light-0008 has that the others do not (its star width first:
 the sharpest frames are where a core is most nearly one pixel).
+
+### Cause found: the lone-pixel rule takes star cores in the sharpest frames (cleanwidth, 25 November 2026)
+
+Every one of Abell 1656's 40 frames, the rule alone against the frame uncleaned (brightest-third stars),
+beside the frame's median star width in the green plane:
+
+| Frames | Median width (px) | Flux kept | Peak kept |
+|---|---|---|---|
+| 12 that lose light | 3.22 (3.16 to 3.31) | 0.81 to 0.90 | 0.63 to 0.98 |
+| 28 that lose nothing | 3.40 (3.22 to 3.72) | 1.000 | 1.000 |
+
+Every frame at 3.25 px or less loses 10 to 19% of its brightest stars' light but one (light-0026, 3.22);
+from 3.3 px up only light-0006 (3.31) loses any. The sky does not separate them (385 against 381). So
+across sessions width did not sort passes from fails, but within one session it does: in a frame sharp
+enough, the brightest stars' cores are narrow enough for the third-brightest-neighbour test to take them
+for lone hits. The owner's 183M frames are wider at the stacking scale and never reach it. This is a fault
+in the shipped rule (`stacking.clean`), not in the harness; counted, not fixed, as the protocol says. A fix
+to try on unread data: leave any pixel at the peak of a star `find_stars` found, or scale the 40% with the
+frame's measured width.
