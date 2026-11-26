@@ -424,3 +424,9 @@ So in the crowded and bright-nebula fields Dark Star itself leaves the stars; ou
 D31 the blend is what puts back a share of the worst tenth: that part is ours to fix, in `colour.py`'s blend. The
 model's weights are not open, so Dark Star's own share could only be helped by what it is given (its tiling, its
 stretch, the mode) or reported upstream; neither is started.
+
+**Candidate 8 on the owner's 11 sessions (desktop): 10 pass, M33 L fails exactly as candidate 7 did** (18 visible
+cosmic-ray pixels against 3; every star's light kept in all 11). The shape test removed none of the extra hits, so
+they are not cores made brighter by a hit: they sit within the spared 3 by 3 where a hit is no brighter than its
+star's core. Recorded as a failure; the 2600MC sessions and set 76 are run to the end, as asked, before the
+evidence is read as a whole.
