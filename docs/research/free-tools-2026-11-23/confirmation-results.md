@@ -275,3 +275,9 @@ Candidate 6 on all four raw 2600MC sessions, for the record (not promoted):
 | NGC 7293 | pass | pass (cosmic 2) |
 
 It keeps the light everywhere but lets hits through in the sharp sessions: 2 of 4 pass, against the shipped 1.
+
+Candidate 6 on set 76 (QHY Minicam8M), for the record: **all 4 fail**, much as the shipped rule did (Ha 10 Oct
+flux 0.793, peak 0.603; OIII 10 Oct flux 0.171, peak 0.168; the other two on grain and cosmic counts). Set 76's
+frames are 2.7 to 3.6 px wide, mostly over the 3.35 px at which candidate 6 acts, so here it is mostly the shipped
+rule, and an 83% loss in a stack is not sharp cores alone: set 76 has a cause of its own, still open. To be found
+in single frames, as Abell 1656's was (`cleanparts.py`), before candidate 7 is judged on set 76.
