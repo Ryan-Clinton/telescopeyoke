@@ -815,6 +815,16 @@ def show_plan(name):
 def run(args):
     # At least a tilt: a level alone left NGC 2174's sky teal on one side and red on
     # the other (21 November 2026), and a flat plane cannot take a nebula away.
+    # These choices act only in the linear narrowband mix: an LRGB or --stretched picture would be made
+    # exactly as without them, under another name and with other settings recorded (found 26 November
+    # 2026: the shared sets' LRGB pictures "with --background level" were the default).
+    if args.palette == "LRGB" or args.stretched:
+        asked = [o for o, on in (("--background level", args.background == "level"),
+                                 ("--star-removal none", args.star_removal == "none")) if on]
+        if asked:
+            raise interface.Refusal("INVALID_REQUEST", f"{' and '.join(asked)} act only on a narrowband picture "
+                                    "made linear (SHO, HOO and the like, without --stretched); this one would be "
+                                    "made the same without them.")
     stacks = sessions(args.name, args.night, say=print)
     print("stacks: " + (", ".join(f"{b} {p.parent.name}" for b, p in sorted(stacks.items())) or "none"))
     linear_mix = args.palette != "LRGB" and not args.stretched

@@ -45,3 +45,12 @@ Each change made after the protocol was fixed, with its reason. Nothing here cha
   into the stack before GraXpert, the pair being the stack denoised without and with them, scaled to
   its 99.995th percentile for the tools. Step 2 on the shared sets takes every filter's stack
   (`ds_real.py`), as the protocol says, where the AstrophotoMarket run took one per set.
+- **25 November 2026, the float16 store (beb6b79).** `stacking.register_file` now keeps a colour
+  frame's pixel over 65504 at 65504 instead of inf. It touches the restack only (step 1's pipeline
+  path, colour cameras); the step 1 harness keeps its own float16 cubes and was not changed by it, and
+  steps 2 to 4 read finished stacks. Results before beb6b79 and after it name their commit.
+- **26 November 2026, `--background level` on LRGB.** `colour.py` used the choice only in the linear
+  narrowband mix; an LRGB picture was made exactly as with `auto`. So step 4's LRGB sets marked "level"
+  (40, 44, 49, 56, 57, 72) were in fact made with the automatic background; their verdicts stand as
+  verdicts on that. `colour.py` now refuses `--background level` and `--star-removal none` where they
+  would do nothing.

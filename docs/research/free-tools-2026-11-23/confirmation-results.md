@@ -92,8 +92,10 @@ Every run ended with exit 0. Each picture was looked at whole for tiles, edges, 
 | 65 | **fail** | a strip along the top with another background level from the rest |
 | 72 | **fail** | dark round holes in the sky (two plainly, more faintly), and the Rosette hardly shows |
 
-Five of 17 fail, all at the edges or in the sky model: the background step (28, 41, 57, 65, and 72's holes
-round what may be dust motes) rather than the colour or the stars. Next: the sky model's edge handling and
+Five of 17 fail, all at the edges or in the background (28, 41, 57, 65, and 72's holes round what may be
+dust motes) rather than the colour or the stars. Two paths, not one sky model: 41 and 65 went through the
+narrowband mix and its sky model; 28, 57 and 72 are LRGB, whose background is `process.process`'s (and
+`--background level` did nothing there: deviation of 26 November). Next: the sky model's edge handling and
 what it does with a stack whose frames did not all cover the field.
 
 ### The stack's rejection is not the cause (clipmean, 25 November 2026)
@@ -150,3 +152,9 @@ Not part of the rule, and to look at in the pictures before Dark Star is trusted
 leaves its worst tenth of stars whole or nearly (D18 Ha, D31 B/G/L at 40 to 65%, D74 Ha and OIII, D78 Ha),
 where ours leaves 17 to 74%. **On D74 Ha (the Tarantula) it removed no stars at all** (stars left 100%,
 ours 28%). Crowded or bright-nebula fields, all of them.
+
+Added after these results, and reported beside them rather than changing them: star removal also has to
+remove stars. Against our own removal, more than 10 points more left by Dark Star blended: of all stars, 1 of
+53 stacks (D74 Ha); of its worst tenth, 7 (the ones above). Production's LRGB path runs no star removal; the
+36 broadband stacks here test Dark Star on
+broadband data, not what an LRGB picture gets today.
