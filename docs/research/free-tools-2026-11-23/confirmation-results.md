@@ -136,3 +136,17 @@ for lone hits. The owner's 183M frames are wider at the stacking scale and never
 in the shipped rule (`stacking.clean`), not in the harness; counted, not fixed, as the protocol says. A fix
 to try on unread data: leave any pixel at the peak of a star `find_stars` found, or scale the 40% with the
 frame's measured width.
+
+## Step 2: star removal on the shared sets (25 to 26 November 2026)
+
+Every filter's stack of the 17 sets (53 stacks, `ds_real.py`, deviation 8), GraXpert's denoise then Dark Star
+blended, against our star removal after the same denoise (`stars_chain.py`, `TY_ONE_MODE`).
+
+**Pass on all 53**: the planted faint line is kept to within 5 points of ours in every stack (Dark Star
+median 99.9%, lowest 70.8%; ours median 15.8%). Stars left, median: 0.2% against ours 1.1%; brightest 20:
+0.8% against 5.6%.
+
+Not part of the rule, and to look at in the pictures before Dark Star is trusted everywhere: in 7 stacks it
+leaves its worst tenth of stars whole or nearly (D18 Ha, D31 B/G/L at 40 to 65%, D74 Ha and OIII, D78 Ha),
+where ours leaves 17 to 74%. **On D74 Ha (the Tarantula) it removed no stars at all** (stars left 100%,
+ours 28%). Crowded or bright-nebula fields, all of them.
