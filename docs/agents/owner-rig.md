@@ -216,8 +216,8 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
   The jobs owed are [owner-jobs.md](owner-jobs.md).
 - **Wobble found 26 November 2026, by hand**: the altitude pivot's two
   side bolts (taken off to reach the latitude bolts) were loose, the head
-  rocking about half a tick on the latitude dial; a bigger wobble lower
-  down, between the head and the tripod (where not yet pinned down).
+  rocking about half a tick on the latitude dial; the bigger wobble is the
+  altitude axis itself rocking left and right on that pivot.
   Neither explains Dec pulses south moving nothing; both can shift the
   polar alignment and give jumps. Polar align again once they are tight.
 - **Latitude bolts**: the rear bolt in lowers the axis, the front bolt in
