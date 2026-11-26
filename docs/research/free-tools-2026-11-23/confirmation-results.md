@@ -203,3 +203,20 @@ Candidate 3's leftover in light-0011 (`corelook_t.py`): cores with only one neig
 peak; 36,822, 21,682, 20,236). Candidates 4 and 5 spare those, but also some hits on M33 L's star wings. Candidate
 6 uses 4's core test only in a frame whose stars' median width is 3.35 px or less, where the shipped rule was
 seen to take cores; a wider frame is cleaned exactly as shipped.
+
+## Step 3: stretch on the shared sets (25 to 26 November 2026)
+
+The 53 stacks of step 2 (`ds_stretch.py`, deviation 8: regions from the stack itself, the lines planted before
+GraXpert), each tool at its default sky level. Medians:
+
+| Method | Faint lines over grain | Line height | Grain | Bright detail | Burnt white |
+|---|---|---|---|---|---|
+| **Ours** (`process.display`) | 10.1 | 0.037 | 0.0034 | 0.0084 | 0.006% |
+| Siril 1.4.5 autostretch | 5.4 | 0.062 | 0.0116 | 0.0130 | 0.016% |
+| Siril 1.4.5 autoghs | 5.7 | 0.004 | 0.0023 | 0.0052 | 0.005% |
+| Seti Astro Suite Pro statistical stretch | 5.4 | 0.063 | 0.0119 | 0.0138 | 0.020% |
+
+**None passes; ours stays**, as on the owner's ten held-out pairs (`docs/free-tools-plan.md`, Stretch): ours
+shows the faint lines higher over the grain in all 53 stacks. Siril's autostretch and the suite's stretch keep
+more bright detail (about 1.6 times ours) and burn a little more white; autoghs keeps less of both. The same
+caution as before: ours puts the sky at black, the tools at 0.25, and the rule measures in the faint nebula.
