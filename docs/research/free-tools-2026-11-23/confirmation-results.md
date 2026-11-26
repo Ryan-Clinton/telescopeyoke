@@ -166,3 +166,12 @@ remove stars. Against our own removal, more than 10 points more left by Dark Sta
 53 stacks (D74 Ha); of its worst tenth, 7 (the ones above). Production's LRGB path runs no star removal; the
 36 broadband stacks here test Dark Star on
 broadband data, not what an LRGB picture gets today.
+
+### A candidate fix, first look (development data, 26 November 2026)
+
+Diagnostic, not a verdict: the shipped lone-pixel rule with each found star's centre (3 by 3, from
+`find_stars` on the frame) left alone (`cleanstar.py`, `starspare.py`), on all 40 Abell 1656 frames. The 12
+frames that lost 10 to 19% under the shipped rule lose nothing (flux and peak 1.000), and no frame loses any.
+It replaces about a third fewer pixels (median 720 against 1,104 a frame), so it may also spare some real hits:
+the full pass mark, cosmic rays and fixed defects counted, runs next on the owner's 11 sessions, the four raw
+2600MC sessions and set 76. Only if it passes all three is it judged once on the frozen raw sessions.
