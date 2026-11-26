@@ -236,3 +236,31 @@ sky fit and crop the finished picture to the well covered rectangle, then judge 
 peak and grain kept (flux 0.9998 or better); visible cosmic-ray pixels 0 to 23, at most 6 above the shipped rule's
 (M33 L 9 against 3), inside its plus 10; fixed defects left no worse. On the 40 Abell 1656 frames it keeps every
 star's light. Next, on development data still: the four raw 2600MC sessions and set 76; then once on the frozen.
+
+**Candidate 6 fails on development data, and stays recorded as a failure.** Abell 1656 stacked (raw 2600MC, full
+pass mark, 26 November 2026): brightest-third flux 0.989 (needs 0.995), peak 0.960 (needs 0.99), visible
+cosmic-ray pixels 109 (the shipped rule 12, so at most 22). It keeps far more starlight than the shipped rule
+(0.943, 0.819), but in the sharp frames, the only ones where its core test acts, that test spares cosmic-ray hits
+too. The other three 2600MC sessions and set 76 are finished for the record; candidate 6 is not promoted whatever
+they show. Shape tests within one frame are not separating a sharp core from a hit, so further thresholds are
+not tried.
+
+### What comes next for the cleaning, and its limits
+
+One candidate, then stop. It uses the other frames: a pixel the shape test calls a hit is left alone when the
+session's lined-up reference has a star there. Its limits, fixed before it is written:
+- It changes only which pixels the per-frame cleaning replaces. The frames on disk are never changed, the
+  stack's own rejection is unchanged, and the replaced pixels of each frame are counted and kept beside it.
+- A real one-frame signal must survive the cleaning: planted star-like sources present in one frame only (an
+  asteroid, a flare, a transient) are measured with the pass mark, and must keep their light as stars do.
+- Judged on the same pass mark on the owner's 11 sessions, the four raw 2600MC sessions and set 76; only if it
+  passes all of them, once on the five frozen raw sessions. A failure there is recorded and not tuned against.
+- If it fails, `stacking.clean` stays as it is, and the cleaning is recorded as proven on the owner's rig and not
+  yet on other cameras.
+
+### The footprint, and what is cropped
+
+The covered-area candidate (`fp_patch.py`) is for stacks made elsewhere, which carry no coverage. A restack made
+here already knows its coverage from each pixel's weight and trims to it (`stacking.Stack.covered`); the grain is
+used only where no weight exists. The stacks are never cropped or changed: only the picture is cropped, and the
+linear picture file is marked a picture product, not for measurement, with its crop in its header.
