@@ -54,3 +54,6 @@ Each change made after the protocol was fixed, with its reason. Nothing here cha
   (40, 44, 49, 56, 57, 72) were in fact made with the automatic background; their verdicts stand as
   verdicts on that. `colour.py` now refuses `--background level` and `--star-removal none` where they
   would do nothing.
+- **26 November 2026, the protocol's addition.** Data roles (development, frozen, cross-camera), failures kept
+  as failures, a second star-removal rule (stars removed) and the data owner's notes beside failures were
+  added to `confirmation-protocol.md`, before any fix is judged. Steps 1 to 4's results so far stand as run.

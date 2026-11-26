@@ -98,6 +98,13 @@ narrowband mix and its sky model; 28, 57 and 72 are LRGB, whose background is `p
 `--background level` did nothing there: deviation of 26 November). Next: the sky model's edge handling and
 what it does with a stack whose frames did not all cover the field.
 
+What the data's owners said, recorded beside the verdicts and not changing them: 28's poster had "trouble
+with the corners"; 57 is 3000 untracked frames of 0.6 s, so the field turned and the stack's footprint is a
+turned shape; 72 has darks but no flats, and its poster names dust spots. 41 and 65 have no such note
+(65 is a 2x drizzle stacked in DSS without a plate solution). So for 28 and 57 the question is the pipeline
+not knowing a stack's valid footprint when it models the sky (to be measured: the footprint found and left
+out of the background, the finished picture cropped); 72's holes are dust that no flat took off.
+
 ### The stack's rejection is not the cause (clipmean, 25 November 2026)
 
 Diagnostic, not a verdict: Abell 1656's 40 frames with each layer a plain mean (no rejection). The new

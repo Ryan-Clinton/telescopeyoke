@@ -58,3 +58,15 @@ rule is drawn from them and none is published.
 
 Every set run is reported, passes and failures, in one table per stage, with the code's commit.
 A set that cannot be read is listed with why.
+
+## Added 26 November 2026, before any fix is judged (logged in deviations.md)
+
+- **Three roles for data.** Everything run so far is development data. A fix is judged once, after it is
+  final, on frozen confirmation data chosen from its listing (camera, scale, subs, calibration) and written
+  down before it is opened; and on other cameras' data for cross-camera. Frozen data is never used to tune.
+- **A failure stays a failure.** A set that failed a stage stays in that stage's table as a failure with its
+  commit, whatever a later fix does; the fix's result is a new row.
+- **Star removal has two rules from now on**: the planted faint line kept, as before, and stars removed:
+  stars left no more than our own removal's plus 10 points, overall and in the worst tenth, in every stack.
+- **What the data's owner said about it is recorded beside a failure** (no flats, untracked, uncropped
+  mosaic, drizzled, a mislabelled filter), and does not change the verdict.
