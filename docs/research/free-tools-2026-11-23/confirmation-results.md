@@ -312,3 +312,14 @@ Planted star-like sources in one frame only (20 a frame, 262 frames): the cleani
 light, at worst 76.5%, the same with the shipped rule and with candidate 7, as designed (it spares only stars the
 reference has). So the shipped cleaning already takes a little of a one-frame source's light, up to a quarter in a
 few frames: a thing to know for discovery work on single frames, measured here for the first time.
+
+### The covered-area candidate: a first try with a bug, and a second (26 November 2026)
+
+The first try (`fp_patch.py`) cut 10 of the 17 pictures to under 60% of the frame and refused them (D43 kept 2%,
+D56 5%). Two faults of mine: its new function had the name of `colour.covered`, which lines the filters up, and
+replaced it; and it counted a bright nebula's grain as thin coverage. Recorded as a failed try, not a verdict on the
+idea. The second (`fp_patch2.py`, function `well_covered`) counts a block as thinly covered only when its grain is
+over 1.5 times the usual, its level is the sky's (60th percentile or under), and it joins the frame's edge. On all 17
+stacks it leaves the rest alone (99.5% or more kept) and finds D28's corners (the picture cropped to 66% of the
+frame), D57's untracked band (63%) and D65's top strip (95%). Pictures of the five failures and five passes are
+being made with it.
