@@ -406,3 +406,21 @@ wedges were R, G and B's (26 November 2026).
 
 The other 13 pictures are being made with it, to show it changes nothing it should not, before it is judged once
 on the six frozen stacks.
+
+### Is it Dark Star, or our blend? (26 November 2026)
+
+Step 2's own scores already hold Dark Star's raw output beside the blended one (`stars_chain.py` keeps both). Stars
+left, overall and worst tenth:
+
+| Stack | Ours | Dark Star alone | Dark Star blended (ours) |
+|---|---|---|---|
+| D74 Ha (Tarantula) | 28%, 74% | **94%, 106%** | 100%, 101% |
+| D74 OIII | 10%, 63% | 13%, **107%** | 14%, 101% |
+| D78 Ha (M42) | 0.7%, 24% | 0.3%, **98%** | 0.2%, 100% |
+| D18 Ha | 0.8%, 29% | 0%, **101%** | 0%, 100% |
+| D31 L (M101) | 0.8%, 13% | 1.3%, 19% | 1.4%, **40%** |
+
+So in the crowded and bright-nebula fields Dark Star itself leaves the stars; our blend changes little there. In
+D31 the blend is what puts back a share of the worst tenth: that part is ours to fix, in `colour.py`'s blend. The
+model's weights are not open, so Dark Star's own share could only be helped by what it is given (its tiling, its
+stretch, the mode) or reported upstream; neither is started.
