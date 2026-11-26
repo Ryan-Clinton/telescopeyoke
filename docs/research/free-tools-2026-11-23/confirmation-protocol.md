@@ -64,6 +64,10 @@ A set that cannot be read is listed with why.
 - **Three roles for data.** Everything run so far is development data. A fix is judged once, after it is
   final, on frozen confirmation data chosen from its listing (camera, scale, subs, calibration) and written
   down before it is opened; and on other cameras' data for cross-camera. Frozen data is never used to tune.
+  The frozen sets were chosen on 26 November 2026: six finished stacks fetched on 25 November (only their
+  file names and one header card each read), and five raw sessions of the raw archive named by target kind
+  before anything inside them was listed. Data run before then, and any set named as an example (the two
+  untracked lens sets among them), stays development.
 - **A failure stays a failure.** A set that failed a stage stays in that stage's table as a failure with its
   commit, whatever a later fix does; the fix's result is a new row.
 - **Star removal has two rules from now on**: the planted faint line kept, as before, and stars removed:

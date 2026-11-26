@@ -103,7 +103,8 @@ with the corners"; 57 is 3000 untracked frames of 0.6 s, so the field turned and
 turned shape; 72 has darks but no flats, and its poster names dust spots. 41 and 65 have no such note
 (65 is a 2x drizzle stacked in DSS without a plate solution). So for 28 and 57 the question is the pipeline
 not knowing a stack's valid footprint when it models the sky (to be measured: the footprint found and left
-out of the background, the finished picture cropped); 72's holes are dust that no flat took off.
+out of the background, the finished picture cropped). 72's holes are dust that no flat took off: a fault in the
+input, and still a failure of the pipeline in what it says, since the picture is handed over as though it were sound.
 
 ### The stack's rejection is not the cause (clipmean, 25 November 2026)
 
