@@ -430,3 +430,8 @@ cosmic-ray pixels against 3; every star's light kept in all 11). The shape test 
 they are not cores made brighter by a hit: they sit within the spared 3 by 3 where a hit is no brighter than its
 star's core. Recorded as a failure; the 2600MC sessions and set 76 are run to the end, as asked, before the
 evidence is read as a whole.
+
+**Covered-area version 5 on the other 13 pictures (26 November 2026): no picture made worse.** Each is as it was in
+step 4, cropped by at most 9% (D40 91%, D43 90%; most 94 to 100%). D41's purple corner and D72's dust holes are
+unchanged, as expected: neither is coverage. With D28 nearly fixed and D57 and D65 fixed, version 5 is the
+covered-area candidate to judge, once, on the six frozen stacks.
