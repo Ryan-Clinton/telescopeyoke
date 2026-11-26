@@ -384,3 +384,14 @@ Across candidates 1 to 7, two findings stand. Where a sharp core and a hit look 
 frame tells them apart, and in sharp, crowded fields that still spares the hits that land on stars. The way on is
 a value test, not a shape one: a pixel kept only when its value agrees with the reference's at that place. It is
 recorded here as the next idea, not started.
+
+The third covered-area candidate (`fp_patch3.py`), D28 and D57 (26 November 2026): both made, each against step 4's.
+- **D28: better, not fixed.** The green gradient along the bottom is gone and the picture is cropped in. But
+  parts of two corner wedges are still in it (bottom left, top right): the grain mask finds the wedges' outer
+  parts and misses their inner edge, where fewer frames are missing.
+- **D57: better, not fixed.** Most of the diagonal band is cropped away, but a sliver is left at the top left.
+  The orange glow in the bottom-right corner is untouched, as it should be: it is in the data (by its look,
+  amp glow or a light), not a coverage gap.
+
+So the covered-area fix has one clean pass (D65), two improvements that still fail by eye (D28, D57), and changes
+nothing it should not (the five passes, D41, D72). It is not ready to judge on frozen data.
