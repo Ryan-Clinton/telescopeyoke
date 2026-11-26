@@ -323,3 +323,18 @@ over 1.5 times the usual, its level is the sky's (60th percentile or under), and
 stacks it leaves the rest alone (99.5% or more kept) and finds D28's corners (the picture cropped to 66% of the
 frame), D57's untracked band (63%) and D65's top strip (95%). Pictures of the five failures and five passes are
 being made with it.
+
+Candidate 7 on the four raw 2600MC sessions (desktop, 26 November 2026):
+
+| Session | Shipped rule | Candidate 7 |
+|---|---|---|
+| Abell 1656 | fail (flux 0.943, peak 0.819) | **pass** (1.000, 1.000; cosmic 14 against 12) |
+| LBN 552 | fail (0.970, 0.926; cosmic 36 against 24) | **fail, cosmic only** (0.9999, 1.000; cosmic 36 against 23) |
+| M81 | fail (peak 0.978) | **pass** (1.000, 1.000; cosmic 24 against 15) |
+| NGC 7293 | pass | see the line below |
+
+Every star's light kept in all four. LBN 552 fails on cosmic rays by 3 pixels, and cannot do better by design:
+candidate 7 only spares pixels the shipped cleaning would replace, never replaces more, and the shipped rule itself
+leaves 36 there. That shortfall is the shipped cleaning's, not the star-core fault's. By the pass mark it is a fail,
+and it stays one.
+NGC 7293: raw533-NGC7293             RGB   rejected 0.0000 flux 1.0000 peak 1.0000 grain 1.0000 fixed 0.0137/0.0237 cosmic 2/3 PASS
