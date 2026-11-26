@@ -220,3 +220,14 @@ GraXpert), each tool at its default sky level. Medians:
 shows the faint lines higher over the grain in all 53 stacks. Siril's autostretch and the suite's stretch keep
 more bright detail (about 1.6 times ours) and burn a little more white; autoghs keeps less of both. The same
 caution as before: ours puts the sky at black, the tools at 0.25, and the rule measures in the faint nebula.
+
+### Where the stacks' frames did not reach (noisemap, 26 November 2026)
+
+Diagnostic, not a verdict, for step 4's edge failures. D28 and D57 have no empty (zero or NaN) pixels, so the
+pipeline's present test for a stack's edge (`process.remove_sky` leaves out exact zeros; `colour.combine` crops to
+the finite rows and columns) finds nothing to leave out. The areas fewer frames reached show instead in the
+grain: in 32 px blocks against the stack's usual grain, D28's frames make a turned square with its four corners
+outside it (5% of the blocks over twice the usual grain), D57's untracked frames a diagonal band down the left
+(13%), D65's a strip along the top (2%). D41, D18 and D29 have none (D72: 1%, round its dust). So the footprint can
+be found from the stack alone; next, as a candidate on development data: leave the thinly covered blocks out of the
+sky fit and crop the finished picture to the well covered rectangle, then judge on the frozen stacks.
