@@ -281,3 +281,20 @@ flux 0.793, peak 0.603; OIII 10 Oct flux 0.171, peak 0.168; the other two on gra
 frames are 2.7 to 3.6 px wide, mostly over the 3.35 px at which candidate 6 acts, so here it is mostly the shipped
 rule, and an 83% loss in a stack is not sharp cores alone: set 76 has a cause of its own, still open. To be found
 in single frames, as Abell 1656's was (`cleanparts.py`), before candidate 7 is judged on set 76.
+
+### Set 76's cause: stars under 2 px wide (cleanparts76, 26 November 2026)
+
+Diagnostic, not a verdict: every fourth frame of set 76's two 10 October sessions, each part of the cleaning
+against the frame uncleaned (brightest-third stars):
+
+| Session | Frames' star width (px) | Defect map alone | Lone-pixel rule alone |
+|---|---|---|---|
+| Ha | 2.61 to 2.84 | keeps everything (45 to 54 map pixels on stars) | keeps 39 to 79% of the flux, 18 to 52% of the peak |
+| OIII | 1.96 to 1.98 (one frame 3.42) | keeps **2 to 4%** (283 to 327 map pixels on stars) | keeps 2 to 4% |
+
+So it is the star-core fault at its worst. Ha's stars are sharper than any Abell 1656 frame and the rule takes
+their cores, as there. OIII's are under 2 px across, nearly one pixel. Every star is then a lone spike. The rule
+takes it, and so does the defect map: the frames were not dithered, so the stars sat on the same pixels all
+night, and the map's guard (a star's third-brightest neighbour stands out too) does not hold for a star that
+small. No shape test can save such a star; only knowing it is a star can. That is candidate 7's test (a star in
+this frame and in the reference), which must then also spare the map's pixels that are stars, not only the rule's.
