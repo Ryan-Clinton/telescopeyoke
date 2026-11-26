@@ -395,3 +395,14 @@ The third covered-area candidate (`fp_patch3.py`), D28 and D57 (26 November 2026
 
 So the covered-area fix has one clean pass (D65), two improvements that still fail by eye (D28, D57), and changes
 nothing it should not (the five passes, D41, D72). It is not ready to judge on frozen data.
+
+The fifth covered-area version (`fp_patch5.py`) takes every filter's own footprint, not L's alone: D28's leftover
+wedges were R, G and B's (26 November 2026).
+- **D28: nearly fixed.** Gradient and wedges gone but for two slivers in the very bottom corners; cropped to 64%.
+- **D57: fixed by eye.** Band and corner glow gone, cropped to 51% (an untracked stack, its two galaxies kept).
+- **D65: better than version 2.** With OIII's thin strip out of the sky fit, the teal cast over the whole picture
+  is gone too.
+- **D31 (a pass): unchanged.**
+
+The other 13 pictures are being made with it, to show it changes nothing it should not, before it is judged once
+on the six frozen stacks.
