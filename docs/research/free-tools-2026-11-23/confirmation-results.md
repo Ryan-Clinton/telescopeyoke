@@ -175,3 +175,17 @@ frames that lost 10 to 19% under the shipped rule lose nothing (flux and peak 1.
 It replaces about a third fewer pixels (median 720 against 1,104 a frame), so it may also spare some real hits:
 the full pass mark, cosmic rays and fixed defects counted, runs next on the owner's 11 sessions, the four raw
 2600MC sessions and set 76. Only if it passes all three is it judged once on the frozen raw sessions.
+
+### Why a sharp core passes for a hit, and two candidates that failed (26 November 2026)
+
+Sparing found stars' centres (candidate 1) kept every star's light on the owner's sessions but left 4,300 to
+5,400 visible cosmic-ray pixels in each (the shipped rule 0 to 22): `find_stars` finds hits as well as stars.
+Sparing only stars at least 70% of the frame's usual width (candidate 2) still left 5,056 and 2,584 on M33 L and
+NGC 2174 OIII. Both fail and stay recorded as failures; neither went further.
+
+`corelook.py` printed the replaced pixels in light-0008's brightest stars: 27 of the 60 brightest lost their
+peak. A typical one, above the background: peak 66,505, neighbours 41,243, 20,462, 19,544 and less. The second
+neighbour is over half the peak, but the third only 31%, under the rule's 40%, so the peak is taken for a hit
+on a star's wing. Candidate 3 keeps the 40% where the second neighbour is under half the pixel's height (a lone
+hit, or a pair) and asks only 20% where it is over half (a core); first on M33 L, NGC 2174 OIII and the 40
+Abell 1656 frames.
