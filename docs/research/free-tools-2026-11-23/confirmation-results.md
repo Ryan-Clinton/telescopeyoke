@@ -298,3 +298,17 @@ takes it, and so does the defect map: the frames were not dithered, so the stars
 night, and the map's guard (a star's third-brightest neighbour stands out too) does not hold for a star that
 small. No shape test can save such a star; only knowing it is a star can. That is candidate 7's test (a star in
 this frame and in the reference), which must then also spare the map's pixels that are stars, not only the rule's.
+
+### Candidate 7 on the owner's 11 sessions (26 November 2026, run on the laptop)
+
+Candidate 7 (`mframe.py`): a pixel the shipped cleaning would replace, by the rule or by the defect map, is kept
+when a star found in this frame matches one of the session's reference within 1.5 px. **All 11 pass**: every
+star's light, peak and grain kept (flux 0.9999 or better), visible cosmic-ray pixels 0 to 24, never above the old
+cleaning's plus 10, fixed defects left no worse. One caution: this run's old-cleaning baseline came out looser on
+the laptop than on the desktop (fixed defects left 0.08 to 0.14 against 0.02 to 0.05; IC 405's cosmic count 24
+against 0 in the first desktop run), so the same 11 are run again on the desktop (`clip14md`) before this counts.
+
+Planted star-like sources in one frame only (20 a frame, 262 frames): the cleaning keeps a median 98.2% of their
+light, at worst 76.5%, the same with the shipped rule and with candidate 7, as designed (it spares only stars the
+reference has). So the shipped cleaning already takes a little of a one-frame source's light, up to a quarter in a
+few frames: a thing to know for discovery work on single frames, measured here for the first time.
