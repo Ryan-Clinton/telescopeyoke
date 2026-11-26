@@ -435,3 +435,31 @@ evidence is read as a whole.
 step 4, cropped by at most 9% (D40 91%, D43 90%; most 94 to 100%). D41's purple corner and D72's dust holes are
 unchanged, as expected: neither is coverage. With D28 nearly fixed and D57 and D65 fixed, version 5 is the
 covered-area candidate to judge, once, on the six frozen stacks.
+
+Candidate 8 on set 76: all 4 fail, Ha of 10 October now among them (flux 0.833, peak 0.672), which candidate 7
+passed. Its shape test un-spares the sharp cores of these 2.6 px stars, as on Abell 1656.
+
+## The evidence read as a whole (26 November 2026)
+
+**The cleaning: no candidate passes; `stacking.clean` stays as shipped.**
+
+| | Owner's 11 | 2600MC, 4 | Set 76, 4 |
+|---|---|---|---|
+| Shipped rule | 11 pass | 1 pass | 0 pass |
+| Candidate 6 (core test in sharp frames) | 11 (desktop) | 2 | 0 |
+| Candidate 7 (a star in this frame and the reference is left) | 10 (M33 L: 18 cosmic pixels against 13) | 3 | 1 |
+| Candidate 8 (7, sparing only a star's shape) | 10 (M33 L the same) | 2 | 0 |
+
+Candidate 7 is the nearest and the clearest lesson: knowing a pixel is a star (it is in another frame) keeps every
+sharp star's light, which no shape test did; what it gives back is a few cosmic-ray hits on stars in crowded fields.
+Its other failures are the shipped rule's own (LBN 552's cosmic count, set 76's grain) or the data's (set 76's OIII
+of 10 October, frames of more than one field). The cleaning is proven on the owner's rig and not general: on
+cameras sharper than about 3.3 px it takes star cores, by up to 19% (2600MC) and 80% (set 76's sub-2 px OIII).
+Stopped by the rule set before candidate 7; the next idea, if it is taken up, is recorded above.
+
+**The covered area: version 5 is ready to judge on the frozen stacks.** D65 and D57 fixed, D28 nearly (two slivers),
+no other picture made worse. D41 (the sky model's purple corner) and D72 (dust, no flats) are separate faults, still open.
+
+**Also found on the way:**
+- The shipped cleaning takes a median 2%, at worst 24%, of a one-frame source's light in the owner's frames.
+- Dark Star itself, not our blend, leaves the stars in crowded fields; in M101 our blend puts some back.
