@@ -189,3 +189,17 @@ neighbour is over half the peak, but the third only 31%, under the rule's 40%, s
 on a star's wing. Candidate 3 keeps the 40% where the second neighbour is under half the pixel's height (a lone
 hit, or a pair) and asks only 20% where it is over half (a core); first on M33 L, NGC 2174 OIII and the 40
 Abell 1656 frames.
+
+Candidates 3 to 5 (development data; the shipped rule's own counts: M33 L 3 visible cosmic pixels, NGC 2174
+OIII 0, pass at the shipped count plus 10; every star's light kept in both by all three):
+
+| Candidate | M33 L cosmic | NGC 2174 OIII cosmic | Abell 1656 frames losing light |
+|---|---|---|---|
+| 3: third neighbour need reach only 20% where the brightest-but-one is over half the height | 9, pass | 3, pass | 1 of 40 (light-0011, flux 0.838) |
+| 4: a core (second neighbour 25%+, third 15%+) is left | 19, **fail** | 9, pass | none in the first 18 |
+| 5: as 4 at 30% and 25% | 16, **fail** | 4, pass | not run |
+
+Candidate 3's leftover in light-0011 (`corelook_t.py`): cores with only one neighbour over half the peak (54,539
+peak; 36,822, 21,682, 20,236). Candidates 4 and 5 spare those, but also some hits on M33 L's star wings. Candidate
+6 uses 4's core test only in a frame whose stars' median width is 3.35 px or less, where the shipped rule was
+seen to take cores; a wider frame is cleaned exactly as shipped.
