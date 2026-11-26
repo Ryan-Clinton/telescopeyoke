@@ -338,3 +338,23 @@ candidate 7 only spares pixels the shipped cleaning would replace, never replace
 leaves 36 there. That shortfall is the shipped cleaning's, not the star-core fault's. By the pass mark it is a fail,
 and it stays one.
 NGC 7293: raw533-NGC7293             RGB   rejected 0.0000 flux 1.0000 peak 1.0000 grain 1.0000 fixed 0.0137/0.0237 cosmic 2/3 PASS
+
+Candidate 7 on set 76 (QHY Minicam8M, 26 November 2026):
+
+| Session | Shipped rule | Candidate 7 |
+|---|---|---|
+| Ha 10 Oct | fail (flux 0.793, peak 0.603) | **pass** (0.998, 1.000; cosmic 6 against 1) |
+| Ha 2 Nov | fail (grain) | fail (flux 0.991, grain 0.987) |
+| OIII 10 Oct | fail (flux 0.171, peak 0.168) | fail (0.171, 0.168), unchanged |
+| OIII 29 Oct | fail (flux, grain, cosmic) | fail (grain 0.970 only) |
+
+The grain failures are the shipped cleaning's own (it smooths these frames' grain by 1.3 to 3%, as it did before).
+OIII of 10 October is not a fair test of anything yet: its frames do not all show one field. Lined up on the
+session's reference (its first frame), light-0004 matches 20 stars, light-0008, -0012 and -0016 none, their rough
+shifts 150 to 500 px apart. A mosaic's panels or a re-pointing in one night's folder, so most frames have no
+reference star to spare, and the harness's stack holds few frames. A data fault, to go in the register; the
+session's result stays recorded as it is.
+
+Candidate 7 so far: the owner's 11 pass (on the laptop; the desktop's run is going); of the other cameras' 8
+sessions it passes 4 (the shipped rule 1) and keeps every star's light in all but the mixed OIII session; its other
+failures are the shipped cleaning's own cosmic shortfall (LBN 552) and grain (set 76).
