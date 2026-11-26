@@ -368,3 +368,19 @@ The second covered-area candidate's pictures (26 November 2026), against step 4'
   that drifted apart (at least 75% shared) refused them. That guard is for filters that drifted off the target,
   which a thinly covered edge is not. A third version keeps the guard, counting what the filters share before
   the thin parts are left out (`fp_patch3.py`). It is making D28 and D57 now.
+
+**Candidate 7 on the owner's 11 sessions, desktop (the run that counts): 10 pass, M33 L fails.** M33 L of
+5 November leaves 18 visible cosmic-ray pixels against the old cleaning's 3 (at most 13); every star's light is kept
+in all 11. The laptop run had passed it only because its baseline was looser (22 there), as feared. The cause is
+plain from the design: candidate 7 leaves a found star's whole 3 by 3 centre alone, so a hit that lands on a real
+star's core is spared with it, and M33 L, a crowded field with a star on many pixels, catches the most.
+
+**So candidate 7 fails, and by the stopping rule fixed before it was written, the cleaning stops here.**
+`stacking.clean` stays as shipped. The shipped rule's record:
+- On the owner's rig it passes all 11 sessions.
+- On other cameras it fails sharp frames: Abell 1656, M81, LBN 552 and set 76.
+
+Across candidates 1 to 7, two findings stand. Where a sharp core and a hit look alike in one frame, only another
+frame tells them apart, and in sharp, crowded fields that still spares the hits that land on stars. The way on is
+a value test, not a shape one: a pixel kept only when its value agrees with the reference's at that place. It is
+recorded here as the next idea, not started.
