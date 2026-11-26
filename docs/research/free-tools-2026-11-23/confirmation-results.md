@@ -264,3 +264,14 @@ The covered-area candidate (`fp_patch.py`) is for stacks made elsewhere, which c
 here already knows its coverage from each pixel's weight and trims to it (`stacking.Stack.covered`); the grain is
 used only where no weight exists. The stacks are never cropped or changed: only the picture is cropped, and the
 linear picture file is marked a picture product, not for measurement, with its crop in its header.
+
+Candidate 6 on all four raw 2600MC sessions, for the record (not promoted):
+
+| Session | Shipped rule | Candidate 6 |
+|---|---|---|
+| Abell 1656 | fail (flux 0.943, peak 0.819; cosmic 12) | fail (0.989, 0.960; cosmic 109) |
+| LBN 552 | fail (0.970, 0.926; cosmic 36 against 24) | **pass** (1.000, 1.000; cosmic 30) |
+| M81 | fail (peak 0.978) | fail (1.000, 1.000; cosmic 141 against 15) |
+| NGC 7293 | pass | pass (cosmic 2) |
+
+It keeps the light everywhere but lets hits through in the sharp sessions: 2 of 4 pass, against the shipped 1.
