@@ -231,3 +231,8 @@ outside it (5% of the blocks over twice the usual grain), D57's untracked frames
 (13%), D65's a strip along the top (2%). D41, D18 and D29 have none (D72: 1%, round its dust). So the footprint can
 be found from the stack alone; next, as a candidate on development data: leave the thinly covered blocks out of the
 sky fit and crop the finished picture to the well covered rectangle, then judge on the frozen stacks.
+
+**Candidate 6 on the owner's 11 sessions** (full pass mark, 26 November 2026): **all 11 pass**. Every star's light,
+peak and grain kept (flux 0.9998 or better); visible cosmic-ray pixels 0 to 23, at most 6 above the shipped rule's
+(M33 L 9 against 3), inside its plus 10; fixed defects left no worse. On the 40 Abell 1656 frames it keeps every
+star's light. Next, on development data still: the four raw 2600MC sessions and set 76; then once on the frozen.
