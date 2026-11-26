@@ -70,7 +70,7 @@ SCHEMA = 1                  # the shape of the records; readers accept older one
 # The generic core this carries: Ryan-Clinton/common's jobs/jobs.py is its
 # authoritative copy for every other project (private); a fix there is
 # carried here, and this names the revision (docs/job-reporting-spec.md).
-CORE = "2026-11-26.4"
+CORE = "2026-11-26.5"
 
 
 def home():
@@ -180,6 +180,20 @@ def _system():
     return "windows" if host.WINDOWS else "linux"
 
 
+def in_wsl():
+    """Whether this is WSL: by its variable, or by its kernel where the
+    variable is not passed on (a session over ssh to the desktop's WSL got
+    a register of its own and 16 cores, 26 November 2026)."""
+    if host.WINDOWS:
+        return False
+    if os.environ.get("WSL_DISTRO_NAME"):
+        return True
+    try:
+        return "microsoft" in Path("/proc/version").read_text().lower()
+    except OSError:
+        return False
+
+
 def machine():
     """This computer's register, shared by every project on it and, on the
     PC, by WSL and native Windows: JOBS_MACHINE; else, in WSL, the Windows
@@ -188,7 +202,7 @@ def machine():
     given = os.environ.get("JOBS_MACHINE")
     if given:
         return Path(given)
-    if os.environ.get("WSL_DISTRO_NAME"):
+    if in_wsl():
         windows = _windows_home()
         if windows:
             return windows / ".local" / "state" / "common-jobs"
@@ -365,7 +379,7 @@ def machine_cores():
     """The whole computer's logical processors: in WSL, Windows' count (WSL
     may be given fewer, and Windows' jobs run on the rest), asked once and
     kept; elsewhere this system's."""
-    if os.environ.get("WSL_DISTRO_NAME"):
+    if in_wsl():
         kept = Path.home() / ".local" / "state" / "common-jobs-windows-cores"
         try:
             return int(kept.read_text().strip())
