@@ -47,6 +47,12 @@ NOT_RESPONDING_S = 180      # a heartbeat this old in a live process: hung (a li
 QUIET_S = 600               # no output or progress for this long, with no deadline given: stalled
 DEADLINE_MARGIN = (1.2, 60)  # a deadline is overrun past deadline x 1.2 + 60 s
 QUEUE_EVERY_S = 5           # a queued job looks this often whether it can start
+CPU_DEFAULT = 2             # threads a job asking for "cpu" reserves; "cpu:N" asks for N
+CPU_SPARE = 2               # of the computer's cores, never reserved: the desktop and its sessions
+CPU_STAGGER_S = 45          # between two cpu jobs starting on this computer, so the measure catches up
+# What caps a job's threads to what it reserved, unless whoever started it set them already
+THREAD_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS",
+               "VECLIB_MAXIMUM_THREADS", "BLIS_NUM_THREADS", "RAYON_NUM_THREADS", "POLARS_MAX_THREADS")
 KEEP_DAYS = {"routine": 2}  # a finished job's folder is kept this long (30 days otherwise)
 LOG_CAP_MB, LOG_CAP_LOW_MB, LOW_DISK_GB = 20, 2, 5
 IDLE_AFTER_S = 120          # nothing running for this long, while busy-until stands: idle
@@ -64,7 +70,7 @@ SCHEMA = 1                  # the shape of the records; readers accept older one
 # The generic core this carries: Ryan-Clinton/common's jobs/jobs.py is its
 # authoritative copy for every other project (private); a fix there is
 # carried here, and this names the revision (docs/job-reporting-spec.md).
-CORE = "2026-11-25.2"
+CORE = "2026-11-26.4"
 
 
 def home():
@@ -247,14 +253,16 @@ def _held_file(job_id):
     return machine() / "held" / f"{job_id}.json"
 
 
-def reserve(job_id, name, held, pid):
-    """This job's exclusive needs in the register, before it starts. Raises
-    OSError when it cannot be kept: the job must not start then."""
-    if not held:
+def reserve(job_id, name, held, pid, cpus=0):
+    """This job's exclusive needs, and the threads it runs (cpus), in the
+    register, before it starts. Raises OSError when it cannot be kept: the
+    job must not start then."""
+    if not held and not cpus:
         return
     records.write(_held_file(job_id),
                   {"register": REGISTER, "job": job_id, "name": name, "project": project_name(),
-                   "resources": list(held), "system": _system(), "host": _hostname(), "pid": pid,
+                   "resources": list(held), "cpus": int(cpus or 0), "system": _system(), "host": _hostname(),
+                   "pid": pid,
                    "pid_start": started_at(pid), "boot": boot_id(), "session": session(),
                    "at": time.time(), "beat": time.time()}, indent=None)
 
@@ -269,7 +277,7 @@ def _held_change(job_id, how):
             if not r:
                 return
             how(r)
-            if r.get("resources"):
+            if r.get("resources") or r.get("cpus"):
                 records.write(f, r, indent=None)
             else:
                 f.unlink()
@@ -282,7 +290,30 @@ def beat_reservation(job_id):
 
 
 def release_reservation(job_id, what):
-    _held_change(job_id, lambda r: r.update(resources=[x for x in r.get("resources", []) if x not in what]))
+    def let_go(r):
+        r.update(resources=[x for x in r.get("resources", []) if x not in what])
+        if "cpu" in what:
+            r["cpus"] = 0
+    _held_change(job_id, let_go)
+
+
+def _touch(path):
+    try:
+        path.touch()
+    except OSError:
+        pass
+
+
+def _launcher_alive(p, d, now):
+    """Whether a job's launcher lives: by its process on the system that
+    started it, and from the other system (WSL or native Windows, which
+    cannot see each other's processes) by the beat it writes every
+    RESERVE_BEAT_S. A record from before records named their system is
+    judged by its process, as before."""
+    if p.get("system") and p["system"] != _system():
+        beat = _mtime(d / "launcher_beat")
+        return bool(beat) and now - beat < RESERVE_DEAD_S, True
+    return None, False
 
 
 def unreserve(job_id):
@@ -319,6 +350,134 @@ def machine_holds(now=None):
         for resource in r.get("resources") or []:
             held.setdefault(resource, f"{r.get('project')}'s job {r.get('name')} ({r.get('system')})")
     return held
+
+
+def cpu_threads(needs):
+    """The threads a job reserves: N for "cpu:N", CPU_DEFAULT for "cpu", else 0."""
+    for n in needs or ():
+        word, _, count = str(n).partition(":")
+        if word == "cpu":
+            return max(1, int(count)) if count.isdigit() else CPU_DEFAULT
+    return 0
+
+
+def machine_cores():
+    """The whole computer's logical processors: in WSL, Windows' count (WSL
+    may be given fewer, and Windows' jobs run on the rest), asked once and
+    kept; elsewhere this system's."""
+    if os.environ.get("WSL_DISTRO_NAME"):
+        kept = Path.home() / ".local" / "state" / "common-jobs-windows-cores"
+        try:
+            return int(kept.read_text().strip())
+        except (OSError, ValueError):
+            pass
+        try:
+            got = subprocess.run(["cmd.exe", "/c", "echo %NUMBER_OF_PROCESSORS%"], capture_output=True, text=True,
+                                 timeout=10, cwd="/mnt/c").stdout.strip()
+            if got.isdigit():
+                kept.parent.mkdir(parents=True, exist_ok=True)
+                kept.write_text(got)
+                return int(got)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return os.cpu_count() or 2
+
+
+def _cpu_ticks():
+    """(busy, total) CPU time of this system so far, all cores: /proc/stat
+    on Linux (busy is everything but idle and iowait, so processes stuck in
+    D state do not count, as they do in the load average), GetSystemTimes
+    on Windows (the whole computer, WSL's virtual machine included)."""
+    try:
+        if host.WINDOWS:
+            import ctypes
+            from ctypes import wintypes
+            idle, kernel, user = wintypes.FILETIME(), wintypes.FILETIME(), wintypes.FILETIME()
+            if not ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kernel),
+                                                         ctypes.byref(user)):
+                return None
+            t = [(x.dwHighDateTime << 32) | x.dwLowDateTime for x in (idle, kernel, user)]
+            total = t[1] + t[2]             # kernel time includes idle
+            return total - t[0], total
+        fields = [int(x) for x in open("/proc/stat").readline().split()[1:]]
+        idle = fields[3] + (fields[4] if len(fields) > 4 else 0)
+        total = sum(fields[:8])
+        return total - idle, total
+    except (OSError, ValueError, AttributeError, IndexError):
+        return None
+
+
+_CPU_SAMPLE = {}
+
+
+def busy_cores(fresh=False):
+    """This system's cores busy since the last look (a queued job looks every
+    QUEUE_EVERY_S), or over a moment now with fresh; None on a first look."""
+    now = time.time()
+    got = _cpu_ticks()
+    if got is None:
+        return None
+    if fresh:
+        time.sleep(0.5)
+        again = _cpu_ticks()
+        if again is None:
+            return None
+        before, got = got, again
+    else:
+        before = _CPU_SAMPLE.get("ticks") if 0.5 < now - _CPU_SAMPLE.get("at", 0) < 120 else None
+        _CPU_SAMPLE.update(ticks=got, at=now)
+        if before is None:
+            return None
+    spent = got[1] - before[1]
+    return round((got[0] - before[0]) / spent * (os.cpu_count() or 1), 1) if spent > 0 else None
+
+
+def machine_cpu(now=None):
+    """The threads reserved on this computer, every project's in WSL and
+    Windows alike: in all, on this system, and by whom; and the budget."""
+    now = now or time.time()
+    out = {"budget": max(1, machine_cores() - CPU_SPARE), "reserved": 0, "here": 0, "by": []}
+    try:
+        entries = list((machine() / "held").glob("*.json"))
+    except OSError:
+        return out
+    for f in entries:
+        r = _read(f, {}) or {}
+        if not r.get("cpus") or not _reservation_alive(r, now):
+            continue
+        out["reserved"] += r["cpus"]
+        if r.get("system") == _system():
+            out["here"] += r["cpus"]
+        out["by"].append({"project": r.get("project"), "name": r.get("name"), "system": r.get("system"),
+                          "cpus": r["cpus"]})
+    return out
+
+
+def cpu_room(n, now=None):
+    """Whether a job of n threads may start now: what is reserved on the
+    computer and on this system, with n, within their cores, counting the
+    busy CPU nothing reserved (work started outside cj) on this system; and
+    no other cpu job started on the computer in the last CPU_STAGGER_S. A
+    job asking more than there is runs once there is that much free, or the
+    whole of it. Returns True, or why not."""
+    now = now or time.time()
+    last = _mtime(machine() / "cpu_last_start")
+    if last and now - last < CPU_STAGGER_S:
+        return "another cpu job started under a minute ago"
+    c = machine_cpu(now)
+    if c["budget"] - c["reserved"] < min(n, c["budget"]):
+        return f"{c['reserved']} of the computer's {c['budget']} threads reserved"
+    cores = os.cpu_count() or 2
+    # On Windows the measure is the whole computer's, so every reservation is
+    # in it; in WSL only WSL's own.
+    mine = c["reserved"] if host.WINDOWS else c["here"]
+    busy = busy_cores()
+    if busy is None:
+        return "measuring the CPU"
+    outside = max(0.0, busy - mine)
+    if cores - mine - outside < min(n, max(1, cores - CPU_SPARE)):
+        return f"{busy:g} of {cores} cores busy here, {mine} reserved"
+    return True
 
 
 def project_name():
@@ -465,7 +624,7 @@ class Job:
         record = _read(self.dir / "process.json", {}) or {}
         if not record:
             record = {"id": self.id, "name": self.name, "kind": self.kind, "own": True,
-                      "command": redact(" ".join(sys.argv)), "host": _hostname(), "pid": os.getpid(),
+                      "command": redact(" ".join(sys.argv)), "host": _hostname(), "system": _system(), "pid": os.getpid(),
                       "pid_start": started_at(os.getpid()), "boot": boot_id(), "parent": self.parent,
                       "after": [], "needs": [], "why": None, "queued": None, "started": time.time(),
                       "session": session(), "schema": SCHEMA, "core": CORE}
@@ -674,7 +833,7 @@ class Recorded:
         self.dir = folder(self.id)
         self.log = None
         self.record = {"id": self.id, "name": name, "kind": kind, "own": False,
-                       "command": redact(" ".join(map(str, command))), "host": _hostname(), "boot": boot_id(),
+                       "command": redact(" ".join(map(str, command))), "host": _hostname(), "system": _system(), "boot": boot_id(),
                        "supervisor": os.getpid(), "supervisor_start": started_at(os.getpid()),
                        "parent": os.environ.get("TY_JOB"), "after": [], "needs": [], "why": why,
                        "pid": None, "pid_start": None, "queued": time.time(), "started": None,
@@ -726,7 +885,7 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
     d = folder(job_id)
     d.mkdir(parents=True, exist_ok=True)
     record = {"id": job_id, "name": name, "kind": kind if kind in KINDS else "finite", "own": False,
-              "command": redact(" ".join(command)), "host": _hostname(), "boot": boot_id(),
+              "command": redact(" ".join(command)), "host": _hostname(), "system": _system(), "boot": boot_id(),
               "supervisor": os.getpid(), "supervisor_start": started_at(os.getpid()),
               "parent": os.environ.get("TY_JOB"), "after": after, "needs": needs, "why": why or None,
               "pid": None, "pid_start": None, "queued": time.time(), "started": None,
@@ -787,11 +946,14 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
                 return 1
             if verdict is True:
                 exclusive_needs = [n for n in needs if n in exclusive()]
+                cpus = cpu_threads(needs)
                 try:
                     # Reserved before it starts, under the lock, in the name of
                     # this launcher (alive as long as the workload): if the
                     # reservation cannot be kept, the job does not start.
-                    reserve(job_id, name, exclusive_needs, os.getpid())
+                    reserve(job_id, name, exclusive_needs, os.getpid(), cpus)
+                    if cpus:
+                        _touch(machine() / "cpu_last_start")
                 except OSError as problem:
                     put(phase="blocked", blocked=f"could not reserve {', '.join(exclusive_needs)}: {problem}",
                         ended=time.time())
@@ -800,6 +962,13 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
                     # The output always comes through here: this process is
                     # the log's one writer, so it can cap it safely. Its own
                     # process group (POSIX), so its workers are seen to the end.
+                    if cpus:
+                        # Its threads capped to what it reserved: numpy and the
+                        # like take every core otherwise.
+                        env["JOBS_CPUS"] = str(cpus)
+                        for var in THREAD_VARS:
+                            if var not in os.environ:
+                                env[var] = str(cpus)
                     child = subprocess.Popen(command, stdin=subprocess.DEVNULL, env=env,
                                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                              start_new_session=not host.WINDOWS)
@@ -820,6 +989,8 @@ def supervise(job_id, name, kind, after, needs, why, wait, command, log_path=Non
     def beat():
         while not beating.wait(RESERVE_BEAT_S):
             beat_reservation(job_id)
+            _touch(folder(job_id) / "launcher_beat")
+    _touch(folder(job_id) / "launcher_beat")
     threading.Thread(target=beat, daemon=True).start()
     if wait:
         # Run in the foreground (a timer, the console, a parent job): the
@@ -983,12 +1154,8 @@ def ready(job_id, after, needs, queued_at):
         held = holds_now(listing)       # a running, waiting or stalled job keeps what it needs
         if any(n in held for n in needs if n in exclusive()):
             return None
-        if "cpu" in needs:
-            try:
-                if os.getloadavg()[0] > max(1, (os.cpu_count() or 2) - 1):
-                    return None
-            except (OSError, AttributeError):
-                pass
+        if cpu_threads(needs) and cpu_room(cpu_threads(needs)) is not True:
+            return None
         # First come, first served among jobs queued for the same thing, of
         # those that could start now: one still waiting on its own
         # dependencies, or on another thing it needs (a camera in use), never
@@ -1075,9 +1242,12 @@ def look(job_id, now=None):
          "last_progress": max(filter(None, (g.get("last_progress"), g.get("operation_since"))), default=None),
          "stall": None, "log": str(log_path), "quiet_s": (_read(d / "quiet.json", {}) or {}).get("seconds")}
     phase = p.get("phase")
-    alive = running(p.get("pid"), p.get("pid_start"), p.get("boot"))
+    other_alive, other = _launcher_alive(p, d, now)
+    alive = other_alive if other else running(p.get("pid"), p.get("pid_start"), p.get("boot"))
+    supervised = other_alive if other else running(p.get("supervisor"), p.get("supervisor_start"), p.get("boot"))
+    j["system"] = p.get("system")
     if phase == "queued":
-        phase = "queued" if running(p.get("supervisor"), p.get("supervisor_start"), p.get("boot")) else "vanished"
+        phase = "queued" if supervised else "vanished"
     elif phase in ("blocked", "cancelled"):
         pass
     elif p.get("exit_code") is not None:
@@ -1087,8 +1257,7 @@ def look(job_id, now=None):
         phase = "waiting" if g.get("waiting") else "running"
     elif phase == "running" and p.get("own") and g.get("result") and not alive:
         phase = "failed" if str(g["result"]).startswith("failed") else "done"
-    elif phase == "running" and not p.get("pid") and running(p.get("supervisor"), p.get("supervisor_start"),
-                                                             p.get("boot")):
+    elif phase == "running" and not p.get("pid") and supervised:
         phase = "running"     # the launcher is starting it this moment
     else:
         phase = "vanished" if p or g else "unknown"
@@ -1348,6 +1517,11 @@ def _clock(t):
 def computer():
     out = {}
     try:
+        c = machine_cpu()
+        out["cpu_reserved"], out["cpu_budget"] = c["reserved"], c["budget"]
+    except Exception:
+        pass
+    try:
         out["load"] = round(os.getloadavg()[0], 1)
         out["cores"] = os.cpu_count()
     except (OSError, AttributeError):
@@ -1495,6 +1669,8 @@ def text(r, now=None):
         parts = []
         if "load" in c:
             parts.append(f"load {c['load']} on {c['cores']} cores")
+        if "cpu_reserved" in c:
+            parts.append(f"{c['cpu_reserved']} of {c['cpu_budget']} threads reserved")
         if "memory_free_gb" in c:
             parts.append(f"memory {c['memory_free_gb']} of {c['memory_gb']} GB free")
         if "disk_free_gb" in c:
@@ -1700,7 +1876,7 @@ def main():
         ap.add_argument("--wait", action="store_true", help="run in the foreground, its output passed on too")
         args = ap.parse_args(argv[1:cut])
         needs = [n for n in args.needs.split(",") if n]
-        unknown = [n for n in needs if n not in NEEDS]
+        unknown = [n for n in needs if n not in NEEDS and not (n.startswith("cpu:") and n[4:].isdigit() and int(n[4:]) > 0)]
         if unknown:
             ap.error(f"unknown needs: {', '.join(unknown)}")
         result = launch(args.name, argv[cut + 1:], args.after, needs, args.kind, args.why, args.wait,

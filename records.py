@@ -26,6 +26,7 @@ import functools
 import hashlib
 import json
 import os
+import time
 import platform
 import subprocess
 import sys
@@ -178,7 +179,16 @@ def write(path, record, schema=None, stamp=False, record_version=1, indent=1, de
         f.write(text)
         f.flush()
         os.fsync(f.fileno())
-    partial.replace(path)
+    # On Windows a file another process has open cannot be replaced: a reader
+    # (ty jobs) holds it for a moment, so try again for up to 5 s.
+    for attempt in range(50):
+        try:
+            partial.replace(path)
+            break
+        except PermissionError:
+            if os.name != "nt" or attempt == 49:
+                raise
+            time.sleep(0.1)
     return record
 
 
