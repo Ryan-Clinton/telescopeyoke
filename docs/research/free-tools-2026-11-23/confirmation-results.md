@@ -358,3 +358,13 @@ session's result stays recorded as it is.
 Candidate 7 so far: the owner's 11 pass (on the laptop; the desktop's run is going); of the other cameras' 8
 sessions it passes 4 (the shipped rule 1) and keeps every star's light in all but the mixed OIII session; its other
 failures are the shipped cleaning's own cosmic shortfall (LBN 552) and grain (set 76).
+
+The second covered-area candidate's pictures (26 November 2026), against step 4's:
+- **D65: fixed.** The strip along the top is gone and the rest of the picture is as before.
+- **D18, D43, D56, D74, D31 (passes): unchanged**, as they should be.
+- **D41 and D72: unchanged**, as expected. Their faults are not coverage: D41's purple corner is the sky model's,
+  and D72's holes are dust in a stack with no flats.
+- **D28 and D57: no picture.** The crop left 72% and 65% of the frame, and `colour.py`'s guard against filters
+  that drifted apart (at least 75% shared) refused them. That guard is for filters that drifted off the target,
+  which a thinly covered edge is not. A third version keeps the guard, counting what the filters share before
+  the thin parts are left out (`fp_patch3.py`). It is making D28 and D57 now.
