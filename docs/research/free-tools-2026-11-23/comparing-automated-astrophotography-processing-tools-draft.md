@@ -8,7 +8,7 @@ I compared freely available astrophotography image-processing tools with the exi
 
 The initial denoising comparison used ten pairs of independently stacked exposures, with artificially planted faint filaments and a common amount of remaining grain. At the 50% grain setting, **GraXpert 3.0.2** had an error of **0.971** against an independent reference, relative to **1.000** for a plain blur. It preserved **88.5%** of the planted filament signal. DeepSNR preserved slightly more of the filament but had slightly higher reference error; the other automatic denoisers did not beat GraXpert on the combined criteria. GraXpert was adopted for *picture production only*, not scientific measurement.
 
-For star removal, **Dark Star** from Seti Astro Suite Pro worked well on most of the tested images when its output was blended selectively with the original. Across **53 individual channel stacks from 17 image collections**, the blend passed the original faint-line preservation criterion on **53/53**. A separate effectiveness check found it met the star-removal comparison on **52/53** overall and **46/53** for the hardest tenth of stars. On one Tarantula Nebula channel, almost no stars were removed. That failure was already present in Dark Star's raw output, not introduced by TelescopeYoke's blending.
+For star removal, **Dark Star** from Seti Astro Suite Pro worked well on most of the tested images when its output was blended selectively with the original. Across **53 individual channel stacks from 17 image collections**, the blend passed the original faint-line preservation criterion on **53/53**. A separate effectiveness check found it met the star-removal comparison on **52/53** overall and **46/53** for the hardest tenth of stars. On one Tarantula Nebula channel, almost no stars were removed. That failure was already present in Dark Star's own output with the settings TelescopeYoke gives it, not introduced by TelescopeYoke's blending.
 
 For stretching, TelescopeYoke's existing method retained a stronger ratio of faint artificial detail to grain under the selected automatic-processing comparison: **10.1**, against **5.4–5.7** for the tested Siril and Seti Astro alternatives. Some alternatives retained more bright detail. The sky brightness targets also differed, so this is **not evidence that one stretch is universally superior**.
 
@@ -65,8 +65,9 @@ An unwanted background may come from light pollution, uneven illumination, a sen
 | Siril polynomial, degree 2 | **0.09** | 0.30 | 0.62 | 90% |
 | Siril RBF, defaults | 0.30 | 0.41 | 0.44 | 57% |
 | Seti Astro Suite Pro ABE, defaults | 0.26 | 0.27 | 0.30 | 86% |
+| Seti Astro Suite Pro ABE, polynomial 2 only | 0.10 | 0.31 | 0.38 | **95%** |
 
-Lower values in the first three columns are better; the glow-retention figure should be near 100%. GraXpert AI handled the artificial corner glow particularly well but removed too much of one faint test glow: on the worst input it retained only **56%**, versus **85%** for TelescopeYoke's sky model. The methods were not perfectly symmetric: TelescopeYoke can use its Ha filter to locate nebula, while the other tools were generally run with automatic sampling.
+Lower values in the first three columns are better; the glow-retention figure should be near 100%. GraXpert AI handled the artificial corner glow particularly well but removed too much of one faint test glow: on the worst input it retained only **56%**, versus **85%** for TelescopeYoke's sky model. Seti Astro's ABE with a polynomial alone kept more of the faint glow than TelescopeYoke's model (95% against 88%), but left about twice as much of a bowl or a corner glow, so it did not replace it. The methods were not perfectly symmetric: TelescopeYoke can use its Ha filter to locate nebula, while the other tools were generally run with automatic sampling.
 
 **Decision:** keep TelescopeYoke's sky model for this automated workflow. That does not establish that it is the best possible manual background correction, or that it handles every type of field.
 
@@ -74,7 +75,7 @@ Lower values in the first three columns are better; the glow-retention figure sh
 
 Star removal is particularly easy to judge badly. A method can preserve every artificial filament simply by leaving the image unchanged, including all of its stars. I therefore distinguish **preserving astronomical detail** from **actually removing the stellar signal**.
 
-The tested workflow passed each stack through GraXpert and then Dark Star. TelescopeYoke blends Dark Star's result only around detections judged to be stars, because unblended Dark Star had removed substantial genuine faint signal in earlier tests. The old TelescopeYoke star-removal method was the comparison baseline.
+The tested workflow passed each stack through GraXpert and then Dark Star (Seti Astro Suite Pro 1.24.8, mono AI4 model). In the first phase the blend passed the same faint-line rule on two rounds of five stacks not used to develop it; StarNet2, blended the same way, scored about the same and was not adopted. TelescopeYoke blends Dark Star's result only around detections judged to be stars, because unblended Dark Star had removed substantial genuine faint signal in earlier tests. The old TelescopeYoke star-removal method was the comparison baseline.
 
 | Test on 53 channel stacks | Result |
 |---|---:|
@@ -84,7 +85,7 @@ The tested workflow passed each stack through GraXpert and then Dark Star. Teles
 
 The blended method left a median **0.2% of measured stellar brightness** under the test's residual-signal metric, versus **1.1%** for the old method. These figures are not percentages of the number of stars remaining; they measure how much stellar signal is left around the measured stars.
 
-The worst cases matter. On the Tarantula Nebula's Ha image, Dark Star's **raw output still retained approximately 94%** of measured stellar signal; TelescopeYoke's blend retained approximately 100%. In several other crowded or strongly nebulous fields, the hardest stars remained almost intact. On an M101 image the fault was different: Dark Star removed more of the stars, but TelescopeYoke's blend restored some of them. This distinction prevents blaming the AI model for a failure created by the integration code.
+The worst cases matter. On the Tarantula Nebula's Ha image, Dark Star's **own output, with the settings used, still retained approximately 94%** of measured stellar signal; TelescopeYoke's blend retained approximately 100%. In several other crowded or strongly nebulous fields, the hardest stars remained almost intact. On an M101 image the fault was different: Dark Star removed more of the stars, but TelescopeYoke's blend restored some of them. This distinction prevents blaming the AI model for a failure created by the integration code. Whether the crowded-field failures come from the model or from what it is given (its tiling, stretch and mode) has not been tested.
 
 **Decision:** Dark Star remains useful for the narrowband picture pipeline, but its performance is not reliable across every crowded field. No change to Dark Star's proprietary model weights was attempted, and the remaining failures have not been solved. Broadband comparisons were research tests; the current LRGB picture path does not invoke Dark Star.
 
@@ -107,7 +108,7 @@ TelescopeYoke scored better on the **specific faint-line-to-grain metric** used 
 
 The initial tests found no sharpening method that increased agreement with a second, independent stack. Seti Astro's non-stellar sharpening increased measured fine detail by **45%**, but grain by **41%**; Siril's default Richardson–Lucy deconvolution added much less apparent detail. TelescopeYoke's own sharpening also worsened independent-stack agreement and remains off by default. These measurements did not establish that sharpening creates *no* real detail in general—only that no tested configuration demonstrated a qualifying improvement.
 
-The existing narrowband colour-palette combination was retained after comparison with a simple automated Siril/Seti Astro workflow. For broadband colour calibration, Siril's spectrophotometric calibration crashed in the tested installation, so it could not be fairly evaluated against TelescopeYoke's star-based balancing. The crash is a limitation of this test, not a claim that Siril's calibration is generally unusable.
+The existing narrowband colour-palette combination was retained after a visual comparison on one stack (NGC 2174) with a simple automated Siril/Seti Astro workflow, which left a purple gradient across the sky; neither tool offers an automatic palette combination. For broadband colour calibration, Siril's spectrophotometric calibration crashed in the tested installation, so it could not be fairly evaluated against TelescopeYoke's star-based balancing. That balance was checked alone against 135 Gaia stars in an M33 field: Sun-like stars came out 0.07 magnitudes from white, against 0.20 with no balance. The crash is a limitation of this test, not a claim that Siril's calibration is generally unusable.
 
 ## What the broader tests uncovered
 
@@ -115,7 +116,7 @@ The existing narrowband colour-palette combination was retained after comparison
 
 TelescopeYoke removes isolated bright pixels before stacking because cosmic-ray hits and hot pixels are not astronomical sources. The difficulty is that a very sharp star can have a similarly compact core. The shipped cleaning passed the defined criteria across **11 sessions on the original rig**, but failed on **three of four additional colour-camera sessions** and **four of four sessions from a second camera**. One second-camera session also contained mismatched fields, complicating interpretation, but it was not silently excluded from the reported failures.
 
-Eight correction candidates were tried. The best candidates recovered stellar brightness more successfully but also protected unwanted cosmic-ray hits. **None passed all criteria**, and the shipped cleaner was left unchanged. Tests with artificial one-frame, star-like signals also found a median **1.8% loss of flux**, with a worst case around **23.5%**. Those results concern planted sources, not measured losses from real discoveries. They matter because the scientific uses of the pipeline require more caution than producing an attractive final picture.
+Eight correction candidates were tried. The best candidates recovered stellar brightness more successfully but also protected unwanted cosmic-ray hits. **None passed all criteria**, and the shipped cleaner was left unchanged. Tests with artificial one-frame, star-like signals in the original rig's 11 sessions also found a median **1.8% loss of flux**, with a worst case around **23.5%**, the same with the shipped cleaner and the best candidate. Those results concern planted sources, not measured losses from real discoveries. They matter because the scientific uses of the pipeline require more caution than producing an attractive final picture.
 
 ### A false correction for image footprints
 
@@ -150,4 +151,20 @@ The most useful outcome was not simply the set of tools chosen. The measurements
 - [Research scripts and index](https://github.com/Ryan-Clinton/telescopeyoke/tree/main/docs/research/free-tools-2026-11-23)
 - [The earlier 23 November diary entry](https://ryanclinton.uk/astrophotography/2026-11-23-testing-the-free-tools/)
 
-*Draft for editorial and scientific review. No DOI or independent-reproduction claim is made. No publication action has been taken.*
+## Data and code availability
+
+The code is at https://github.com/Ryan-Clinton/telescopeyoke, and every number here is in the records linked above, with the scripts that made it. The first phase's stacks are the project's own. The second phase's stacks and raw frames, and the reserved confirmation sets, are not the project's to redistribute, so they are neither named nor linked, and those results cannot be reproduced from public data alone. The tests were designed, run and recorded by TelescopeYoke's AI assistant (Claude), and the method was reviewed with ChatGPT.
+
+## References
+
+- GraXpert 3.0.2, S. Hirsch et al., https://github.com/Steffenhir/GraXpert
+- Seti Astro Suite Pro 1.24.8 (Dark Star, Cosmic Clarity, statistical stretch, ABE), F. Ramos, https://github.com/setiastro/setiastrosuitepro
+- Siril 1.4.5, https://siril.org
+- DeepSNR 1.3.2; StarNet2
+- Gaia Collaboration, Vallenari, A. et al. 2023, A&A 674, A1: Gaia Data Release 3.
+
+## Revisions
+
+Version 1.0, 27 November 2026. First version.
+
+*Draft for review. Not published.*
