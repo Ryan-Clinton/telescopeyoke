@@ -52,6 +52,8 @@ GraXpert performed best on the selected combination of fidelity and noise reduct
 
 The faintest 5% of measured stars in the worst GraXpert test stack lost about **21% of their measured flux**, despite the median star preserving approximately 99.9%. This is one reason the denoiser is used only for a final picture. No result from this stage justifies using AI-denoised pixels for photometry.
 
+![Planted filament kept against error, for each denoiser](figures/fig-denoise.svg)
+
 **Decision:** use GraXpert for optional automated picture denoising; retire the home-trained denoiser. The 53-stack study did not independently retest this decision.
 
 ### 2. Removing background gradients
@@ -83,6 +85,8 @@ The tested workflow passed each stack through GraXpert and then Dark Star (Seti 
 | Residual stellar signal no more than 10 points worse than old method, overall | **52/53 passed** |
 | Same threshold for the hardest tenth of stars | **46/53 passed** |
 
+![Pass counts of the three star-removal rules on 53 stacks](figures/fig-star-removal.svg)
+
 The blended method left a median **0.2% of measured stellar brightness** under the test's residual-signal metric, versus **1.1%** for the old method. These figures are not percentages of the number of stars remaining; they measure how much stellar signal is left around the measured stars.
 
 The worst cases matter. On the Tarantula Nebula's Ha image, Dark Star's **own output, with the settings used, still retained approximately 94%** of measured stellar signal; TelescopeYoke's blend retained approximately 100%. In several other crowded or strongly nebulous fields, the hardest stars remained almost intact. On an M101 image the fault was different: Dark Star removed more of the stars, but TelescopeYoke's blend restored some of them. This distinction prevents blaming the AI model for a failure created by the integration code. Whether the crowded-field failures come from the model or from what it is given (its tiling, stretch and mode) has not been tested.
@@ -99,6 +103,8 @@ A stretch maps the faint linear signal of a stacked exposure into visible bright
 | Siril autostretch | 5.4 | 0.0130 |
 | Siril autoghs | 5.7 | 0.0052 |
 | Seti Astro statistical stretch | 5.4 | **0.0138** |
+
+![Faint planted lines over the grain, for each stretch](figures/fig-stretch.svg)
 
 TelescopeYoke scored better on the **specific faint-line-to-grain metric** used for the automatic workflow. Siril autostretch and Seti Astro's statistical stretch retained more measured bright detail. The methods did **not** use the same displayed sky brightness: TelescopeYoke put the sky near black, while the external tools targeted 0.25. These results therefore do not prove that the TelescopeYoke stretch looks better under every viewing condition or with every setting.
 
@@ -153,14 +159,18 @@ The most useful outcome was not simply the set of tools chosen. The measurements
 
 ## Data and code availability
 
-The code is at https://github.com/Ryan-Clinton/telescopeyoke, and every number here is in the records linked above, with the scripts that made it. The first phase's stacks are the project's own. The second phase's stacks and raw frames, and the reserved confirmation sets, are not the project's to redistribute, so they are neither named nor linked, and those results cannot be reproduced from public data alone. The tests were designed, run and recorded by TelescopeYoke's AI assistant (Claude), and the method was reviewed with ChatGPT.
+The code is at https://github.com/Ryan-Clinton/telescopeyoke. Every number here is in the records linked above. The first phase's scripts and the main second-phase scripts (star removal, stretch, the picture runs) are committed beside those records in `docs/research/free-tools-2026-11-23/`, and the figures are drawn from the recorded numbers by `figures/make_figures.py`. The cleaning experiments' harness and the frozen-set scripts are not published: they contain the locations of data that is not the project's to share. The first phase's stacks are the project's own. The second phase's stacks and raw frames, and the reserved confirmation sets, are not the project's to redistribute, so they are neither named nor linked. The public material supports checking the method and the reported results, but not reproducing the second phase's results.
+
+## Research and acknowledgements
+
+This investigation was conducted as part of the TelescopeYoke project. Claude was used to design, execute and document the computational experiments, with reviews of the method and results assisted by ChatGPT. The conclusions, and the decisions about which software to adopt, are the project author's responsibility. This report has not been peer reviewed.
 
 ## References
 
 - GraXpert 3.0.2, S. Hirsch et al., https://github.com/Steffenhir/GraXpert
 - Seti Astro Suite Pro 1.24.8 (Dark Star, Cosmic Clarity, statistical stretch, ABE), F. Ramos, https://github.com/setiastro/setiastrosuitepro
-- Siril 1.4.5, https://siril.org
-- DeepSNR 1.3.2; StarNet2
+- Siril 1.4.5, the Free-Astro team, https://siril.org
+- DeepSNR 1.3.2 and StarNet2 (StarNet v2), N. Misiura, StarNet Software, https://www.starnetastro.com
 - Gaia Collaboration, Vallenari, A. et al. 2023, A&A 674, A1: Gaia Data Release 3.
 
 ## Revisions
