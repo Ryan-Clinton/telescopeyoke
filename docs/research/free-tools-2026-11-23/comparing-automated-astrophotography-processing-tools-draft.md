@@ -173,6 +173,10 @@ This investigation was conducted as part of the TelescopeYoke project. Claude wa
 - DeepSNR 1.3.2 and StarNet2 (StarNet v2), N. Misiura, StarNet Software, https://www.starnetastro.com
 - Gaia Collaboration, Vallenari, A. et al. 2023, A&A 674, A1: Gaia Data Release 3.
 
+## How to cite
+
+Clinton, R. (2026). Comparing Automated Astrophotography Image-Processing Tools (Version 1.0). Zenodo. https://doi.org/10.5281/zenodo.24587435
+
 ## Revisions
 
 Version 1.0, 27 November 2026. First version.
