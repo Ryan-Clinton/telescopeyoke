@@ -463,3 +463,24 @@ no other picture made worse. D41 (the sky model's purple corner) and D72 (dust, 
 **Also found on the way:**
 - The shipped cleaning takes a median 2%, at worst 24%, of a one-frame source's light in the owner's frames.
 - Dark Star itself, not our blend, leaves the stars in crowded fields; in M101 our blend puts some back.
+
+## The covered-area fix on the frozen stacks: it fails (27 November 2026)
+
+The six frozen AstrophotoMarket stacks of 25 November, opened for the first time, once. Two cannot be read and are
+listed so, not replaced: 467 (one file holding three filters already combined) and 510 (its L stack has three
+planes; its other file is a dual-band colour stack). The four read (405 Sh2-101, 422 IC 4628, 572 NGC 2359, 583
+IC 1484, all SHO) were made with the shipped `colour.py` and with covered-area version 5, and looked at side by side:
+
+| Set | Shipped | Version 5 |
+|---|---|---|
+| 405 | no edge or band fault | the same; no fault (98% kept) |
+| 422 | no edge or band fault | the same; no fault (97% kept) |
+| 572 | no edge or band fault | **worse**: cropped to 70%, the helmet's faint outer nebula gone, a brown band round the edges |
+| 583 | no edge or band fault | **changed**: the whole nebula greener, the palette moved (97% kept) |
+
+None of the four had a coverage fault for the fix to mend, and on two it did harm. In NGC 2359 the faint nebula
+filling much of the frame was taken for thin coverage: sky-level brightness and more grain than the brighter middle.
+Left out of the sky fit, it took the fit with it. So version 5 **fails its confirmation** and is not adopted. Per
+the protocol this failure stays, and nothing is tuned against these four. What it showed: grain at sky level is not
+evidence enough of thin coverage where a faint nebula fills the field. A stack that carries a weight or coverage map
+would settle it; one that does not cannot be told apart this way.
